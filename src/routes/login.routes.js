@@ -1,22 +1,16 @@
 const { Router } = require('express');
 const authController = require('../controllers/auth.controller');
-const validate = require('../middleware/validate.middleware');
-const registrationRules = require('../middleware/registration.middleware');
 const loginRules = require('../middleware/login.middleware');
+const validate = require('../middleware/validate.middleware');
+const ensureDatabase = require('../middleware/database.middleware');
 
 const router = Router();
 
 router.post(
-  '/register',
-  registrationRules(),
-  validate,
-  authController.register
-);
-
-router.post(
-  '/login',
+  '/',
   loginRules(),
-  validate,
+  (req, res, next) => validate(req, res, next, 400),
+  ensureDatabase,
   authController.login
 );
 

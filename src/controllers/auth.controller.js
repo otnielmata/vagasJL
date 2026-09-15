@@ -15,14 +15,14 @@ async function register(req, res, next) {
 }
 
 /**
- * POST /api/auth/login
+ * POST /login e /api/auth/login
  */
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
     const { user, token } = await authService.login({ email, password });
 
-    return res.status(200).json({ user, token });
+    return res.status(200).json({ user: user.toJSON(), token });
   } catch (error) {
     return next(error);
   }

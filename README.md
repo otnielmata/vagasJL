@@ -6,7 +6,8 @@ baseado em uma estrutura padronizada de competências.
 
 Este repositório contém a estrutura inicial do projeto (arquitetura, autenticação,
 documentação e scripts de execução), o cadastro de usuários da
-[VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1) e a edição dos próprios dados da
+[VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1), o login da
+[VJ-2](https://jl-mentoria.atlassian.net/browse/VJ-2) e a edição dos próprios dados da
 [VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4).
 Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas próximas histórias.
 
@@ -35,6 +36,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │   │   ├── index.js
 │   │   ├── auth.routes.js
 │   │   ├── registration.routes.js # POST /usuarios e PUT /usuarios/:id
+│   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
 │   │   ├── auth.controller.js
@@ -51,6 +53,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
 │       ├── user-update.middleware.js
+│       ├── login.middleware.js
 │       ├── validate.middleware.js
 │       ├── notFound.middleware.js
 │       └── error.middleware.js
@@ -125,6 +128,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
+| POST   | `/login`           | Não          | Autentica usuário ativo (VJ-2)       |
 | POST   | `/api/auth/register`| Não          | Cadastra um novo usuário             |
 | POST   | `/api/auth/login`   | Não          | Autentica e retorna um token JWT     |
 | GET    | `/api/users/me`     | Sim (Bearer) | Retorna os dados do usuário logado   |
@@ -174,10 +178,41 @@ Resposta **201**:
   solicitações concorrentes. O índice único precisa estar pronto antes da criação.
 - E-mail duplicado retorna **409**. Campos ausentes/inválidos retornam **400** e seus nomes
   aparecem em `errors`, sem ecoar os valores enviados. A validação precede a conexão com o banco.
-- Esse endpoint retorna apenas o usuário. Use `/api/auth/login` para obter um JWT.
+- Esse endpoint retorna apenas o usuário. Use `/login` para obter um JWT.
 - `/api/auth/register` continua disponível com retorno de usuário e token e validação **422**.
   Os dois cadastros agora exigem no mínimo **8 caracteres** e criam usuários ativos.
   O login mantém compatibilidade com senhas de usuários já cadastrados.
+
+## Login de usuários — VJ-2
+
+`POST /login` recebe:
+
+```json
+{
+  "email": "maria.silva@example.com",
+  "password": "senhaForte123"
+}
+```
+
+O e-mail deve ser válido e a senha deve ser uma string não vazia, com até 72 bytes em UTF-8.
+O e-mail é normalizado para minúsculas e sem espaços nas extremidades. A senha é comparada
+exatamente como enviada contra o hash bcrypt armazenado, sem remover espaços ou alterar seu conteúdo.
+
+- **200**: usuário cadastrado e ativo (`status: "active"`), com senha correta. Retorna
+  `{ "user": { ... }, "token": "..." }`, sem senha ou hash nos dados do usuário.
+- **401**: e-mail não cadastrado, senha incorreta ou usuário inativo. Todos retornam
+  `{ "message": "Credenciais invalidas" }`, sem identificar qual credencial está incorreta.
+- **400**: e-mail/senha ausentes, tipos ou formatos inválidos, ou JSON inválido. A validação
+  dos campos ocorre antes da conexão com o MongoDB; valores recebidos não são ecoados nos erros.
+
+O token é um JWT assinado com HS256 usando `JWT_SECRET`, com identificador (`sub`), perfil
+(`role`), emissão (`iat`) e expiração (`exp`). A validade é definida por `JWT_EXPIRES_IN`
+(padrão `1d`). Use `Authorization: Bearer <token>` em `/api/users/me` e nas demais rotas protegidas.
+
+O endpoint existente `/api/auth/login` compartilha autenticação e bloqueio de usuários inativos,
+mantendo **422** para campos inválidos. A exigência de 8 caracteres vale para novos cadastros;
+o login continua aceitando as senhas de usuários antigos. Esta história não inclui revogação
+de tokens já emitidos, refresh token ou alteração de status de usuários.
 
 ## Contrato de autenticação e erros
 
@@ -223,9 +258,9 @@ da VJ-4. A edição utiliza o documento Mongoose e `save()` para executar valida
   O banco armazena o hash bcrypt; senhas e hashes nunca aparecem nas respostas.
 - JWTs usam HS256 e expiração configurável. `/api/users/me` exige um Bearer token válido.
 - Erros retornam `{ "message": "..." }`; validações podem incluir `errors` com campo e mensagem.
-- Status: `400` para JSON inválido e campos inválidos no cadastro/edição em `/usuarios`, `401` para credenciais/token inválidos, `409` para
+- Status: `400` para JSON inválido e campos inválidos no cadastro/edição em `/usuarios` e no `/login`, `401` para credenciais/token inválidos, `409` para
   e-mail duplicado (inclusive cadastros concorrentes), `413` para corpo excessivo,
-  `422` para dados inválidos nas rotas de autenticação e `503` para indisponibilidade de conexão com o MongoDB.
+  `422` para dados inválidos em `/api/auth/*` e `503` para indisponibilidade de conexão com o MongoDB.
 - Falhas internas retornam uma mensagem genérica. A stack só é incluída em `development`.
 
 ## Conexão e execução
@@ -263,6 +298,14 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Senha com no mínimo 8 caracteres e hash seguro | Regras de validação e hook do model com persistência simulada |
 | Resposta sem senha | Serialização do model e controller |
 
+| Critério da VJ-2 | Cobertura unitária |
+| --- | --- |
+| Login válido, HTTP 200 e resposta sem senha | Service com bcrypt real e controller com persistência simulada |
+| Usuário ativo e senha validada contra hash | Service: ativo, inativo, e-mail desconhecido e senha incorreta |
+| Credenciais inválidas, HTTP 401 e mensagem genérica | Service, controller e middleware de erros |
+| E-mail/senha ausentes ou inválidos, HTTP 400 | Regras de validação de login |
+| Token válido com prazo de expiração | Assinatura HS256, claims, expiração configurável e rejeição após expirar |
+
 | Critério da VJ-4 | Cobertura unitária |
 | --- | --- |
 | Edição própria, HTTP 200 e resposta sem senha | Service, controller e model |
@@ -273,7 +316,7 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Dados inválidos e campos não editáveis, HTTP 400 | Regras de validação, controller e whitelist do service |
 | Senha alterada com hash; senha omitida preservada | Hooks do model com gravação simulada |
 
-A suíte também cobre a compatibilidade do cadastro existente e o middleware de conexão.
+A suíte também cobre a compatibilidade dos endpoints existentes e o middleware de conexão.
 Não há testes de API/E2E nesta implementação.
 
 ## Integração contínua e deploy futuros
