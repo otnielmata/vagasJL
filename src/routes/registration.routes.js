@@ -5,6 +5,7 @@ const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const { authenticate } = require('../middleware/auth.middleware');
 const userUpdateRules = require('../middleware/user-update.middleware');
+const userReadRules = require('../middleware/user-read.middleware');
 
 const router = Router();
 
@@ -23,6 +24,15 @@ router.put(
   (req, res, next) => validate(req, res, next, 400),
   ensureDatabase,
   userController.update
+);
+
+router.get(
+  '/:id',
+  authenticate,
+  userReadRules(),
+  (req, res, next) => validate(req, res, next, 400),
+  ensureDatabase,
+  userController.show
 );
 
 module.exports = router;

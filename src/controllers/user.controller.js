@@ -33,4 +33,13 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { create, getMe, update };
+async function show(req, res, next) {
+  try {
+    const user = await userService.getPublicUserById(req.params.id);
+    return res.status(200).json({ user });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { create, getMe, update, show };

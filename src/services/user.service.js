@@ -76,8 +76,17 @@ async function updateUser(id, authenticatedId, { name, email, password }) {
   }
 }
 
+async function getPublicUserById(id) {
+  const user = await User.findById(id).select('_id name').lean();
+  if (!user) {
+    throw new ApiError(404, 'Usuario nao encontrado');
+  }
+  return { _id: user._id, name: user.name };
+}
+
 module.exports = {
   createUser,
   getUserById,
   updateUser,
+  getPublicUserById,
 };
