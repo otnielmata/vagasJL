@@ -4,7 +4,7 @@ info:
   description: >
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
-    Inclui cadastro (VJ-1), login (VJ-2) e edicao dos proprios dados (VJ-4).
+    Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4) e exclusao da propria conta (VJ-23).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -19,6 +19,65 @@ tags:
 
 paths:
   /usuarios/{id}:
+    delete:
+      tags: [Users]
+      summary: Exclui a propria conta e o candidato vinculado (VJ-23)
+      description: >
+        Exige JWT valido e conta ativa. Exclui fisicamente usuario e candidatos vinculados
+        numa unica transacao; requer MongoDB replica set ou Atlas. Libera os emails para
+        novo cadastro e invalida o acesso com tokens antigos pela verificacao da conta no banco.
+        Somente o titular pode excluir a conta, inclusive quando o papel e admin.
+        Repetir DELETE do proprio id ausente com JWT ainda assinado e nao expirado retorna
+        404 sem autorizar operacoes; em outras rotas o token da conta excluida retorna 401.
+        JWT expirado ou invalido sempre retorna 401. Nao recebe corpo.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da propria conta
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b7
+      responses:
+        '204':
+          description: Usuario e candidatos vinculados excluidos; resposta sem corpo
+        '400':
+          description: Identificador ou JSON invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou expirado; conta inativa ou excluida (exceto repeticao do proprio DELETE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Alvo existente pertence a outro usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuario inexistente ou repeticao da exclusao do proprio identificador
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Banco indisponivel ou sem suporte a transacoes; exclusao nao confirmada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
       tags: [Users]
       summary: Edita os dados do proprio usuario (VJ-4)
