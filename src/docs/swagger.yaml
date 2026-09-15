@@ -1,0 +1,174 @@
+openapi: 3.0.3
+info:
+  title: Vagas JL API
+  description: >
+    API REST que conecta profissionais de testes de software a oportunidades de trabalho,
+    e permite que empresas encontrem profissionais compativeis com suas vagas.
+    Esta e a especificacao da estrutura inicial do projeto.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Ambiente local
+tags:
+  - name: Auth
+    description: Cadastro e autenticacao de usuarios
+  - name: Users
+    description: Dados do usuario autenticado
+  - name: Health
+    description: Verificacao de disponibilidade da API
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Verifica se a API esta no ar
+      responses:
+        '200':
+          description: API disponivel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Cadastra um novo usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Ja existe um usuario com este email
+        '422':
+          description: Erro de validacao
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica um usuario existente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticacao realizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciais invalidas
+        '422':
+          description: Erro de validacao
+
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Retorna o perfil do usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil do usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Token ausente, invalido ou expirado
+        '404':
+          description: Usuario nao encontrado
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6512f1e2b3a1c2d3e4f5a6b7
+        name:
+          type: string
+          example: Maria Silva
+        email:
+          type: string
+          example: maria.silva@example.com
+        role:
+          type: string
+          enum: [candidate, company, admin]
+          example: candidate
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          example: Maria Silva
+        email:
+          type: string
+          example: maria.silva@example.com
+        password:
+          type: string
+          format: password
+          example: senhaForte123
+        role:
+          type: string
+          enum: [candidate, company, admin]
+          example: candidate
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: maria.silva@example.com
+        password:
+          type: string
+          format: password
+          example: senhaForte123
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
