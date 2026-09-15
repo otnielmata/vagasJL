@@ -9,4 +9,13 @@ async function register(req, res, next) {
   }
 }
 
-module.exports = { register };
+async function validateEligibility(req, res, next) {
+  try {
+    const result = await candidateService.validateCandidateEligibility(req.params.id, req.user.id, req.body);
+    return res.status(result.statusCode).json({ candidate: result.candidate.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, validateEligibility };

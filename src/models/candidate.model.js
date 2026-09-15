@@ -1,11 +1,42 @@
 const mongoose = require('mongoose');
-const { UNKNOWN, CANDIDATE_STATUS, PROFILE_FIELDS } = require('../config/candidate');
+const {
+  UNKNOWN,
+  CANDIDATE_STATUS,
+  ELIGIBILITY_STATUS,
+  ELIGIBILITY_METHOD,
+  ELIGIBILITY_SOURCE,
+  PROFILE_FIELDS,
+} = require('../config/candidate');
 
 const optionalProfile = Object.fromEntries(PROFILE_FIELDS.map((field) => [field, {
   type: String,
   default: UNKNOWN,
   trim: true,
 }]));
+
+const eligibilitySchema = new mongoose.Schema({
+  status: {
+    type: String,
+    enum: Object.values(ELIGIBILITY_STATUS),
+    default: ELIGIBILITY_STATUS.PENDING,
+    required: true,
+  },
+  method: {
+    type: String,
+    enum: Object.values(ELIGIBILITY_METHOD),
+    default: ELIGIBILITY_METHOD.UNKNOWN,
+    required: true,
+  },
+  source: {
+    type: String,
+    default: ELIGIBILITY_SOURCE.PENDING,
+    required: true,
+    trim: true,
+    maxlength: 100,
+  },
+  lastAttemptAt: { type: Date, default: null },
+  approvedAt: { type: Date, default: null },
+}, { _id: false });
 
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
@@ -23,6 +54,7 @@ const candidateSchema = new mongoose.Schema({
     default: CANDIDATE_STATUS.PENDING_VALIDATION,
     required: true,
   },
+  eligibility: { type: eligibilitySchema, default: () => ({}) },
 }, { timestamps: true });
 
 candidateSchema.index(
@@ -47,6 +79,7 @@ candidateSchema.set('toJSON', {
   transform: (_document, result) => {
     delete result.__v;
     delete result.id;
+    if (result.eligibility) delete result.eligibility.source;
     return result;
   },
 });

@@ -11,7 +11,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4), a consulta pública autenticada da
 [VJ-6](https://jl-mentoria.atlassian.net/browse/VJ-6), o cadastro de candidatos da
 [VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22) e a exclusão da própria conta da
-[VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23).
+[VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23), além da validação de elegibilidade da
+[VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -38,7 +39,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
-│   │   ├── candidate.routes.js # POST /candidatos
+│   │   ├── candidate.routes.js # POST /candidatos e /candidatos/:id/validacao
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
@@ -60,6 +61,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
 │       ├── auth.middleware.js
 │       ├── candidate.middleware.js
+│       ├── candidate-validation.middleware.js
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
 │       ├── user-update.middleware.js
@@ -147,6 +149,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
+| POST   | `/candidatos/{id}/validacao` | Sim (Bearer) | Valida a elegibilidade do próprio candidato (VJ-24) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
 | DELETE | `/usuarios/{id}`   | Sim (Bearer) | Exclui a própria conta e o candidato vinculado (VJ-23) |
@@ -274,8 +277,9 @@ armazenado na base confiável e vinculado ao mesmo e-mail. Um e-mail marcado com
 Campos de controle (`user`, `status`, `studentVerified`, `visibleToCompanies`) são rejeitados.
 O vínculo vem do JWT e o status é definido pelo servidor.
 
-O retorno é **201** com `{ "candidate": { ... } }`, incluindo `status`, campos do perfil e
-`visibleToCompanies`. A coleção `candidates` mantém um índice único para `user`, impedindo dois
+O retorno é **201** com `{ "candidate": { ... } }`, incluindo `status`, resumo de `eligibility`,
+campos do perfil e `visibleToCompanies`. A fonte interna da validação e os comprovantes não são
+expostos. A coleção `candidates` mantém um índice único para `user`, impedindo dois
 perfis do mesmo usuário, e um índice único parcial para `email` somente quando `status` é `active`.
 Um segundo cadastro do mesmo usuário ou o uso de um e-mail já associado a candidato ativo retorna
 **409**. Candidatos pendentes, incompletos, inativos ou bloqueados não reservam o e-mail pela regra
@@ -302,8 +306,8 @@ administrada **`authorized_students`**, separada dos cadastros públicos, e dois
 
 - `STUDENT_VALIDATION_SOURCE=pending`: validação ainda não configurada; cria candidato pendente.
 - `STUDENT_VALIDATION_SOURCE=mongodb`: consulta a base autoritativa pelo e-mail da conta.
-  Registro `authorized` permite criar perfil incompleto; `pending` mantém o cadastro pendente;
-  um registro `pending` também pode ser aprovado por código de compra ou identificador confiável;
+  Registro `authorized` permite criar perfil incompleto; um registro `pending` pode ser aprovado
+  por código de compra ou identificador confiável e, sem comprovante, continua pendente;
   registro ausente, `denied` ou comprovante incorreto rejeita com **422**, sem criar candidato.
 
 Somente um administrador com acesso direto ao banco deve alimentar essa coleção a partir da
@@ -318,15 +322,14 @@ db.getSiblingDB('vagas-jl').authorized_students.updateOne(
 )
 ```
 
-Os e-mails devem ser normalizados para minúsculas. Para validar por compra ou por outro
-identificador aprovado pelo produto, o administrador pode registrar `purchaseCodeHash` ou
-`trustedIdentifierHash` com o SHA-256 hexadecimal (64 caracteres) do valor real, vinculado ao
-mesmo e-mail. Esses hashes são únicos e não aparecem em consultas normais do model. O cliente
-envia o valor original, nunca o hash; a comparação usa tempo constante. Em um registro `pending`,
-ao menos um dos comprovantes enviados deve corresponder. E-mail `authorized` é suficiente,
-mesmo sem comprovante. Erros de infraestrutura ou inconsistências nos índices propagam como
-erro de serviço; não autorizam o aluno nem são confundidos com rejeição de matrícula ou
-duplicidade de candidato.
+Os e-mails devem ser normalizados para minúsculas e são únicos. Para validar por compra, o
+administrador pode registrar `purchaseCodeHash` com o SHA-256 hexadecimal (64 caracteres) do
+código real, vinculado ao mesmo e-mail. `trustedIdentifierHash` segue o mesmo formato para outro
+identificador confiável aprovado pelo produto. Ambos os hashes possuem índices únicos e não são
+selecionados em consultas comuns. O cliente envia o valor original, nunca o hash; a comparação
+usa tempo constante. Códigos e identificadores em texto puro não são persistidos nem registrados
+em logs. Um e-mail com status `authorized` é suficiente por si só. Falhas da fonte retornam
+**503**, não autorizam o aluno e não são confundidas com rejeição de elegibilidade.
 
 Após atualizar uma instalação que já criou o índice global antigo de `candidates.email`, faça
 backup e execute uma vez, em janela controlada:
@@ -360,6 +363,54 @@ um bloqueio concorrente. Ele não ativa, desbloqueia ou recria candidatos.
 | Conta autenticada não possui papel `candidate` | 403 |
 | Mesmo usuário já cadastrado ou e-mail usado por candidato ativo | 409 |
 | Fora da base autorizada ou comprovante incorreto | 422 |
+
+### Validação de elegibilidade do candidato — VJ-24
+
+`POST /candidatos/{id}/validacao` reprocessa a validação de um candidato já cadastrado. Exige
+JWT válido de uma conta com perfil `candidate`; o identificador precisa ser um ObjectId e o
+candidato deve pertencer ao titular do token. O corpo é opcional para validação por e-mail:
+
+```json
+{}
+```
+
+Para comprovação adicional, envie no máximo os campos abaixo, com 1 a 256 caracteres:
+
+```json
+{
+  "purchaseCode": "codigo-original-da-compra",
+  "trustedIdentifier": "identificador-aprovado"
+}
+```
+
+A API ignora qualquer alegação de aprovação vinda do cliente: campos como `email`, `status`,
+`approved`, `source` e `user` são rejeitados com **400**. A validação sempre usa o e-mail
+normalizado que já está vinculado ao candidato e à conta autenticada. A base
+`authorized_students` armazena apenas hashes SHA-256 dos comprovantes; os valores recebidos não
+entram no documento de candidato, na resposta ou em mensagens de erro.
+
+Cada tentativa concluída pela fonte grava em `candidate.eligibility` o resultado atual, método,
+fonte interna, data da última tentativa e data da aprovação. A resposta omite a fonte interna e
+expõe somente o resumo seguro (`status`, `method`, `lastAttemptAt` e `approvedAt`). O contrato do
+service separa a fonte de validação do endpoint, permitindo incluir futuramente um adaptador da
+plataforma de vendas sem alterar a URL nem o corpo público.
+
+| Resultado | HTTP | Efeito no candidato |
+| --- | --- | --- |
+| Aprovado por e-mail ou comprovante | 200 | `pending_validation` muda para `incomplete_profile` |
+| Já aprovado | 200 | Resposta idempotente, sem nova consulta ou efeito duplicado |
+| Fonte ainda inconclusiva | 202 | Continua `pending_validation` e invisível para empresas |
+| Definitivamente não elegível | 422 | Continua pendente; registra somente o resultado seguro |
+| Inativo ou bloqueado | 409 | Nenhuma validação ou mudança de estado |
+| E-mail do candidato diverge da conta atual | 409 | Nenhuma prova é consultada e o estado é preservado |
+| Candidato de outro usuário | 403 | Nenhuma validação ou mudança de estado |
+| Candidato inexistente | 404 | Nenhuma mudança |
+| Fonte ou banco indisponível | 503 | Estado anterior preservado integralmente |
+
+A aprovação de elegibilidade **nunca ativa** o cadastro. A conclusão do perfil e a ativação são
+fluxos separados; somente `status: active` torna `visibleToCompanies` verdadeiro. Uma repetição
+após aprovação retorna **200** e preserva o estado válido. Candidatos antigos já aprovados recebem
+os metadados legados uma única vez, sem promoção para `active`.
 
 
 ### Edição de usuário — VJ-4
@@ -552,6 +603,20 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Autenticação obrigatória recebe 401 | Middleware JWT, configuração da rota e conta existente/ativa |
 | Dados omitidos permanecem UNKNOWN | Defaults do model, normalização de null e rejeição de booleanos |
 | Validação posterior preserva o controle de status | Revalidação administrativa com atualização condicional |
+
+| Critério da VJ-24 | Cobertura unitária |
+| --- | --- |
+| Validação apenas do próprio candidato autenticado | Rota, autorização de perfil e service com vínculo ao usuário |
+| Aprovação por e-mail, código ou identificador | Adapter da base autorizada, hashes e service de candidato |
+| Aprovação leva somente a perfil incompleto | Atualização condicional e filtro de visibilidade do model |
+| Resultado inconclusivo retorna 202 | Controller e persistência do estado pendente |
+| Não elegível retorna 422 sem ativação | Service com registro seguro do resultado rejeitado |
+| Repetição aprovada é idempotente | Service sem nova consulta ou gravação duplicada |
+| Inativo/bloqueado retorna 409 | Service preservando integralmente o documento |
+| Prova vinculada ao e-mail atual da conta | Service rejeitando divergência antes de consultar a fonte |
+| Identificador ou evidência inválida retorna 400 | Middleware com lista fechada de campos e erros sem valores |
+| Fonte indisponível retorna 503 sem mudanças | Adapter e service sem operação de persistência |
+| Comprovantes não são persistidos nem expostos | Schemas, serialização, controller e inspeção da atualização |
 
 | Critério da VJ-6 | Cobertura unitária |
 | --- | --- |

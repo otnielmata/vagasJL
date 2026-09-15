@@ -5,7 +5,8 @@ info:
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
-    cadastro de candidatos (VJ-22) e exclusao da propria conta (VJ-23).
+    cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23) e validacao de
+    elegibilidade de candidatos (VJ-24).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -79,6 +80,101 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: Usuario fora da base autorizada ou comprovante de aluno invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/{id}/validacao:
+    post:
+      tags: [Candidates]
+      summary: Valida a elegibilidade do candidato (VJ-24)
+      description: >
+        Exige JWT de candidato e permite validar somente o perfil vinculado a conta autenticada.
+        Usa o email normalizado da conta, um codigo de compra ou outro identificador confiavel.
+        Comprovantes sao comparados a hashes da base autorizada e nunca sao persistidos ou
+        retornados. Aprovacao muda pending_validation somente para incomplete_profile;
+        nunca ativa o candidato. Resultado inconclusivo mantem o status e retorna 202.
+        Repetir uma validacao ja aprovada e idempotente. Candidatos inativos ou bloqueados
+        nao podem ser validados. Falha da fonte retorna 503 sem alterar o estado anterior.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do proprio candidato
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b6
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateEligibilityRequest'
+      responses:
+        '200':
+          description: Elegibilidade aprovada ou validacao ja aprovada anteriormente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                additionalProperties: false
+                properties:
+                  candidate:
+                    $ref: '#/components/schemas/Candidate'
+        '202':
+          description: Fonte ainda inconclusiva; candidato permanece pendente e oculto para empresas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                additionalProperties: false
+                properties:
+                  candidate:
+                    $ref: '#/components/schemas/Candidate'
+        '400':
+          description: Identificador, JSON ou comprovante malformado; campos nao permitidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado; conta inexistente ou inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil de empresa ou tentativa de validar o candidato de outro usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Candidato nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Candidato inativo, bloqueado, com email divergente da conta ou alterado concorrentemente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Fonte confiavel confirmou que o candidato nao e elegivel
           content:
             application/json:
               schema:
@@ -516,7 +612,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Unavailable:
-      description: Banco de dados temporariamente indisponivel
+      description: Banco de dados ou dependencia temporariamente indisponivel
       content:
         application/json:
           schema:
@@ -532,6 +628,41 @@ components:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
       description: Pendente de validacao, Perfil incompleto, Ativo, Inativo ou Bloqueado
+    CandidateEligibilityRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        purchaseCode:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: Codigo em texto puro comparado ao hash seguro vinculado ao email autenticado
+        trustedIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: Outro identificador aprovado comparado ao hash seguro da base autorizada
+    CandidateEligibility:
+      type: object
+      required: [status, method, lastAttemptAt, approvedAt]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        method:
+          type: string
+          enum: [unknown, email, purchase_code, trusted_identifier, multiple, legacy]
+        lastAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
     CandidateRegistrationRequest:
       type: object
       required: [name, email]
@@ -606,7 +737,7 @@ components:
       description: URL HTTP/HTTPS absoluta ou UNKNOWN; ausente ou null e persistido como UNKNOWN
     Candidate:
       type: object
-      required: [_id, user, name, email, status, visibleToCompanies]
+      required: [_id, user, name, email, status, eligibility, visibleToCompanies]
       properties:
         _id:
           type: string
@@ -641,6 +772,8 @@ components:
           enum: [available, unavailable, UNKNOWN]
         status:
           $ref: '#/components/schemas/CandidateStatus'
+        eligibility:
+          $ref: '#/components/schemas/CandidateEligibility'
         visibleToCompanies:
           type: boolean
           readOnly: true
