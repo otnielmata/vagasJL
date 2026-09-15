@@ -5,15 +5,15 @@ info:
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
-    cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23) e validacao de
-    elegibilidade de candidatos (VJ-24).
+    cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
+    elegibilidade (VJ-24) e visualizacao individual de candidatos (VJ-25).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
   - name: Candidates
-    description: Cadastro de candidatos e validacao de alunos
+    description: Cadastro, validacao e visualizacao de candidatos
   - name: Auth
     description: Cadastro e autenticacao de usuarios
   - name: Users
@@ -181,6 +181,69 @@ paths:
                 $ref: '#/components/schemas/Error'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/{id}:
+    get:
+      tags: [Candidates]
+      summary: Visualiza um candidato conforme a permissao (VJ-25)
+      description: >
+        Exige JWT valido de candidato ou empresa. O candidato pode consultar somente o
+        proprio cadastro em qualquer status e recebe tambem o status atual. A empresa
+        consulta somente candidatos ativos; candidato inexistente ou com qualquer outro
+        status produz o mesmo 404. A resposta usa uma projecao explicita, converte campos
+        opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
+        senha, token ou detalhes internos da validacao. A operacao e somente leitura.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do candidato a consultar
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b6
+      responses:
+        '200':
+          description: Dados cadastrais permitidos para o solicitante
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                additionalProperties: false
+                properties:
+                  candidate:
+                    $ref: '#/components/schemas/PublicCandidate'
+        '400':
+          description: Identificador de candidato malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado; conta inexistente ou inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Candidato tentou consultar outro perfil ou papel sem permissao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Candidato inexistente ou nao ativo para uma empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -784,6 +847,64 @@ components:
         updatedAt:
           type: string
           format: date-time
+    PublicCandidate:
+      type: object
+      required:
+        - _id
+        - name
+        - photoUrl
+        - email
+        - phone
+        - city
+        - state
+        - country
+        - linkedinUrl
+        - githubUrl
+        - portfolioUrl
+        - professionalSummary
+        - availability
+      additionalProperties: false
+      properties:
+        _id:
+          type: string
+          example: 6512f1e2b3a1c2d3e4f5a6b6
+        name:
+          type: string
+          example: Maria Silva
+        photoUrl:
+          type: string
+          description: URL publica da foto ou UNKNOWN
+        email:
+          type: string
+          format: email
+          example: maria@example.com
+        phone:
+          type: string
+          description: Telefone de contato ou UNKNOWN
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        linkedinUrl:
+          type: string
+          description: URL publica ou UNKNOWN
+        githubUrl:
+          type: string
+          description: URL publica ou UNKNOWN
+        portfolioUrl:
+          type: string
+          description: URL publica ou UNKNOWN
+        professionalSummary:
+          type: string
+        availability:
+          type: string
+          enum: [available, unavailable, UNKNOWN]
+        status:
+          allOf:
+            - $ref: '#/components/schemas/CandidateStatus'
+          description: Retornado somente quando o candidato consulta o proprio cadastro
     PublicUser:
       type: object
       required: [_id, name]

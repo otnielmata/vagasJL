@@ -18,4 +18,17 @@ async function validateEligibility(req, res, next) {
   }
 }
 
-module.exports = { register, validateEligibility };
+async function show(req, res, next) {
+  try {
+    const candidate = await candidateService.getCandidateById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
+    return res.status(200).json({ candidate });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, validateEligibility, show };

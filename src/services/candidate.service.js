@@ -11,6 +11,18 @@ const {
   PROFILE_FIELDS,
 } = require('../config/candidate');
 
+const PUBLIC_CANDIDATE_FIELDS = Object.freeze([
+  'name', 'photoUrl', 'email', 'phone', 'city', 'state', 'country', 'linkedinUrl',
+  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability',
+]);
+const PROFILE_FIELD_SET = new Set(PROFILE_FIELDS);
+const CANDIDATE_READ_PROJECTION = Object.freeze({
+  _id: 1,
+  user: 1,
+  status: 1,
+  ...Object.fromEntries(PUBLIC_CANDIDATE_FIELDS.map((field) => [field, 1])),
+});
+
 function isValidSource(source) {
   return typeof source === 'string' && source.trim().length > 0 && source.length <= 100;
 }
@@ -31,6 +43,21 @@ function eligibilityData(validation, attemptedAt) {
     lastAttemptAt: attemptedAt,
     approvedAt: validation.status === ELIGIBILITY_STATUS.APPROVED ? attemptedAt : null,
   };
+}
+
+function normalizePublicProfileValue(value) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : UNKNOWN;
+}
+
+function publicCandidateData(candidate, includeStatus) {
+  const result = { _id: candidate._id };
+  for (const field of PUBLIC_CANDIDATE_FIELDS) {
+    result[field] = PROFILE_FIELD_SET.has(field)
+      ? normalizePublicProfileValue(candidate[field])
+      : candidate[field];
+  }
+  if (includeStatus) result.status = candidate.status;
+  return result;
 }
 
 async function persistPendingValidation(candidate, validation, attemptedAt) {
@@ -195,4 +222,27 @@ async function validateCandidateEligibility(candidateId, userId, evidence = {}) 
   return processPendingValidation(candidate, evidence, accountEmail);
 }
 
-module.exports = { registerCandidate, revalidatePendingCandidate, validateCandidateEligibility };
+async function getCandidateById(candidateId, requesterId, requesterRole) {
+  if (!['candidate', 'company'].includes(requesterRole)) {
+    throw new ApiError(403, 'Acesso negado para este perfil de usuario');
+  }
+
+  const filter = { _id: candidateId };
+  if (requesterRole === 'company') filter.status = CANDIDATE_STATUS.ACTIVE;
+
+  const candidate = await Candidate.findOne(filter).select(CANDIDATE_READ_PROJECTION).lean();
+  if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
+
+  if (requesterRole === 'candidate' && candidate.user.toString() !== String(requesterId).toLowerCase()) {
+    throw new ApiError(403, 'Voce so pode visualizar seu proprio cadastro de candidato');
+  }
+
+  return publicCandidateData(candidate, requesterRole === 'candidate');
+}
+
+module.exports = {
+  registerCandidate,
+  revalidatePendingCandidate,
+  validateCandidateEligibility,
+  getCandidateById,
+};
