@@ -37,6 +37,7 @@ for (const body of [undefined, null, {}, [], { email: input.email }, { name: inp
   { ...input, professionalSummary: 'a'.repeat(5001) }, { ...input, purchaseCode: null },
   { ...input, purchaseCode: '' }, { ...input, status: 'active' }, { ...input, user: 'someone' },
   { ...input, studentVerified: true }, { ...input, visibleToCompanies: true },
+  { ...input, eligibility: { status: 'approved' } },
 ]) {
   test(`rejects invalid candidate input ${JSON.stringify(body)?.slice(0, 110)}`, async () => {
     const result = await check(body);
