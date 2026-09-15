@@ -71,6 +71,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │       └── error.middleware.js
 ├── test/unit/                  # Testes de unidade, sem HTTP ou MongoDB real
 ├── scripts/revalidate-candidate.js # Revalidacao administrativa de candidato pendente
+├── scripts/sync-candidate-indexes.js # Sincronizacao controlada dos indices de candidatos
 ├── .env.example                # Modelo de variáveis de ambiente
 └── package.json
 ```
@@ -128,6 +129,7 @@ O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionad
 | Start (dev/watch) | `npm run dev` | Inicia a API com `nodemon`, reiniciando automaticamente a cada alteração  |
 | Testes de unidade | `npm test` | Executa os testes com o runner nativo do Node.js |
 | Revalidação de aluno | `npm run candidates:revalidate -- <id>` | Revalida um candidato pendente pela base confiável |
+| Índices de candidatos | `npm run candidates:sync-indexes` | Migra o índice de e-mail para unicidade apenas entre candidatos ativos |
 
 ## Documentação da API (Swagger)
 
@@ -239,7 +241,8 @@ Refresh token e alteração de status de usuários não fazem parte deste escopo
 
 ### Cadastro de candidato — VJ-22
 
-`POST /candidatos` exige JWT válido e uma conta existente e ativa. Os campos obrigatórios
+`POST /candidatos` exige JWT válido e uma conta existente, ativa e com papel `candidate`.
+Contas `company` ou `admin` recebem **403**. Os campos obrigatórios
 são `name` e `email`; o e-mail deve coincidir com o da conta autenticada para impedir o uso
 do e-mail de outro aluno como comprovação. Exemplo:
 
@@ -264,15 +267,20 @@ Disponibilidade aceita `available`, `unavailable` ou `UNKNOWN`; booleanos não s
 Fotos e links são URLs HTTP/HTTPS, não uploads. Nome aceita até 200 caracteres, apresentação
 até 5.000 e demais textos até 2.048; telefone usa dígitos/pontuação e tem de 6 a 40 caracteres.
 
-`purchaseCode` é opcional (1 a 256 caracteres) e, quando informado, deve coincidir exatamente
-com o código cujo hash está na base confiável. O comprovante e seu hash não são gravados
-no perfil nem retornados pela API. Campos de controle (`user`, `status`, `studentVerified`,
-`visibleToCompanies`) são rejeitados. O vínculo vem do JWT e o status é definido pelo servidor.
+`purchaseCode` e `trustedIdentifier` são comprovantes opcionais (1 a 256 caracteres). Quando
+informados para um registro ainda pendente, ao menos um deve coincidir exatamente com o hash
+armazenado na base confiável e vinculado ao mesmo e-mail. Um e-mail marcado como `authorized`
+é suficiente por si só. Comprovantes e hashes não são gravados no perfil nem retornados pela API.
+Campos de controle (`user`, `status`, `studentVerified`, `visibleToCompanies`) são rejeitados.
+O vínculo vem do JWT e o status é definido pelo servidor.
 
 O retorno é **201** com `{ "candidate": { ... } }`, incluindo `status`, campos do perfil e
-`visibleToCompanies`. A coleção `candidates` tem índices únicos em `user` e `email`.
-Um segundo cadastro para o mesmo usuário ou e-mail retorna **409**, inclusive em concorrência
-e mesmo se o cadastro existente ainda estiver pendente/inativo. Não cria uma nova conta de usuário.
+`visibleToCompanies`. A coleção `candidates` mantém um índice único para `user`, impedindo dois
+perfis do mesmo usuário, e um índice único parcial para `email` somente quando `status` é `active`.
+Um segundo cadastro do mesmo usuário ou o uso de um e-mail já associado a candidato ativo retorna
+**409**. Candidatos pendentes, incompletos, inativos ou bloqueados não reservam o e-mail pela regra
+RN-004; a conta de usuário continua sujeita à sua própria regra de e-mail único. O endpoint não
+cria uma nova conta de usuário.
 
 | Status armazenado | Significado | Visível para empresas |
 | --- | --- | --- |
@@ -295,7 +303,8 @@ administrada **`authorized_students`**, separada dos cadastros públicos, e dois
 - `STUDENT_VALIDATION_SOURCE=pending`: validação ainda não configurada; cria candidato pendente.
 - `STUDENT_VALIDATION_SOURCE=mongodb`: consulta a base autoritativa pelo e-mail da conta.
   Registro `authorized` permite criar perfil incompleto; `pending` mantém o cadastro pendente;
-  registro ausente ou `denied` rejeita com **422**, sem criar candidato.
+  um registro `pending` também pode ser aprovado por código de compra ou identificador confiável;
+  registro ausente, `denied` ou comprovante incorreto rejeita com **422**, sem criar candidato.
 
 Somente um administrador com acesso direto ao banco deve alimentar essa coleção a partir da
 fonte oficial de alunos. Não há endpoint público para autorizar alunos. Exemplo de operação
@@ -309,12 +318,27 @@ db.getSiblingDB('vagas-jl').authorized_students.updateOne(
 )
 ```
 
-Os e-mails devem ser normalizados para minúsculas. Para validar por compra, o administrador
-pode registrar `purchaseCodeHash` com o SHA-256 hexadecimal (64 caracteres) do código real,
-vinculado ao mesmo e-mail. Se o cliente enviar um código, ele também deve corresponder ao hash.
-O hash não deve ser fornecido pelo cliente como comprovação; a comparação usa tempo constante.
-E-mail autorizado é suficiente quando nenhum código é enviado. Erros de infraestrutura
-propagam como erro de serviço; não autorizam o aluno nem são confundidos com rejeição de matrícula.
+Os e-mails devem ser normalizados para minúsculas. Para validar por compra ou por outro
+identificador aprovado pelo produto, o administrador pode registrar `purchaseCodeHash` ou
+`trustedIdentifierHash` com o SHA-256 hexadecimal (64 caracteres) do valor real, vinculado ao
+mesmo e-mail. Esses hashes são únicos e não aparecem em consultas normais do model. O cliente
+envia o valor original, nunca o hash; a comparação usa tempo constante. Em um registro `pending`,
+ao menos um dos comprovantes enviados deve corresponder. E-mail `authorized` é suficiente,
+mesmo sem comprovante. Erros de infraestrutura ou inconsistências nos índices propagam como
+erro de serviço; não autorizam o aluno nem são confundidos com rejeição de matrícula ou
+duplicidade de candidato.
+
+Após atualizar uma instalação que já criou o índice global antigo de `candidates.email`, faça
+backup e execute uma vez, em janela controlada:
+
+```bash
+npm run candidates:sync-indexes
+```
+
+O comando sincroniza os índices declarados pelo model de candidatos, removendo o índice global
+obsoleto e criando `unique_active_candidate_email`. Na base de alunos, apenas cria/verifica os
+índices declarados; não remove índices administrativos adicionais. O comando não é executado
+automaticamente durante o start nem por esta implementação.
 
 Nenhum aluno foi importado ou autorizado automaticamente. O `.env.example` usa `pending`;
 o `.env` local existente não foi alterado. Após preparar a base, configure `mongodb` e reinicie
@@ -333,7 +357,8 @@ um bloqueio concorrente. Ele não ativa, desbloqueia ou recria candidatos.
 | Cadastro pendente ou validado com sucesso | 201 |
 | Dados inválidos, campos não permitidos ou e-mail diferente da conta | 400 |
 | JWT inválido/ausente/expirado ou conta inexistente/inativa | 401 |
-| Mesmo usuário/e-mail já cadastrado | 409 |
+| Conta autenticada não possui papel `candidate` | 403 |
+| Mesmo usuário já cadastrado ou e-mail usado por candidato ativo | 409 |
 | Fora da base autorizada ou comprovante incorreto | 422 |
 
 
@@ -517,9 +542,12 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Critério da VJ-22 | Cobertura unitária |
 | --- | --- |
 | Aluno validado recebe 201 e perfil incompleto | Service e validação de e-mail/código na base simulada |
+| Código de compra ou identificador confiável aprova registro pendente | Service e hashes vinculados ao e-mail |
 | Validação pendente recebe 201 e não aparece para empresas | Default do model, service e filtro de visibilidade |
 | Fora da base autorizada recebe 422 | Service de alunos e ausência de gravação do candidato |
 | Duplicidade recebe 409 | Consulta por usuário/e-mail e erro concorrente dos índices únicos |
+| E-mail é único somente entre candidatos ativos | Índice parcial do model e filtro explícito do service |
+| Somente contas de candidato podem criar perfil | Autorização da rota e defesa no service |
 | Dados inválidos recebem 400 | Middleware, campos obrigatórios e bloqueio de controles do cliente |
 | Autenticação obrigatória recebe 401 | Middleware JWT, configuração da rota e conta existente/ativa |
 | Dados omitidos permanecem UNKNOWN | Defaults do model, normalização de null e rejeição de booleanos |

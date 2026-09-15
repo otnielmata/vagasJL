@@ -2,7 +2,8 @@ const { body } = require('express-validator');
 const { UNKNOWN, PROFILE_FIELDS } = require('../config/candidate');
 
 function candidateRules() {
-  const allowedFields = ['name', 'email', 'purchaseCode', ...PROFILE_FIELDS];
+  const evidenceFields = ['purchaseCode', 'trustedIdentifier'];
+  const allowedFields = ['name', 'email', ...evidenceFields, ...PROFILE_FIELDS];
   const urlFields = ['photoUrl', 'linkedinUrl', 'githubUrl', 'portfolioUrl'];
   return [
     body().custom((value) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -24,9 +25,10 @@ function candidateRules() {
       .matches(/^\+?[0-9 ().-]{6,40}$/).withMessage('Telefone invalido'),
     body('availability').optional({ values: 'null' })
       .isIn(['available', 'unavailable', UNKNOWN]).withMessage('Disponibilidade invalida'),
-    body('purchaseCode').optional().isString().withMessage('Codigo de compra invalido').bail()
-      .isLength({ min: 1, max: 256 }).withMessage('Codigo de compra invalido').bail()
-      .custom((value) => value.trim().length > 0).withMessage('Codigo de compra invalido'),
+    ...evidenceFields.map((field) => body(field).optional()
+      .isString().withMessage('Comprovante de aluno invalido').bail()
+      .isLength({ min: 1, max: 256 }).withMessage('Comprovante de aluno invalido').bail()
+      .custom((value) => value.trim().length > 0).withMessage('Comprovante de aluno invalido')),
   ];
 }
 
