@@ -10,6 +10,8 @@ servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Candidates
+    description: Cadastro de candidatos e validacao de alunos
   - name: Auth
     description: Cadastro e autenticacao de usuarios
   - name: Users
@@ -18,6 +20,67 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /candidatos:
+    post:
+      tags: [Candidates]
+      summary: Cadastra um candidato (VJ-22)
+      description: >
+        Exige usuario autenticado e ativo. Nome e email sao obrigatorios; o email deve
+        coincidir com a conta autenticada. A validacao usa uma base de alunos confiavel,
+        nunca flags enviadas pelo cliente. Sem validacao concluida, o status e
+        pending_validation; aluno autorizado recebe incomplete_profile. Nenhum cadastro
+        e ativado automaticamente. Campos opcionais omitidos ou null sao persistidos
+        como UNKNOWN. Codigo de compra, quando enviado, nao e persistido no candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateRegistrationRequest'
+      responses:
+        '201':
+          description: Candidato criado, pendente de validacao ou com perfil incompleto
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                properties:
+                  candidate:
+                    $ref: '#/components/schemas/Candidate'
+        '400':
+          description: Dados obrigatorios invalidos, email diferente da conta ou campos nao permitidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token invalido, ausente ou expirado; conta inexistente ou inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Candidato ja cadastrado para o mesmo usuario ou email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Usuario fora da base autorizada ou comprovante de compra invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /usuarios/{id}:
     put:
       tags: [Users]
@@ -345,6 +408,123 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CandidateStatus:
+      type: string
+      enum: [pending_validation, incomplete_profile, active, inactive, blocked]
+      description: Pendente de validacao, Perfil incompleto, Ativo, Inativo ou Bloqueado
+    CandidateRegistrationRequest:
+      type: object
+      required: [name, email]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Maria Silva
+        email:
+          type: string
+          format: email
+          description: Mesmo email da conta autenticada
+          example: maria@example.com
+        purchaseCode:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: Codigo opcional, comparado ao SHA-256 registrado para o email autenticado
+        photoUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        phone:
+          type: string
+          nullable: true
+          default: UNKNOWN
+          description: Telefone de 6 a 40 caracteres (digitos e pontuacao) ou UNKNOWN
+        city:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        state:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        country:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        linkedinUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        githubUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        portfolioUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        professionalSummary:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 5000
+          default: UNKNOWN
+        availability:
+          type: string
+          nullable: true
+          enum: [available, unavailable, UNKNOWN, null]
+          default: UNKNOWN
+          description: Booleanos nao sao aceitos; ausente ou null significa UNKNOWN
+    CandidateOptionalText:
+      type: string
+      nullable: true
+      minLength: 1
+      maxLength: 2048
+      default: UNKNOWN
+      description: Ausente ou null e persistido como UNKNOWN; texto vazio e invalido
+    CandidateOptionalUrl:
+      type: string
+      nullable: true
+      minLength: 1
+      maxLength: 2048
+      default: UNKNOWN
+      description: URL HTTP/HTTPS absoluta ou UNKNOWN; ausente ou null e persistido como UNKNOWN
+    Candidate:
+      type: object
+      required: [_id, user, name, email, status, visibleToCompanies]
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+          description: Conta vinculada pelo JWT, nunca pelo corpo da requisicao
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        photoUrl:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        linkedinUrl:
+          type: string
+        githubUrl:
+          type: string
+        portfolioUrl:
+          type: string
+        professionalSummary:
+          type: string
+        availability:
+          type: string
+          enum: [available, unavailable, UNKNOWN]
+        status:
+          $ref: '#/components/schemas/CandidateStatus'
+        visibleToCompanies:
+          type: boolean
+          readOnly: true
+          description: Derivado exclusivamente de status active; sempre false no cadastro
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     UpdateUserRequest:
       type: object
       minProperties: 1

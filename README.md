@@ -8,8 +8,9 @@ Este repositório contém a estrutura inicial do projeto (arquitetura, autentica
 documentação e scripts de execução), o cadastro de usuários da
 [VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1), o login da
 [VJ-2](https://jl-mentoria.atlassian.net/browse/VJ-2) e a edição dos próprios dados da
-[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4).
-Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas próximas histórias.
+[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4) e o cadastro de candidatos da
+[VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22).
+Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
 
@@ -35,21 +36,28 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
+│   │   ├── candidate.routes.js # POST /candidatos
 │   │   ├── registration.routes.js # POST /usuarios e PUT /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
 │   │   ├── auth.controller.js
+│   │   ├── candidate.controller.js
 │   │   └── user.controller.js
 │   ├── services/               # Regra de negócio, isolada do Express (req/res)
 │   │   ├── auth.service.js
+│   │   ├── candidate.service.js
+│   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
 │   │   └── api.error.js        # Erro de negócio com status HTTP
 │   ├── models/                # Schemas do Mongoose
+│   │   ├── candidate.model.js
+│   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
 │       ├── auth.middleware.js
+│       ├── candidate.middleware.js
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
 │       ├── user-update.middleware.js
@@ -58,6 +66,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │       ├── notFound.middleware.js
 │       └── error.middleware.js
 ├── test/unit/                  # Testes de unidade, sem HTTP ou MongoDB real
+├── scripts/revalidate-candidate.js # Revalidacao administrativa de candidato pendente
 ├── .env.example                # Modelo de variáveis de ambiente
 └── package.json
 ```
@@ -90,6 +99,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
    | `JWT_SECRET`     | Segredo próprio obrigatório com pelo menos 32 bytes                |
    | `JWT_EXPIRES_IN` | Tempo de expiração do token (ex.: `1h`, `7d`)                       |
    | `CORS_ORIGIN`    | Origem(ns) permitida(s) para CORS, separadas por vírgula, ou `*`     |
+   | `STUDENT_VALIDATION_SOURCE` | `pending` (padrão) ou `mongodb` para consultar a base autorizada |
 
 3. Gere um segredo e preencha `JWT_SECRET` no `.env`:
 
@@ -111,6 +121,7 @@ O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionad
 | Start (estático) | `npm start`   | Inicia a API uma única vez com `node server.js`                              |
 | Start (dev/watch) | `npm run dev` | Inicia a API com `nodemon`, reiniciando automaticamente a cada alteração  |
 | Testes de unidade | `npm test` | Executa os testes com o runner nativo do Node.js |
+| Revalidação de aluno | `npm run candidates:revalidate -- <id>` | Revalida um candidato pendente pela base confiável |
 
 ## Documentação da API (Swagger)
 
@@ -127,6 +138,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | ------ | ------------------ | ------------ | ------------------------------------ |
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
+| POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | POST   | `/login`           | Não          | Autentica usuário ativo (VJ-2)       |
 | POST   | `/api/auth/register`| Não          | Cadastra um novo usuário             |
@@ -215,6 +227,106 @@ o login continua aceitando as senhas de usuários antigos. Esta história não i
 de tokens já emitidos, refresh token ou alteração de status de usuários.
 
 ## Contrato de autenticação e erros
+
+### Cadastro de candidato — VJ-22
+
+`POST /candidatos` exige JWT válido e uma conta existente e ativa. Os campos obrigatórios
+são `name` e `email`; o e-mail deve coincidir com o da conta autenticada para impedir o uso
+do e-mail de outro aluno como comprovação. Exemplo:
+
+```json
+{
+  "name": "Maria Silva",
+  "email": "maria@example.com",
+  "phone": "+55 11 99999-9999",
+  "city": "São Paulo",
+  "state": "SP",
+  "country": "Brasil",
+  "githubUrl": "https://github.com/maria",
+  "professionalSummary": "Profissional de testes de software",
+  "availability": "available"
+}
+```
+
+São aceitos `photoUrl`, `phone`, `city`, `state`, `country`, `linkedinUrl`, `githubUrl`,
+`portfolioUrl`, `professionalSummary` e `availability`. Campos opcionais omitidos ou `null`
+são persistidos como a string **`UNKNOWN`**, nunca como `false`. Strings vazias são inválidas.
+Disponibilidade aceita `available`, `unavailable` ou `UNKNOWN`; booleanos não são aceitos.
+Fotos e links são URLs HTTP/HTTPS, não uploads. Nome aceita até 200 caracteres, apresentação
+até 5.000 e demais textos até 2.048; telefone usa dígitos/pontuação e tem de 6 a 40 caracteres.
+
+`purchaseCode` é opcional (1 a 256 caracteres) e, quando informado, deve coincidir exatamente
+com o código cujo hash está na base confiável. O comprovante e seu hash não são gravados
+no perfil nem retornados pela API. Campos de controle (`user`, `status`, `studentVerified`,
+`visibleToCompanies`) são rejeitados. O vínculo vem do JWT e o status é definido pelo servidor.
+
+O retorno é **201** com `{ "candidate": { ... } }`, incluindo `status`, campos do perfil e
+`visibleToCompanies`. A coleção `candidates` tem índices únicos em `user` e `email`.
+Um segundo cadastro para o mesmo usuário ou e-mail retorna **409**, inclusive em concorrência
+e mesmo se o cadastro existente ainda estiver pendente/inativo. Não cria uma nova conta de usuário.
+
+| Status armazenado | Significado | Visível para empresas |
+| --- | --- | --- |
+| `pending_validation` | Pendente de validação | Não |
+| `incomplete_profile` | Perfil incompleto | Não |
+| `active` | Ativo | Sim |
+| `inactive` | Inativo | Não |
+| `blocked` | Bloqueado | Não |
+
+O cadastro nunca retorna `active`: validação pendente mantém `pending_validation` e validação
+concluída muda para `incomplete_profile`. `visibleToCompanies` é calculado exclusivamente pelo
+status. O model oferece `Candidate.findVisibleToCompanies()` com filtro obrigatório `active`
+para as futuras buscas de empresas. Esta história não cria busca de empresas nem fluxo de ativação.
+
+#### Base confiável de alunos
+
+A história não fornece a integração ou a base real. A implementação utiliza uma coleção
+administrada **`authorized_students`**, separada dos cadastros públicos, e dois modos:
+
+- `STUDENT_VALIDATION_SOURCE=pending`: validação ainda não configurada; cria candidato pendente.
+- `STUDENT_VALIDATION_SOURCE=mongodb`: consulta a base autoritativa pelo e-mail da conta.
+  Registro `authorized` permite criar perfil incompleto; `pending` mantém o cadastro pendente;
+  registro ausente ou `denied` rejeita com **422**, sem criar candidato.
+
+Somente um administrador com acesso direto ao banco deve alimentar essa coleção a partir da
+fonte oficial de alunos. Não há endpoint público para autorizar alunos. Exemplo de operação
+administrativa no `mongosh`, **após confirmar a matrícula na fonte oficial**:
+
+```javascript
+db.getSiblingDB('vagas-jl').authorized_students.updateOne(
+  { email: 'aluno-validado@example.com' },
+  { $set: { status: 'authorized' } },
+  { upsert: true }
+)
+```
+
+Os e-mails devem ser normalizados para minúsculas. Para validar por compra, o administrador
+pode registrar `purchaseCodeHash` com o SHA-256 hexadecimal (64 caracteres) do código real,
+vinculado ao mesmo e-mail. Se o cliente enviar um código, ele também deve corresponder ao hash.
+O hash não deve ser fornecido pelo cliente como comprovação; a comparação usa tempo constante.
+E-mail autorizado é suficiente quando nenhum código é enviado. Erros de infraestrutura
+propagam como erro de serviço; não autorizam o aluno nem são confundidos com rejeição de matrícula.
+
+Nenhum aluno foi importado ou autorizado automaticamente. O `.env.example` usa `pending`;
+o `.env` local existente não foi alterado. Após preparar a base, configure `mongodb` e reinicie
+a API. Um operador pode revalidar um cadastro já pendente com:
+
+```bash
+npm run candidates:revalidate -- <ObjectId-do-candidato>
+```
+
+Esse comando administrativo verifica novamente o e-mail na base confiável e muda somente
+`pending_validation` para `incomplete_profile`. A atualização condicional impede sobrescrever
+um bloqueio concorrente. Ele não ativa, desbloqueia ou recria candidatos.
+
+| Condição | HTTP |
+| --- | --- |
+| Cadastro pendente ou validado com sucesso | 201 |
+| Dados inválidos, campos não permitidos ou e-mail diferente da conta | 400 |
+| JWT inválido/ausente/expirado ou conta inexistente/inativa | 401 |
+| Mesmo usuário/e-mail já cadastrado | 409 |
+| Fora da base autorizada ou comprovante incorreto | 422 |
+
 
 ### Edição de usuário — VJ-4
 
@@ -316,6 +428,17 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Dados inválidos e campos não editáveis, HTTP 400 | Regras de validação, controller e whitelist do service |
 | Senha alterada com hash; senha omitida preservada | Hooks do model com gravação simulada |
 
+| Critério da VJ-22 | Cobertura unitária |
+| --- | --- |
+| Aluno validado recebe 201 e perfil incompleto | Service e validação de e-mail/código na base simulada |
+| Validação pendente recebe 201 e não aparece para empresas | Default do model, service e filtro de visibilidade |
+| Fora da base autorizada recebe 422 | Service de alunos e ausência de gravação do candidato |
+| Duplicidade recebe 409 | Consulta por usuário/e-mail e erro concorrente dos índices únicos |
+| Dados inválidos recebem 400 | Middleware, campos obrigatórios e bloqueio de controles do cliente |
+| Autenticação obrigatória recebe 401 | Middleware JWT, configuração da rota e conta existente/ativa |
+| Dados omitidos permanecem UNKNOWN | Defaults do model, normalização de null e rejeição de booleanos |
+| Validação posterior preserva o controle de status | Revalidação administrativa com atualização condicional |
+
 A suíte também cobre a compatibilidade dos endpoints existentes e o middleware de conexão.
 Não há testes de API/E2E nesta implementação.
 
@@ -334,7 +457,7 @@ Não há testes de API/E2E nesta implementação.
 
 ## Próximos passos
 
-- Implementar as entidades de domínio (vagas, candidatos, empresas, competências) a partir das
+- Implementar vagas, empresas, competências e complementar o perfil de candidato a partir das
   user stories do Jira.
 - Implementar o motor de match entre vagas e candidatos.
 - Configurar CI via GitHub Actions e deploy via Vercel.

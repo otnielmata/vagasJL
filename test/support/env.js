@@ -8,4 +8,5 @@ Object.assign(process.env, {
   JWT_SECRET: randomBytes(32).toString('hex'),
   JWT_EXPIRES_IN: '1h',
   CORS_ORIGIN: '*',
+  STUDENT_VALIDATION_SOURCE: 'pending',
 });
