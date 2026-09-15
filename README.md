@@ -7,9 +7,11 @@ baseado em uma estrutura padronizada de competências.
 Este repositório contém a estrutura inicial do projeto (arquitetura, autenticação,
 documentação e scripts de execução), o cadastro de usuários da
 [VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1), o login da
-[VJ-2](https://jl-mentoria.atlassian.net/browse/VJ-2) e a edição dos próprios dados da
-[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4) e o cadastro de candidatos da
-[VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22).
+[VJ-2](https://jl-mentoria.atlassian.net/browse/VJ-2), a edição dos próprios dados da
+[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4), a consulta pública autenticada da
+[VJ-6](https://jl-mentoria.atlassian.net/browse/VJ-6), o cadastro de candidatos da
+[VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22) e a exclusão da própria conta da
+[VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -37,7 +39,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── index.js
 │   │   ├── auth.routes.js
 │   │   ├── candidate.routes.js # POST /candidatos
-│   │   ├── registration.routes.js # POST /usuarios e PUT /usuarios/:id
+│   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
@@ -61,6 +63,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
 │       ├── user-update.middleware.js
+│       ├── user-delete.middleware.js
+│       ├── user-read.middleware.js
 │       ├── login.middleware.js
 │       ├── validate.middleware.js
 │       ├── notFound.middleware.js
@@ -75,6 +79,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 
 - Node.js 18+
 - Uma instância do MongoDB (local ou Atlas)
+- Para excluir contas: MongoDB com transações (replica set, inclusive local, ou Atlas).
+  MongoDB standalone não executa a exclusão; a API retorna 503 sem realizar exclusões parciais.
 
 ## Configuração
 
@@ -140,6 +146,8 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
+| GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
+| DELETE | `/usuarios/{id}`   | Sim (Bearer) | Exclui a própria conta e o candidato vinculado (VJ-23) |
 | POST   | `/login`           | Não          | Autentica usuário ativo (VJ-2)       |
 | POST   | `/api/auth/register`| Não          | Cadastra um novo usuário             |
 | POST   | `/api/auth/login`   | Não          | Autentica e retorna um token JWT     |
@@ -223,8 +231,9 @@ O token é um JWT assinado com HS256 usando `JWT_SECRET`, com identificador (`su
 
 O endpoint existente `/api/auth/login` compartilha autenticação e bloqueio de usuários inativos,
 mantendo **422** para campos inválidos. A exigência de 8 caracteres vale para novos cadastros;
-o login continua aceitando as senhas de usuários antigos. Esta história não inclui revogação
-de tokens já emitidos, refresh token ou alteração de status de usuários.
+o login continua aceitando as senhas de usuários antigos. A VJ-23 acrescenta a revogação
+efetiva de tokens após exclusão, consultando a conta em cada requisição autenticada.
+Refresh token e alteração de status de usuários não fazem parte deste escopo.
 
 ## Contrato de autenticação e erros
 
@@ -361,6 +370,34 @@ Para dados válidos e token válido, a existência do alvo é verificada antes d
 alvo inexistente retorna 404; alvo existente de outra pessoa retorna 403, conforme os cenários
 da VJ-4. A edição utiliza o documento Mongoose e `save()` para executar validações e hooks.
 
+### Consulta de usuário — VJ-6
+
+Envie `GET /usuarios/{id}` com `Authorization: Bearer <token>`, sem corpo de requisição.
+Qualquer usuário autenticado pode consultar os dados públicos de um usuário existente,
+incluindo outro usuário. A regra de editar somente os próprios dados continua exclusiva da edição.
+
+Resposta **200**:
+
+```json
+{
+  "user": {
+    "_id": "6512f1e2b3a1c2d3e4f5a6b7",
+    "name": "Maria Silva"
+  }
+}
+```
+
+Como a história não enumera os campos públicos, este contrato define apenas **`_id` e `name`**.
+O service limita os campos consultados no MongoDB e monta a resposta com essa lista explícita.
+E-mail, perfil, status, datas internas, senha, hash e tokens ficam fora da resposta, inclusive
+se novos campos privados forem adicionados ao model no futuro.
+
+- **401**: autenticação ausente, inválida ou expirada; verificada antes do identificador e do banco.
+- **400**: identificador malformado (é necessário um ObjectId com 24 caracteres hexadecimais).
+- **404**: identificador válido, mas usuário inexistente.
+- A consulta inclui usuários existentes sem filtrar por status; não informa se o alvo está ativo.
+- O perfil próprio completo continua disponível em `/api/users/me`, com seu contrato existente.
+
 ### Regras gerais
 
 - O cadastro público aceita somente `candidate` (padrão) e `company`. A criação de
@@ -374,6 +411,55 @@ da VJ-4. A edição utiliza o documento Mongoose e `save()` para executar valida
   e-mail duplicado (inclusive cadastros concorrentes), `413` para corpo excessivo,
   `422` para dados inválidos em `/api/auth/*` e `503` para indisponibilidade de conexão com o MongoDB.
 - Falhas internas retornam uma mensagem genérica. A stack só é incluída em `development`.
+
+## Exclusão da própria conta — VJ-23
+
+`DELETE /usuarios/{id}` exige `Authorization: Bearer <token>` e não precisa de corpo.
+O identificador deve ser um ObjectId de 24 caracteres hexadecimais. Nem administradores
+podem excluir outras contas por este endpoint.
+
+| Situação | Resposta |
+| --- | --- |
+| Conta própria existente e ativa, exclusão confirmada | **204**, sem corpo |
+| Identificador malformado, com autenticação válida | **400** |
+| JWT ausente, inválido ou expirado; conta autenticada inativa | **401** |
+| Alvo existente pertence a outro usuário | **403** |
+| Alvo inexistente, solicitado por uma conta autenticada ativa | **404** |
+| Repetição da exclusão do próprio identificador com JWT ainda assinado e não expirado | **404**, sem nova remoção |
+| Banco indisponível ou sem suporte a transações | **503**, sem confirmação de sucesso |
+
+A exclusão é física: remove o documento em `users` e todos os documentos em `candidates`
+cujo campo `user` corresponde ao mesmo ObjectId, independentemente do status do candidato.
+Assim, o candidato não permanece disponível para consultas de empresas e os índices únicos
+deixam de reservar os e-mails removidos. O novo cadastro recebe outro identificador: tokens
+da conta antiga não passam a representar a nova conta. Outros usuários/candidatos não são
+alterados. A base administrativa de autorização de alunos não é um cadastro de candidato
+e não é modificada por esta operação.
+
+Todas as rotas que usam `authenticate` verificam agora a existência e o status ativo da conta
+no MongoDB, além da assinatura e expiração do JWT; o papel de autorização vem do banco.
+Depois da exclusão, login com as antigas credenciais e uso dos antigos tokens retornam **401**.
+A única exceção de resposta é a repetição de `DELETE` contra o próprio identificador ausente:
+retorna **404** para cumprir a idempotência da história, sem autorizar acesso ou qualquer mutação.
+JWT expirado/inválido continua retornando **401**, mesmo nessa repetição.
+
+### Atomicidade e ambiente MongoDB
+
+A remoção usa uma única transação com a mesma sessão para leitura e exclusão de usuário
+e candidatos, confirmação majoritária e leituras no primário. Uma falha aborta a transação;
+o controller só retorna 204 depois da confirmação. Não existe fallback com remoções isoladas.
+Consulte a documentação oficial de [transações do MongoDB](https://www.mongodb.com/docs/manual/core/transactions/)
+e [transações do Mongoose](https://mongoosejs.com/docs/transactions.html).
+
+Para desenvolvimento, configure um replica set local antes de usar o DELETE e ajuste
+`MONGODB_URI`, por exemplo `mongodb://localhost:27017/vagas-jl?replicaSet=rs0`, se o conjunto
+configurado se chamar `rs0`. Acrescentar o parâmetro à URI **não** transforma um servidor
+standalone em replica set. Alternativamente, use um cluster Atlas. Esta implementação não
+altera o `.env`, a topologia do MongoDB nem dados reais automaticamente.
+
+A limpeza usa a coleção `candidates` e o vínculo `user` definidos pelo cadastro da VJ-22,
+sem criar uma segunda definição de schema. Ausência de candidato não impede a exclusão.
+Buscas de empresas não são implementadas nesta história.
 
 ## Conexão e execução
 
@@ -439,8 +525,31 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Dados omitidos permanecem UNKNOWN | Defaults do model, normalização de null e rejeição de booleanos |
 | Validação posterior preserva o controle de status | Revalidação administrativa com atualização condicional |
 
+| Critério da VJ-6 | Cobertura unitária |
+| --- | --- |
+| Consulta de usuário existente, HTTP 200 | Service e controller; permite consultar outro usuário |
+| Somente dados públicos, sem informações de autenticação | Projeção do banco e lista explícita com testes para campos privados e futuros |
+| Usuário inexistente, HTTP 404 | Service, controller e middleware de erros |
+| Autenticação obrigatória, HTTP 401 | Middleware JWT e configuração da rota antes da validação/conexão |
+| Identificador malformado, HTTP 400 | Regras de validação da consulta |
+
 A suíte também cobre a compatibilidade dos endpoints existentes e o middleware de conexão.
 Não há testes de API/E2E nesta implementação.
+
+| Critério da VJ-23 | Cobertura unitária |
+| --- | --- |
+| Exclusão própria, 204 sem corpo | Service com sessão simulada e controller |
+| Somente usuário autenticado; 401 para JWT ausente/inválido/expirado | Middleware de autenticação e ordem da rota |
+| Usuário inexistente e segunda exclusão, 404 | Service e middleware, sem novas mutações |
+| Exclusão de outro usuário, 403 | Service, sem limpeza de registros |
+| Login rejeitado após exclusão | Service de autenticação com persistência simulada |
+| Tokens anteriores deixam de autorizar acesso | Middleware com conta inexistente/inativa e papel atualizado |
+| Candidato removido deixa de aparecer em consultas | Limpeza pelo vínculo user, preservando outros candidatos |
+| Reutilização de e-mail com novo identificador | Services de exclusão e cadastro com persistência simulada |
+| Falhas não retornam sucesso parcial | Contrato de transação/sessão e propagação de erros |
+
+Os testes não comprovam uma transação contra infraestrutura real: MongoDB, rollback e
+confirmação são simulados. Não foram executadas exclusões reais nem testes de API/E2E.
 
 ## Integração contínua e deploy futuros
 

@@ -33,4 +33,22 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { create, getMe, update };
+async function remove(req, res, next) {
+  try {
+    await userService.deleteUser(req.params.id, req.user.id);
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function show(req, res, next) {
+  try {
+    const user = await userService.getPublicUserById(req.params.id);
+    return res.status(200).json({ user });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { create, getMe, update, remove, show };
