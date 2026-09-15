@@ -116,9 +116,23 @@ test('existing candidate for user or email receives 409 before verification and 
   await assert.rejects(registerCandidate(userId, input), { statusCode: 409 });
   const filter = Candidate.findOne.mock.calls[0].arguments[0];
   assert.equal(filter.$or[0].user.toString(), userId);
+  assert.equal(filter.$or[0].deletedAt, null);
   assert.deepEqual(filter.$or[1], { email: input.email, status: 'active' });
   assert.equal(studentValidation.validateStudentEligibility.mock.callCount(), 0);
   assert.equal(save.mock.callCount(), 0);
+});
+
+test('allows a new validated candidate after logical deletion and creates a new id', async (context) => {
+  const historicalId = '6512f1e2b3a1c2d3e4f5a6b6';
+  isolate(context);
+  const candidate = await registerCandidate(userId, input);
+  const filter = Candidate.findOne.mock.calls[0].arguments[0];
+
+  assert.deepEqual(filter.$or[0], { user: new User({ _id: userId })._id, deletedAt: null });
+  assert.deepEqual(filter.$or[1], { email: input.email, status: 'active' });
+  assert.notEqual(candidate.id, historicalId);
+  assert.equal(studentValidation.validateStudentEligibility.mock.callCount(), 1);
+  assert.equal(candidate.status, 'incomplete_profile');
 });
 
 test('cannot use another students email or proof to authorize the account', async (context) => {

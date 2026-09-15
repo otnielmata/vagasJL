@@ -29,6 +29,11 @@ const EMAIL_UPDATE_TRANSACTION_OPTIONS = Object.freeze({
   readConcern: { level: 'snapshot' },
   writeConcern: { w: 'majority' },
 });
+const DELETABLE_CANDIDATE_STATUSES = Object.freeze([
+  CANDIDATE_STATUS.PENDING_VALIDATION,
+  CANDIDATE_STATUS.INCOMPLETE_PROFILE,
+  CANDIDATE_STATUS.ACTIVE,
+]);
 
 function isValidSource(source) {
   return typeof source === 'string' && source.trim().length > 0 && source.length <= 100;
@@ -235,7 +240,10 @@ async function registerCandidate(userId, input) {
   }
 
   if (await Candidate.findOne({
-    $or: [{ user: user._id }, { email, status: CANDIDATE_STATUS.ACTIVE }],
+    $or: [
+      { user: user._id, deletedAt: null },
+      { email, status: CANDIDATE_STATUS.ACTIVE },
+    ],
   })) {
     throw new ApiError(409, 'Ja existe um candidato para este usuario ou um candidato ativo com este email');
   }
@@ -427,10 +435,42 @@ async function updateCandidate(candidateId, requesterId, requesterRole, input) {
   }
 }
 
+async function deleteCandidate(candidateId, requesterId, requesterRole) {
+  if (requesterRole !== 'candidate') {
+    throw new ApiError(403, 'Apenas candidatos podem excluir um perfil de candidato');
+  }
+
+  const candidate = await Candidate.findById(candidateId).select('user status +deletedAt');
+  if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
+  if (candidate.user.toString() !== String(requesterId).toLowerCase()) {
+    throw new ApiError(403, 'Voce so pode excluir seu proprio cadastro de candidato');
+  }
+  if (candidate.status === CANDIDATE_STATUS.INACTIVE) {
+    throw new ApiError(404, 'Candidato nao encontrado');
+  }
+  if (!DELETABLE_CANDIDATE_STATUSES.includes(candidate.status)) {
+    throw new ApiError(409, 'Candidato bloqueado nao pode ser excluido');
+  }
+
+  const deletedAt = new Date();
+  const deleted = await Candidate.findOneAndUpdate(
+    {
+      _id: candidate._id,
+      user: candidate.user,
+      status: { $in: DELETABLE_CANDIDATE_STATUSES },
+      deletedAt: null,
+    },
+    { $set: { status: CANDIDATE_STATUS.INACTIVE, deletedAt } },
+    { new: true, runValidators: true }
+  );
+  if (!deleted) throw new ApiError(404, 'Candidato nao encontrado');
+}
+
 module.exports = {
   registerCandidate,
   revalidatePendingCandidate,
   validateCandidateEligibility,
   getCandidateById,
   updateCandidate,
+  deleteCandidate,
 };

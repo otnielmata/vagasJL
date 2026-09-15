@@ -20,6 +20,7 @@ test('defaults to pending and persists every omitted profile field as UNKNOWN', 
   assert.equal(candidate.eligibility.source, ELIGIBILITY_SOURCE.PENDING);
   assert.equal(candidate.eligibility.lastAttemptAt, null);
   assert.equal(candidate.eligibility.approvedAt, null);
+  assert.equal(candidate.deletedAt, null);
   assert.equal(candidate.visibleToCompanies, false);
   for (const field of PROFILE_FIELDS) assert.equal(candidate[field], UNKNOWN);
   assert.equal(candidate.validateSync(), undefined);
@@ -33,15 +34,18 @@ for (const status of Object.values(CANDIDATE_STATUS)) {
   });
 }
 
-test('rejects unknown status and enforces one profile per user plus unique active email', () => {
+test('rejects unknown status and enforces one current profile per user plus unique active email', () => {
   assert.ok(new Candidate({ ...input, status: 'approved' }).validateSync().errors.status);
   assert.deepEqual(Object.keys(new Candidate({}).validateSync().errors).sort(), ['email', 'name', 'user']);
   const indexes = Candidate.schema.indexes();
-  assert.ok(indexes.some(([keys, options]) => keys.user === 1 && options.unique));
+  assert.ok(indexes.some(([keys, options]) => keys.user === 1 && options.unique &&
+    options.name === 'unique_current_candidate_user' &&
+    options.partialFilterExpression.deletedAt === null));
   assert.ok(indexes.some(([keys, options]) => keys.email === 1 && options.unique &&
     options.name === 'unique_active_candidate_email' &&
     options.partialFilterExpression.status === CANDIDATE_STATUS.ACTIVE));
   assert.equal(Candidate.schema.path('email').options.unique, undefined);
+  assert.equal(Candidate.schema.path('user').options.unique, undefined);
 });
 
 test('company query restricts results to active candidates', (context) => {
@@ -111,4 +115,14 @@ test('stores invalidated eligibility as private audit history', () => {
   assert.equal(candidate.eligibilityHistory.length, 1);
   assert.equal(Candidate.schema.path('eligibilityHistory').options.select, false);
   assert.equal(candidate.toJSON().eligibilityHistory, undefined);
+});
+
+test('stores logical deletion date privately and releases only the current-user index', () => {
+  const deletedAt = new Date('2026-09-15T12:00:00.000Z');
+  const candidate = new Candidate({ ...input, status: CANDIDATE_STATUS.INACTIVE, deletedAt });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(candidate.deletedAt, deletedAt);
+  assert.equal(Candidate.schema.path('deletedAt').options.select, false);
+  assert.equal(candidate.toJSON().deletedAt, undefined);
+  assert.equal(candidate.visibleToCompanies, false);
 });

@@ -6,14 +6,15 @@ info:
     e permite que empresas encontrem profissionais compativeis com suas vagas.
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
-    elegibilidade (VJ-24), visualizacao individual (VJ-25) e alteracao de candidatos (VJ-26).
+    elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
+    logica de candidatos (VJ-27).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
   - name: Candidates
-    description: Cadastro, validacao, visualizacao e alteracao de candidatos
+    description: Cadastro, validacao, visualizacao, alteracao e exclusao logica de candidatos
   - name: Auth
     description: Cadastro e autenticacao de usuarios
   - name: Users
@@ -330,6 +331,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Candidates]
+      summary: Exclui logicamente o proprio candidato (VJ-27)
+      description: >
+        Exige JWT valido de uma conta ativa com papel candidate e permite excluir somente o
+        cadastro vinculado ao titular. Candidatos pending_validation, incomplete_profile ou
+        active passam atomicamente para inactive e recebem uma data interna de exclusao. A
+        resposta nao possui corpo. O registro deixa imediatamente de aparecer para empresas,
+        buscas e match, mas a conta, as credenciais e a base autorizada de alunos permanecem
+        ativas. O email e o usuario podem originar um novo cadastro, com novo identificador e
+        nova validacao. Repetir a exclusao retorna 404. O endpoint nao desbloqueia, reativa nem
+        aceita status definido pelo cliente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do proprio candidato
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b6
+      responses:
+        '204':
+          description: Candidato excluido logicamente; resposta sem corpo
+        '400':
+          description: Identificador de candidato malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado; conta inexistente ou inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel sem permissao ou tentativa de excluir outro candidato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Candidato inexistente ou ja inativo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Candidato bloqueado nao pode ser excluido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /usuarios/{id}:
     get:

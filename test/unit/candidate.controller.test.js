@@ -108,6 +108,40 @@ test('candidate update authenticates and permits only candidate before validatio
   }
 });
 
+test('candidate deletion controller returns 204 without a response body', async (context) => {
+  const service = context.mock.method(candidateService, 'deleteCandidate', async () => undefined);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    end() { this.ended = true; return this; },
+  };
+  const request = {
+    params: { id: 'candidate' },
+    user: { id: 'owner', role: 'candidate' },
+    body: { status: 'active' },
+  };
+
+  await candidateController.remove(request, response, () => assert.fail('unexpected error'));
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.ended, true);
+  assert.equal(response.body, undefined);
+  assert.deepEqual(service.mock.calls[0].arguments, ['candidate', 'owner', 'candidate']);
+});
+
+for (const statusCode of [403, 404, 409, 503]) {
+  test(`candidate deletion controller forwards ${statusCode} without success`, async (context) => {
+    const failure = new ApiError(statusCode, 'Exclusao rejeitada');
+    context.mock.method(candidateService, 'deleteCandidate', async () => { throw failure; });
+    let forwarded;
+    await candidateController.remove(
+      { params: { id: 'candidate' }, user: { id: 'owner', role: 'candidate' } },
+      {},
+      (error) => { forwarded = error; }
+    );
+    assert.equal(forwarded, failure);
+  });
+}
+
 test('returns 201 using the token owner and hides purchase proof', async (context) => {
   const candidate = new Candidate({ user: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria', email: 'maria@example.com' });
   const register = context.mock.method(candidateService, 'registerCandidate', async () => candidate);

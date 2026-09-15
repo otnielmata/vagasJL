@@ -6,6 +6,14 @@ const StudentAuthorization = require('../src/models/student-authorization.model'
 async function run() {
   try {
     await connectDB();
+    await Candidate.collection.updateMany(
+      { deletedAt: { $exists: false } },
+      { $set: { deletedAt: null } }
+    );
+    const indexes = await Candidate.collection.indexes();
+    if (indexes.some((index) => index.name === 'user_1')) {
+      await Candidate.collection.dropIndex('user_1');
+    }
     const removedCandidateIndexes = await Candidate.syncIndexes();
     await StudentAuthorization.createIndexes();
     console.log('Indices de candidatos sincronizados:', removedCandidateIndexes);
