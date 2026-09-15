@@ -34,6 +34,12 @@ const PROFILE_FIELDS = Object.freeze([
   'portfolioUrl', 'professionalSummary', 'availability',
 ]);
 
+const CANDIDATE_EDITABLE_FIELDS = Object.freeze(['name', 'email', ...PROFILE_FIELDS]);
+
+const CANDIDATE_MINIMUM_PROFILE_FIELDS = Object.freeze([
+  'name', 'email', 'phone', 'city', 'state', 'country', 'professionalSummary', 'availability',
+]);
+
 module.exports = {
   UNKNOWN,
   CANDIDATE_STATUS,
@@ -41,4 +47,6 @@ module.exports = {
   ELIGIBILITY_METHOD,
   ELIGIBILITY_SOURCE,
   PROFILE_FIELDS,
+  CANDIDATE_EDITABLE_FIELDS,
+  CANDIDATE_MINIMUM_PROFILE_FIELDS,
 };

@@ -92,3 +92,23 @@ test('rejects invalid validation status, method and oversized source', () => {
     assert.ok(Object.keys(error.errors).some((path) => path.startsWith('eligibility.')));
   }
 });
+
+test('stores invalidated eligibility as private audit history', () => {
+  const invalidatedAt = new Date('2026-09-15T12:00:00.000Z');
+  const candidate = new Candidate({
+    ...input,
+    eligibilityHistory: [{
+      email: input.email,
+      status: ELIGIBILITY_STATUS.APPROVED,
+      method: ELIGIBILITY_METHOD.EMAIL,
+      source: ELIGIBILITY_SOURCE.MONGODB,
+      lastAttemptAt: invalidatedAt,
+      approvedAt: invalidatedAt,
+      invalidatedAt,
+    }],
+  });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(candidate.eligibilityHistory.length, 1);
+  assert.equal(Candidate.schema.path('eligibilityHistory').options.select, false);
+  assert.equal(candidate.toJSON().eligibilityHistory, undefined);
+});

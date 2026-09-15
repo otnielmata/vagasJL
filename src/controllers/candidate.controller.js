@@ -31,4 +31,18 @@ async function show(req, res, next) {
   }
 }
 
-module.exports = { register, validateEligibility, show };
+async function update(req, res, next) {
+  try {
+    const candidate = await candidateService.updateCandidate(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
+    return res.status(200).json({ candidate });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, validateEligibility, show, update };

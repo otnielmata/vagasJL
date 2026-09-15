@@ -6,14 +6,14 @@ info:
     e permite que empresas encontrem profissionais compativeis com suas vagas.
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
-    elegibilidade (VJ-24) e visualizacao individual de candidatos (VJ-25).
+    elegibilidade (VJ-24), visualizacao individual (VJ-25) e alteracao de candidatos (VJ-26).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
   - name: Candidates
-    description: Cadastro, validacao e visualizacao de candidatos
+    description: Cadastro, validacao, visualizacao e alteracao de candidatos
   - name: Auth
     description: Cadastro e autenticacao de usuarios
   - name: Users
@@ -248,6 +248,88 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/Unavailable'
+
+    patch:
+      tags: [Candidates]
+      summary: Altera parcialmente o proprio candidato (VJ-26)
+      description: >
+        Exige JWT valido de candidato e permite alterar somente o cadastro vinculado a
+        conta autenticada. Campos omitidos permanecem inalterados e controles do servidor
+        sao rejeitados. Elegibilidade aprovada com todos os dados minimos produz status
+        active; sem os dados minimos produz incomplete_profile. Elegibilidade nao aprovada
+        mantem pending_validation. Inativos e bloqueados nao podem ser editados. Alterar o
+        email atualiza conta e candidato na mesma transacao, arquiva internamente a validacao
+        anterior e reinicia a elegibilidade como pending. A resposta nunca inclui o historico,
+        conta vinculada ou detalhes internos de validacao.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do proprio candidato
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateUpdateRequest'
+      responses:
+        '200':
+          description: Cadastro atualizado e status recalculado pelo servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                additionalProperties: false
+                properties:
+                  candidate:
+                    $ref: '#/components/schemas/PublicCandidate'
+        '400':
+          description: Identificador, corpo, campo ou valor invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado; conta inexistente ou inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel sem permissao ou tentativa de alterar outro candidato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Candidato nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email em uso, candidato inativo/bloqueado ou alteracao concorrente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Banco indisponivel ou sem suporte a transacao necessaria para alterar email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /usuarios/{id}:
     get:
@@ -784,20 +866,60 @@ components:
           enum: [available, unavailable, UNKNOWN, null]
           default: UNKNOWN
           description: Booleanos nao sao aceitos; ausente ou null significa UNKNOWN
+    CandidateUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          description: Alterar reinicia a elegibilidade e atualiza a conta na mesma transacao
+        photoUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        phone:
+          type: string
+          nullable: true
+          description: Telefone valido, UNKNOWN ou null para remover a informacao
+        city:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        state:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        country:
+          $ref: '#/components/schemas/CandidateOptionalText'
+        linkedinUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        githubUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        portfolioUrl:
+          $ref: '#/components/schemas/CandidateOptionalUrl'
+        professionalSummary:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 5000
+          description: Texto, UNKNOWN ou null para remover a informacao
+        availability:
+          type: string
+          nullable: true
+          enum: [available, unavailable, UNKNOWN, null]
+          description: Booleanos nao sao aceitos; UNKNOWN ou null representam dado nao informado
     CandidateOptionalText:
       type: string
       nullable: true
       minLength: 1
       maxLength: 2048
-      default: UNKNOWN
-      description: Ausente ou null e persistido como UNKNOWN; texto vazio e invalido
+      description: Texto ou UNKNOWN; null representa informacao explicitamente nao fornecida
     CandidateOptionalUrl:
       type: string
       nullable: true
       minLength: 1
       maxLength: 2048
-      default: UNKNOWN
-      description: URL HTTP/HTTPS absoluta ou UNKNOWN; ausente ou null e persistido como UNKNOWN
+      description: URL HTTP/HTTPS absoluta ou UNKNOWN; null remove a informacao
     Candidate:
       type: object
       required: [_id, user, name, email, status, eligibility, visibleToCompanies]
