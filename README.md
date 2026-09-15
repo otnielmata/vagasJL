@@ -12,7 +12,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-6](https://jl-mentoria.atlassian.net/browse/VJ-6), o cadastro de candidatos da
 [VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22) e a exclusão da própria conta da
 [VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23), além da validação de elegibilidade da
-[VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24).
+[VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
+[VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -39,7 +40,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
-│   │   ├── candidate.routes.js # POST /candidatos e /candidatos/:id/validacao
+│   │   ├── candidate.routes.js # Cadastro, validação e consulta de candidatos
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
@@ -61,6 +62,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
 │       ├── auth.middleware.js
 │       ├── candidate.middleware.js
+│       ├── candidate-read.middleware.js
 │       ├── candidate-validation.middleware.js
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
@@ -149,6 +151,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
+| GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | POST   | `/candidatos/{id}/validacao` | Sim (Bearer) | Valida a elegibilidade do próprio candidato (VJ-24) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
@@ -412,6 +415,32 @@ fluxos separados; somente `status: active` torna `visibleToCompanies` verdadeiro
 após aprovação retorna **200** e preserva o estado válido. Candidatos antigos já aprovados recebem
 os metadados legados uma única vez, sem promoção para `active`.
 
+### Visualização de candidato — VJ-25
+
+`GET /candidatos/{id}` exige JWT válido de uma conta ativa com papel `candidate` ou `company`.
+O candidato pode consultar somente o próprio cadastro, independentemente de estar pendente,
+incompleto, ativo, inativo ou bloqueado. A empresa recebe dados somente quando o candidato está
+`active`; cadastro inexistente ou em qualquer outro status retorna a mesma resposta **404**, sem
+revelar o estado real.
+
+A resposta contém apenas `_id`, nome, foto, e-mail de contato, telefone, localização, LinkedIn,
+GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`;
+a empresa não. Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
+como `UNKNOWN`, nunca como `false`. Conta vinculada, senha, hashes, tokens, comprovantes, datas e
+detalhes internos de elegibilidade não fazem parte da projeção nem do objeto retornado.
+
+| Condição | HTTP |
+| --- | --- |
+| Titular consulta o próprio cadastro em qualquer status | 200 |
+| Empresa consulta candidato ativo | 200 |
+| Identificador malformado | 400 |
+| JWT ausente/inválido ou conta inexistente/inativa | 401 |
+| Candidato consulta outro candidato ou papel sem permissão | 403 |
+| Candidato inexistente ou não ativo para empresa | 404 |
+
+A consulta não executa gravações e não altera os dados nem o status do candidato. Listagem,
+filtros, busca textual e cálculo de match continuam fora do escopo desta história.
+
 
 ### Edição de usuário — VJ-4
 
@@ -617,6 +646,17 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Identificador ou evidência inválida retorna 400 | Middleware com lista fechada de campos e erros sem valores |
 | Fonte indisponível retorna 503 sem mudanças | Adapter e service sem operação de persistência |
 | Comprovantes não são persistidos nem expostos | Schemas, serialização, controller e inspeção da atualização |
+
+| Critério da VJ-25 | Cobertura unitária |
+| --- | --- |
+| Titular consulta o próprio perfil em qualquer status | Service com todos os status controlados e controller HTTP 200 |
+| Empresa consulta somente candidato ativo | Filtro atômico por `_id` e `status: active` no banco |
+| Status não ativo permanece oculto para empresa | Mesmo erro 404 para pendente, incompleto, inativo e bloqueado |
+| Candidato não consulta outro candidato | Verificação de titularidade e erro 403 |
+| Campos opcionais desconhecidos usam `UNKNOWN` | Normalização explícita, inclusive contra valores legados `false` |
+| Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |
+| Autenticação e identificador válido são obrigatórios | Ordem da rota e middleware de ObjectId, com erros 401 e 400 |
+| Consulta não altera cadastro ou status | Service somente leitura e teste de imutabilidade do resultado armazenado |
 
 | Critério da VJ-6 | Cobertura unitária |
 | --- | --- |
