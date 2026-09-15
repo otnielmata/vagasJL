@@ -41,7 +41,7 @@ const eligibilitySchema = new mongoose.Schema({
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
-  email: { type: String, required: true, unique: true, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
+  email: { type: String, required: true, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
   ...optionalProfile,
   availability: {
     type: String,
@@ -56,6 +56,15 @@ const candidateSchema = new mongoose.Schema({
   },
   eligibility: { type: eligibilitySchema, default: () => ({}) },
 }, { timestamps: true });
+
+candidateSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    name: 'unique_active_candidate_email',
+    partialFilterExpression: { status: CANDIDATE_STATUS.ACTIVE },
+  }
+);
 
 candidateSchema.virtual('visibleToCompanies').get(function visibleToCompanies() {
   return this.status === CANDIDATE_STATUS.ACTIVE;

@@ -22,8 +22,12 @@ test('accepts minimal data, null optional fields and UNKNOWN without converting 
   }
 });
 
-test('normalizes identity fields and accepts valid optional data', async () => {
-  const result = await check({ name: ' Maria ', email: ' MARIA@Example.COM ', phone: '+55 11 99999-9999', photoUrl: 'https://example.com/a.png', availability: 'available', purchaseCode: 'code' });
+test('normalizes identity fields and accepts valid optional data and trusted evidence', async () => {
+  const result = await check({
+    name: ' Maria ', email: ' MARIA@Example.COM ', phone: '+55 11 99999-9999',
+    photoUrl: 'https://example.com/a.png', availability: 'available', purchaseCode: 'code',
+    trustedIdentifier: 'student-identifier',
+  });
   assert.equal(result.continued, true);
   assert.equal(result.request.body.email, input.email);
   assert.equal(result.request.body.name, input.name);
@@ -36,6 +40,8 @@ for (const body of [undefined, null, {}, [], { email: input.email }, { name: inp
   { ...input, linkedinUrl: 'invalid' }, { ...input, portfolioUrl: 'ftp://example.com' },
   { ...input, professionalSummary: 'a'.repeat(5001) }, { ...input, purchaseCode: null },
   { ...input, purchaseCode: '' }, { ...input, status: 'active' }, { ...input, user: 'someone' },
+  { ...input, trustedIdentifier: null }, { ...input, trustedIdentifier: '' },
+  { ...input, trustedIdentifier: '   ' }, { ...input, trustedIdentifier: 123 },
   { ...input, studentVerified: true }, { ...input, visibleToCompanies: true },
   { ...input, eligibility: { status: 'approved' } },
 ]) {

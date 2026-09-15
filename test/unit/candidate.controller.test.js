@@ -14,6 +14,16 @@ test('registration route authenticates before validation, storage and controller
   const route = router.stack.find((layer) => layer.route?.path === '/' && layer.route.methods.post).route;
   const handlers = route.stack.map((layer) => layer.handle);
   assert.equal(handlers[0], authenticate);
+  const authorizationResponse = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  handlers[1]({ user: { role: 'company' } }, authorizationResponse,
+    () => assert.fail('company must not reach candidate registration'));
+  assert.equal(authorizationResponse.statusCode, 403);
+  let candidateAuthorized = false;
+  handlers[1]({ user: { role: 'candidate' } }, {}, () => { candidateAuthorized = true; });
+  assert.equal(candidateAuthorized, true);
   assert.ok(handlers.indexOf(ensureDatabase) > 1);
   assert.equal(handlers.at(-1), candidateController.register);
 });

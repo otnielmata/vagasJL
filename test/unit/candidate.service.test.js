@@ -35,7 +35,7 @@ const validations = {
 };
 
 function isolate(context, validation = validations.approved) {
-  const user = new User({ _id: userId, name: 'Maria', email: input.email });
+  const user = new User({ _id: userId, name: 'Maria', email: input.email, role: 'candidate' });
   context.mock.method(User, 'findById', () => ({ select: async () => user }));
   context.mock.method(Candidate, 'init', async () => Candidate);
   context.mock.method(Candidate, 'findOne', async () => null);
@@ -58,6 +58,7 @@ test('approved student transitions to incomplete profile and persists validation
   const candidate = await registerCandidate(userId, {
     ...input,
     purchaseCode: 'proof',
+    trustedIdentifier: 'approved-id',
     status: 'active',
     user: 'untrusted',
     studentVerified: true,
@@ -73,10 +74,11 @@ test('approved student transitions to incomplete profile and persists validation
   assert.equal(candidate.eligibility.approvedAt, candidate.eligibility.lastAttemptAt);
   assert.equal(candidate.toJSON().eligibility.source, undefined);
   assert.equal(candidate.toJSON().purchaseCode, undefined);
+  assert.equal(candidate.toJSON().trustedIdentifier, undefined);
   assert.equal(candidate.toJSON().studentVerified, undefined);
   assert.equal(save.mock.callCount(), 1);
   assert.deepEqual(studentValidation.validateStudentEligibility.mock.calls[0].arguments, [input.email, {
-    purchaseCode: 'proof', trustedIdentifier: undefined,
+    purchaseCode: 'proof', trustedIdentifier: 'approved-id',
   }]);
 });
 
@@ -114,7 +116,7 @@ test('existing candidate for user or email receives 409 before verification and 
   await assert.rejects(registerCandidate(userId, input), { statusCode: 409 });
   const filter = Candidate.findOne.mock.calls[0].arguments[0];
   assert.equal(filter.$or[0].user.toString(), userId);
-  assert.deepEqual(filter.$or[1], { email: input.email });
+  assert.deepEqual(filter.$or[1], { email: input.email, status: 'active' });
   assert.equal(studentValidation.validateStudentEligibility.mock.callCount(), 0);
   assert.equal(save.mock.callCount(), 0);
 });
@@ -137,6 +139,19 @@ for (const user of [null, { status: 'inactive' }]) {
   });
 }
 
+for (const role of ['company', 'admin']) {
+  test(`rejects active ${role} account with 403 before validation or persistence`, async (context) => {
+    const save = isolate(context);
+    User.findById.mock.mockImplementation(() => ({
+      select: async () => ({ status: 'active', email: input.email, role }),
+    }));
+    await assert.rejects(registerCandidate(userId, input), { statusCode: 403 });
+    assert.equal(Candidate.init.mock.callCount(), 0);
+    assert.equal(studentValidation.validateStudentEligibility.mock.callCount(), 0);
+    assert.equal(save.mock.callCount(), 0);
+  });
+}
+
 for (const [failure, statusCode] of [
   [Object.assign(new Error('duplicate key'), { code: 11000 }), 409],
   [Object.assign(new Error('invalid candidate'), { name: 'ValidationError' }), 400],
@@ -151,6 +166,14 @@ for (const [failure, statusCode] of [
 test('validation outage does not save or grant candidate status', async (context) => {
   const save = isolate(context);
   const failure = new Error('validation unavailable');
+  studentValidation.validateStudentEligibility.mock.mockImplementation(async () => { throw failure; });
+  await assert.rejects(registerCandidate(userId, input), (error) => error === failure);
+  assert.equal(save.mock.callCount(), 0);
+});
+
+test('does not disguise a validation registry conflict as a candidate duplicate', async (context) => {
+  const save = isolate(context);
+  const failure = Object.assign(new Error('registry duplicate'), { code: 11000 });
   studentValidation.validateStudentEligibility.mock.mockImplementation(async () => { throw failure; });
   await assert.rejects(registerCandidate(userId, input), (error) => error === failure);
   assert.equal(save.mock.callCount(), 0);

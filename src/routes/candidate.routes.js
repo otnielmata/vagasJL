@@ -8,7 +8,7 @@ const candidateController = require('../controllers/candidate.controller');
 
 const router = Router();
 
-router.post('/', authenticate, candidateRules(),
+router.post('/', authenticate, authorize('candidate'), candidateRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.register);
 
 router.post('/:id/validacao', authenticate, authorize('candidate'), candidateValidationRules(),
