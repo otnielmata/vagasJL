@@ -4,9 +4,10 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const config = require('./config/env');
-const connectDB = require('./config/db');
+const ensureDatabase = require('./middleware/database.middleware');
 const setupSwagger = require('./config/swagger');
 const routes = require('./routes');
+const registrationRoutes = require('./routes/registration.routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
@@ -25,17 +26,11 @@ if (config.env !== 'test') {
 // Documentacao Swagger (/api-docs e /api-docs.json)
 setupSwagger(app);
 
-app.use(['/api/auth', '/api/users'], async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+app.use(['/api/auth', '/api/users'], ensureDatabase);
 
 // Rotas da API
 app.use('/api', routes);
+app.use('/usuarios', registrationRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({
