@@ -80,6 +80,34 @@ test('candidate lookup authenticates and permits only candidate or company befor
   assert.equal(denied.statusCode, 403);
 });
 
+test('candidate update authenticates and permits only candidate before validation and storage', () => {
+  const route = router.stack.find((layer) => layer.route?.path === '/:id' && layer.route.methods.patch).route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  assert.equal(handlers[0], authenticate);
+  assert.ok(handlers.indexOf(ensureDatabase) > 2);
+  assert.equal(handlers.at(-1), candidateController.update);
+
+  const unauthenticated = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  handlers[0]({ headers: {} }, unauthenticated, () => assert.fail('missing token must be denied'));
+  assert.equal(unauthenticated.statusCode, 401);
+
+  let continued = false;
+  handlers[1]({ user: { role: 'candidate' } }, {}, () => { continued = true; });
+  assert.equal(continued, true);
+
+  for (const role of ['company', 'admin']) {
+    const denied = {
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+    };
+    handlers[1]({ user: { role } }, denied, () => assert.fail(`${role} must be denied`));
+    assert.equal(denied.statusCode, 403);
+  }
+});
+
 test('returns 201 using the token owner and hides purchase proof', async (context) => {
   const candidate = new Candidate({ user: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria', email: 'maria@example.com' });
   const register = context.mock.method(candidateService, 'registerCandidate', async () => candidate);
@@ -174,6 +202,47 @@ for (const statusCode of [403, 404, 503]) {
     let forwarded;
     await candidateController.show(
       { params: { id: 'candidate' }, user: { id: 'owner', role: 'candidate' } },
+      {},
+      (error) => { forwarded = error; }
+    );
+    assert.equal(forwarded, failure);
+  });
+}
+
+test('candidate update controller returns 200 with safe service result', async (context) => {
+  const candidate = {
+    _id: 'candidate',
+    name: 'Maria Silva',
+    email: 'maria@example.com',
+    status: 'active',
+  };
+  const service = context.mock.method(candidateService, 'updateCandidate', async () => candidate);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  const request = {
+    params: { id: 'candidate' },
+    user: { id: 'owner', role: 'candidate' },
+    body: { name: 'Maria Silva' },
+  };
+
+  await candidateController.update(request, response, () => assert.fail('unexpected error'));
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, { candidate });
+  assert.deepEqual(service.mock.calls[0].arguments, [
+    'candidate', 'owner', 'candidate', request.body,
+  ]);
+});
+
+for (const statusCode of [400, 403, 404, 409, 503]) {
+  test(`candidate update controller forwards ${statusCode} without success`, async (context) => {
+    const failure = new ApiError(statusCode, 'Alteracao rejeitada');
+    context.mock.method(candidateService, 'updateCandidate', async () => { throw failure; });
+    let forwarded;
+    await candidateController.update(
+      { params: { id: 'candidate' }, user: { id: 'owner', role: 'candidate' }, body: {} },
       {},
       (error) => { forwarded = error; }
     );

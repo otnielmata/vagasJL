@@ -13,7 +13,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-22](https://jl-mentoria.atlassian.net/browse/VJ-22) e a exclusão da própria conta da
 [VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23), além da validação de elegibilidade da
 [VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
-[VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25).
+[VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
+[VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -40,7 +41,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
-│   │   ├── candidate.routes.js # Cadastro, validação e consulta de candidatos
+│   │   ├── candidate.routes.js # Operações de candidatos
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
@@ -63,6 +64,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │       ├── auth.middleware.js
 │       ├── candidate.middleware.js
 │       ├── candidate-read.middleware.js
+│       ├── candidate-update.middleware.js
 │       ├── candidate-validation.middleware.js
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
@@ -84,8 +86,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 
 - Node.js 18+
 - Uma instância do MongoDB (local ou Atlas)
-- Para excluir contas: MongoDB com transações (replica set, inclusive local, ou Atlas).
-  MongoDB standalone não executa a exclusão; a API retorna 503 sem realizar exclusões parciais.
+- Para excluir contas ou alterar o e-mail de candidato: MongoDB com transações (replica set,
+  inclusive local, ou Atlas). MongoDB standalone retorna 503 sem realizar alterações parciais.
 
 ## Configuração
 
@@ -152,6 +154,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
+| PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | POST   | `/candidatos/{id}/validacao` | Sim (Bearer) | Valida a elegibilidade do próprio candidato (VJ-24) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
@@ -441,6 +444,43 @@ detalhes internos de elegibilidade não fazem parte da projeção nem do objeto 
 A consulta não executa gravações e não altera os dados nem o status do candidato. Listagem,
 filtros, busca textual e cálculo de match continuam fora do escopo desta história.
 
+### Alteração de candidato — VJ-26
+
+`PATCH /candidatos/{id}` exige JWT válido de uma conta ativa com papel `candidate` e aceita ao
+menos um campo: nome, foto, e-mail, telefone, cidade, estado, país, LinkedIn, GitHub, portfólio,
+apresentação profissional ou disponibilidade. Campos omitidos permanecem inalterados. `null` nos
+campos opcionais é convertido para `UNKNOWN`; booleanos como `false` são rejeitados. Identificador,
+proprietário, status, elegibilidade, histórico, datas e visibilidade não podem ser enviados.
+
+O status é calculado exclusivamente pelo servidor:
+
+| Elegibilidade e perfil | Status resultante |
+| --- | --- |
+| Aprovada e com nome, e-mail, telefone, cidade, estado, país, apresentação e disponibilidade | `active` |
+| Aprovada, mas faltando ao menos um desses campos | `incomplete_profile` |
+| Pendente ou rejeitada, mesmo com perfil completo | `pending_validation` |
+| Candidato `inactive` ou `blocked` | Edição recusada com 409; status preservado |
+
+Ao alterar o e-mail, a API verifica unicidade entre contas e candidatos ativos, atualiza `users`
+e `candidates` na mesma transação e mantém o mesmo identificador da conta. A validação anterior é
+arquivada internamente com o e-mail antigo e sua data de invalidação; a elegibilidade atual volta
+a `pending`, o status volta a `pending_validation` e o candidato deixa imediatamente de aparecer
+para empresas. O histórico de auditoria e a fonte da validação nunca são retornados.
+
+| Condição | HTTP |
+| --- | --- |
+| Atualização válida | 200 |
+| Identificador, corpo, campo ou valor inválido | 400 |
+| JWT ausente/inválido ou conta inexistente/inativa | 401 |
+| Papel sem permissão ou candidato de outro usuário | 403 |
+| Candidato inexistente | 404 |
+| E-mail em uso, candidato inativo/bloqueado ou alteração concorrente | 409 |
+| Troca de e-mail sem suporte transacional ou banco indisponível | 503 |
+
+Edições sem troca de e-mail usam atualização condicional atômica e continuam disponíveis em
+MongoDB standalone. A troca de e-mail requer replica set local ou MongoDB Atlas para garantir que
+conta e candidato sejam confirmados ou revertidos juntos.
+
 
 ### Edição de usuário — VJ-4
 
@@ -657,6 +697,20 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |
 | Autenticação e identificador válido são obrigatórios | Ordem da rota e middleware de ObjectId, com erros 401 e 400 |
 | Consulta não altera cadastro ou status | Service somente leitura e teste de imutabilidade do resultado armazenado |
+
+| Critério da VJ-26 | Cobertura unitária |
+| --- | --- |
+| Completar perfil aprovado ativa o candidato | Cálculo com todos os campos mínimos e atualização condicional |
+| Perfil aprovado incompleto deixa de ser visível | Rebaixamento imediato para `incomplete_profile` |
+| Perfil completo sem aprovação permanece pendente | Elegibilidade pendente/rejeitada prevalece sobre completude |
+| Alteração parcial preserva campos omitidos | Operação `$set` limitada à lista recebida e status calculado |
+| Troca de e-mail reinicia a validação | Conta e candidato normalizados, histórico privado e estado pendente |
+| Falha na troca de e-mail não deixa atualização parcial | Rollback simulado para falha na conta, candidato e commit |
+| E-mail duplicado retorna 409 | Consultas de conflito e corrida protegida por índices únicos |
+| Campos controlados ou valores inválidos retornam 400 | Middleware e whitelist defensiva no service |
+| Inativo/bloqueado retorna 409 sem mutação | Verificação anterior à escrita para ambos os estados |
+| Outro candidato retorna 403; inexistente retorna 404 | Titularidade e existência verificadas antes da atualização |
+| Resposta não expõe auditoria ou validação interna | DTO público explícito e histórico com `select: false` |
 
 | Critério da VJ-6 | Cobertura unitária |
 | --- | --- |

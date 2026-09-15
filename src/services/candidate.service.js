@@ -9,6 +9,8 @@ const {
   ELIGIBILITY_METHOD,
   ELIGIBILITY_SOURCE,
   PROFILE_FIELDS,
+  CANDIDATE_EDITABLE_FIELDS,
+  CANDIDATE_MINIMUM_PROFILE_FIELDS,
 } = require('../config/candidate');
 
 const PUBLIC_CANDIDATE_FIELDS = Object.freeze([
@@ -21,6 +23,11 @@ const CANDIDATE_READ_PROJECTION = Object.freeze({
   user: 1,
   status: 1,
   ...Object.fromEntries(PUBLIC_CANDIDATE_FIELDS.map((field) => [field, 1])),
+});
+const EMAIL_UPDATE_TRANSACTION_OPTIONS = Object.freeze({
+  readPreference: 'primary',
+  readConcern: { level: 'snapshot' },
+  writeConcern: { w: 'majority' },
 });
 
 function isValidSource(source) {
@@ -58,6 +65,85 @@ function publicCandidateData(candidate, includeStatus) {
   }
   if (includeStatus) result.status = candidate.status;
   return result;
+}
+
+function normalizeCandidateUpdates(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new ApiError(400, 'Campos de alteracao invalidos');
+  }
+  const fields = Object.keys(input);
+  if (!fields.length || fields.some((field) => !CANDIDATE_EDITABLE_FIELDS.includes(field))) {
+    throw new ApiError(400, 'Campos de alteracao invalidos');
+  }
+
+  return Object.fromEntries(fields.map((field) => {
+    const value = input[field];
+    if (value === null && PROFILE_FIELD_SET.has(field)) return [field, UNKNOWN];
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new ApiError(400, 'Dados de candidato invalidos');
+    }
+    const normalized = value.trim();
+    return [field, field === 'email' ? normalized.toLowerCase() : normalized];
+  }));
+}
+
+function assertEditableCandidate(candidate, requesterId) {
+  if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
+  if (candidate.user.toString() !== String(requesterId).toLowerCase()) {
+    throw new ApiError(403, 'Voce so pode alterar seu proprio cadastro de candidato');
+  }
+  if ([CANDIDATE_STATUS.INACTIVE, CANDIDATE_STATUS.BLOCKED].includes(candidate.status)) {
+    throw new ApiError(409, 'Candidato inativo ou bloqueado nao pode ser alterado');
+  }
+}
+
+function hasKnownValue(value) {
+  return typeof value === 'string' && value.trim().length > 0 && value !== UNKNOWN;
+}
+
+function statusForCandidate(candidate) {
+  if (candidate.eligibility?.status !== ELIGIBILITY_STATUS.APPROVED) {
+    return CANDIDATE_STATUS.PENDING_VALIDATION;
+  }
+  return CANDIDATE_MINIMUM_PROFILE_FIELDS.every((field) => hasKnownValue(candidate[field]))
+    ? CANDIDATE_STATUS.ACTIVE
+    : CANDIDATE_STATUS.INCOMPLETE_PROFILE;
+}
+
+function pendingEligibility() {
+  return {
+    status: ELIGIBILITY_STATUS.PENDING,
+    method: ELIGIBILITY_METHOD.UNKNOWN,
+    source: ELIGIBILITY_SOURCE.PENDING,
+    lastAttemptAt: null,
+    approvedAt: null,
+  };
+}
+
+function eligibilityAuditEntry(candidate, invalidatedAt) {
+  return {
+    email: candidate.email,
+    status: candidate.eligibility?.status || ELIGIBILITY_STATUS.PENDING,
+    method: candidate.eligibility?.method || ELIGIBILITY_METHOD.UNKNOWN,
+    source: candidate.eligibility?.source || ELIGIBILITY_SOURCE.PENDING,
+    lastAttemptAt: candidate.eligibility?.lastAttemptAt || null,
+    approvedAt: candidate.eligibility?.approvedAt || null,
+    invalidatedAt,
+  };
+}
+
+function candidateUpdateError(error, emailChanged) {
+  if (error.code === 11000) {
+    throw new ApiError(409, 'Email ja utilizado por outra conta ou candidato ativo');
+  }
+  if (emailChanged && error.code === 20) {
+    throw new ApiError(503, 'Alteracao de email indisponivel: configure MongoDB com suporte a transacoes');
+  }
+  if (error.name === 'ValidationError' || error.name === 'CastError') {
+    throw new ApiError(400, 'Dados de candidato invalidos');
+  }
+  if (error.name === 'DocumentNotFoundError') throw new ApiError(404, 'Candidato nao encontrado');
+  throw error;
 }
 
 async function persistPendingValidation(candidate, validation, attemptedAt) {
@@ -240,9 +326,111 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
   return publicCandidateData(candidate, requesterRole === 'candidate');
 }
 
+async function updateCandidateFields(candidate, updates) {
+  const current = typeof candidate.toObject === 'function' ? candidate.toObject() : candidate;
+  const status = statusForCandidate({ ...current, ...updates });
+  const filter = {
+    _id: candidate._id,
+    user: candidate.user,
+    status: candidate.status,
+  };
+  if (candidate.updatedAt) filter.updatedAt = candidate.updatedAt;
+
+  const updated = await Candidate.findOneAndUpdate(
+    filter,
+    { $set: { ...updates, status } },
+    { new: true, runValidators: true }
+  );
+  if (!updated) throw new ApiError(409, 'O candidato foi alterado durante a atualizacao');
+  return updated;
+}
+
+async function updateCandidateEmail(candidateId, requesterId, updates) {
+  await User.init();
+  await Candidate.init();
+
+  let updatedCandidate;
+  await Candidate.db.transaction(async (session) => {
+    const candidate = await Candidate.findById(candidateId)
+      .select('+eligibilityHistory')
+      .session(session);
+    assertEditableCandidate(candidate, requesterId);
+
+    const user = await User.findById(requesterId).session(session);
+    if (!user || user.status !== 'active') {
+      throw new ApiError(401, 'Usuario nao autenticado ou inativo');
+    }
+    if (user.role !== 'candidate') {
+      throw new ApiError(403, 'Apenas candidatos podem alterar um perfil de candidato');
+    }
+
+    const newEmail = updates.email;
+    const conflictingUser = await User.findOne({
+      email: newEmail,
+      _id: { $ne: user._id },
+    }).session(session);
+    if (conflictingUser) throw new ApiError(409, 'Email ja utilizado por outra conta ou candidato ativo');
+
+    const conflictingCandidate = await Candidate.findOne({
+      email: newEmail,
+      status: CANDIDATE_STATUS.ACTIVE,
+      _id: { $ne: candidate._id },
+    }).session(session);
+    if (conflictingCandidate) {
+      throw new ApiError(409, 'Email ja utilizado por outra conta ou candidato ativo');
+    }
+
+    const candidateEmailChanged = newEmail !== candidate.email;
+    if (candidateEmailChanged) {
+      if (!candidate.eligibilityHistory) candidate.eligibilityHistory = [];
+      candidate.eligibilityHistory.push(eligibilityAuditEntry(candidate, new Date()));
+    }
+
+    for (const [field, value] of Object.entries(updates)) candidate[field] = value;
+
+    if (candidateEmailChanged) {
+      candidate.eligibility = pendingEligibility();
+      candidate.status = CANDIDATE_STATUS.PENDING_VALIDATION;
+    } else {
+      candidate.status = statusForCandidate(candidate);
+    }
+
+    if (user.email !== newEmail) {
+      user.email = newEmail;
+      await user.save({ session });
+    }
+    updatedCandidate = await candidate.save({ session });
+  }, EMAIL_UPDATE_TRANSACTION_OPTIONS);
+
+  return updatedCandidate;
+}
+
+async function updateCandidate(candidateId, requesterId, requesterRole, input) {
+  if (requesterRole !== 'candidate') {
+    throw new ApiError(403, 'Apenas candidatos podem alterar um perfil de candidato');
+  }
+
+  const updates = normalizeCandidateUpdates(input);
+  let emailChanged = false;
+  try {
+    const candidate = await Candidate.findById(candidateId);
+    assertEditableCandidate(candidate, requesterId);
+    emailChanged = Object.prototype.hasOwnProperty.call(updates, 'email') &&
+      updates.email !== candidate.email;
+
+    const updated = emailChanged
+      ? await updateCandidateEmail(candidateId, requesterId, updates)
+      : await updateCandidateFields(candidate, updates);
+    return publicCandidateData(updated, true);
+  } catch (error) {
+    return candidateUpdateError(error, emailChanged);
+  }
+}
+
 module.exports = {
   registerCandidate,
   revalidatePendingCandidate,
   validateCandidateEligibility,
   getCandidateById,
+  updateCandidate,
 };

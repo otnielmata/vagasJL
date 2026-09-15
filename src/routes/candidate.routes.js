@@ -3,6 +3,7 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 const candidateRules = require('../middleware/candidate.middleware');
 const candidateValidationRules = require('../middleware/candidate-validation.middleware');
 const candidateReadRules = require('../middleware/candidate-read.middleware');
+const candidateUpdateRules = require('../middleware/candidate-update.middleware');
 const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
@@ -14,6 +15,9 @@ router.post('/', authenticate, authorize('candidate'), candidateRules(),
 
 router.get('/:id', authenticate, authorize('candidate', 'company'), candidateReadRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.show);
+
+router.patch('/:id', authenticate, authorize('candidate'), candidateUpdateRules(),
+  (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.update);
 
 router.post('/:id/validacao', authenticate, authorize('candidate'), candidateValidationRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.validateEligibility);
