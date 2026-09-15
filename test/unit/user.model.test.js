@@ -46,3 +46,35 @@ test('hashes password before persistence and compares credentials securely', asy
   assert.equal(persisted.status, 'active');
   assert.equal(user.toJSON().password, undefined);
 });
+
+test('rehashes changed password before update and does not store plaintext', async (context) => {
+  const oldHash = await bcrypt.hash('oldPassword123', 4);
+  const user = User.hydrate({ _id: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria', email: 'maria@example.com', password: oldHash });
+  let stored;
+  context.mock.method(User.collection, 'updateOne', async (filter, update) => {
+    stored = update;
+    return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
+  });
+  user.password = 'newPassword123';
+  await user.save();
+  assert.notEqual(stored.$set.password, 'newPassword123');
+  assert.notEqual(stored.$set.password, oldHash);
+  assert.equal(await bcrypt.compare('newPassword123', stored.$set.password), true);
+  assert.equal(await bcrypt.compare('oldPassword123', stored.$set.password), false);
+  assert.equal(user.toJSON().password, undefined);
+});
+
+test('editing name without loading password preserves stored hash', async (context) => {
+  const user = User.hydrate({ _id: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria', email: 'maria@example.com' }, { password: 0 });
+  let stored;
+  context.mock.method(bcrypt, 'hash', async () => assert.fail('unchanged password must not be hashed'));
+  context.mock.method(User.collection, 'updateOne', async (filter, update) => {
+    stored = update;
+    return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
+  });
+  user.name = 'Maria Silva';
+  await user.save();
+  assert.equal(stored.$set.name, 'Maria Silva');
+  assert.equal(stored.$set.password, undefined);
+  assert.equal(stored.$unset?.password, undefined);
+});
