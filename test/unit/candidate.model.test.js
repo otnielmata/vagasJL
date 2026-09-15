@@ -21,12 +21,15 @@ for (const status of Object.values(CANDIDATE_STATUS)) {
   });
 }
 
-test('rejects unknown status and declares unique user and email indexes', () => {
+test('rejects unknown status and enforces one profile per user plus unique active email', () => {
   assert.ok(new Candidate({ ...input, status: 'approved' }).validateSync().errors.status);
   assert.deepEqual(Object.keys(new Candidate({}).validateSync().errors).sort(), ['email', 'name', 'user']);
-  for (const field of ['user', 'email']) {
-    assert.ok(Candidate.schema.indexes().some(([keys, options]) => keys[field] === 1 && options.unique));
-  }
+  const indexes = Candidate.schema.indexes();
+  assert.ok(indexes.some(([keys, options]) => keys.user === 1 && options.unique));
+  assert.ok(indexes.some(([keys, options]) => keys.email === 1 && options.unique &&
+    options.name === 'unique_active_candidate_email' &&
+    options.partialFilterExpression.status === CANDIDATE_STATUS.ACTIVE));
+  assert.equal(Candidate.schema.path('email').options.unique, undefined);
 });
 
 test('company query restricts results to active candidates', (context) => {
@@ -36,8 +39,11 @@ test('company query restricts results to active candidates', (context) => {
   assert.deepEqual(find.mock.calls[0].arguments, [{ status: 'active' }]);
 });
 
-test('does not persist client verification flags or purchase proof', () => {
-  const candidate = new Candidate({ ...input, purchaseCode: 'private-code', studentVerified: true });
+test('does not persist client verification flags or student proofs', () => {
+  const candidate = new Candidate({
+    ...input, purchaseCode: 'private-code', trustedIdentifier: 'private-id', studentVerified: true,
+  });
   assert.equal(candidate.toJSON().purchaseCode, undefined);
+  assert.equal(candidate.toJSON().trustedIdentifier, undefined);
   assert.equal(candidate.toJSON().studentVerified, undefined);
 });

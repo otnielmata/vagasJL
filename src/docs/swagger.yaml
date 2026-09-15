@@ -26,12 +26,14 @@ paths:
       tags: [Candidates]
       summary: Cadastra um candidato (VJ-22)
       description: >
-        Exige usuario autenticado e ativo. Nome e email sao obrigatorios; o email deve
+        Exige usuario autenticado, ativo e com papel candidate. Nome e email sao obrigatorios; o email deve
         coincidir com a conta autenticada. A validacao usa uma base de alunos confiavel,
+        por email autorizado, codigo de compra ou identificador confiavel aprovado,
         nunca flags enviadas pelo cliente. Sem validacao concluida, o status e
         pending_validation; aluno autorizado recebe incomplete_profile. Nenhum cadastro
         e ativado automaticamente. Campos opcionais omitidos ou null sao persistidos
-        como UNKNOWN. Codigo de compra, quando enviado, nao e persistido no candidato.
+        como UNKNOWN. Codigo de compra e identificador confiavel, quando enviados,
+        nao sao persistidos no candidato.
       security:
         - bearerAuth: []
       requestBody:
@@ -63,14 +65,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: Conta autenticada nao possui o papel candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
-          description: Candidato ja cadastrado para o mesmo usuario ou email
+          description: Candidato ja cadastrado para o usuario ou email utilizado por candidato ativo
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '422':
-          description: Usuario fora da base autorizada ou comprovante de compra invalido
+          description: Usuario fora da base autorizada ou comprovante de aluno invalido
           content:
             application/json:
               schema:
@@ -544,7 +552,13 @@ components:
           minLength: 1
           maxLength: 256
           writeOnly: true
-          description: Codigo opcional, comparado ao SHA-256 registrado para o email autenticado
+          description: Codigo opcional; o valor original e comparado ao SHA-256 vinculado ao email autenticado
+        trustedIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: Outro identificador confiavel aprovado pelo produto; o valor original e comparado ao hash vinculado ao email
         photoUrl:
           $ref: '#/components/schemas/CandidateOptionalUrl'
         phone:

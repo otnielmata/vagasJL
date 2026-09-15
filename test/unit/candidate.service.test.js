@@ -12,7 +12,7 @@ const userId = '6512f1e2b3a1c2d3e4f5a6b7';
 const input = { name: 'Maria', email: 'maria@example.com' };
 
 function isolate(context, result = 'verified') {
-  const user = new User({ _id: userId, name: 'Maria', email: input.email });
+  const user = new User({ _id: userId, name: 'Maria', email: input.email, role: 'candidate' });
   context.mock.method(User, 'findById', () => ({ select: async () => user }));
   context.mock.method(Candidate, 'init', async () => Candidate);
   context.mock.method(Candidate, 'findOne', async () => null);
@@ -22,15 +22,21 @@ function isolate(context, result = 'verified') {
 
 test('verified student transitions from pending default to incomplete profile', async (context) => {
   const save = isolate(context);
-  const candidate = await registerCandidate(userId, { ...input, purchaseCode: 'proof', status: 'active', user: 'untrusted', studentVerified: true });
+  const candidate = await registerCandidate(userId, {
+    ...input, purchaseCode: 'proof', trustedIdentifier: 'approved-id', status: 'active',
+    user: 'untrusted', studentVerified: true,
+  });
   assert.equal(candidate.status, 'incomplete_profile');
   assert.equal(candidate.visibleToCompanies, false);
   assert.equal(candidate.user.toString(), userId);
   assert.equal(candidate.email, input.email);
   assert.equal(candidate.toJSON().purchaseCode, undefined);
+  assert.equal(candidate.toJSON().trustedIdentifier, undefined);
   assert.equal(candidate.toJSON().studentVerified, undefined);
   assert.equal(save.mock.callCount(), 1);
-  assert.deepEqual(studentValidation.validateStudent.mock.calls[0].arguments, [input.email, 'proof']);
+  assert.deepEqual(studentValidation.validateStudent.mock.calls[0].arguments, [input.email, {
+    purchaseCode: 'proof', trustedIdentifier: 'approved-id',
+  }]);
 });
 
 test('pending validation creates hidden pending candidate with omitted and null fields UNKNOWN', async (context) => {
@@ -65,7 +71,7 @@ test('existing candidate for user or email receives 409 before verification and 
   await assert.rejects(registerCandidate(userId, input), { statusCode: 409 });
   const filter = Candidate.findOne.mock.calls[0].arguments[0];
   assert.equal(filter.$or[0].user.toString(), userId);
-  assert.deepEqual(filter.$or[1], { email: input.email });
+  assert.deepEqual(filter.$or[1], { email: input.email, status: 'active' });
   assert.equal(studentValidation.validateStudent.mock.callCount(), 0);
   assert.equal(save.mock.callCount(), 0);
 });
@@ -86,6 +92,19 @@ for (const user of [null, { status: 'inactive' }]) {
   });
 }
 
+for (const role of ['company', 'admin']) {
+  test(`rejects active ${role} account with 403 before validation or persistence`, async (context) => {
+    const save = isolate(context);
+    User.findById.mock.mockImplementation(() => ({
+      select: async () => ({ status: 'active', email: input.email, role }),
+    }));
+    await assert.rejects(registerCandidate(userId, input), { statusCode: 403 });
+    assert.equal(Candidate.init.mock.callCount(), 0);
+    assert.equal(studentValidation.validateStudent.mock.callCount(), 0);
+    assert.equal(save.mock.callCount(), 0);
+  });
+}
+
 for (const [failure, statusCode] of [
   [Object.assign(new Error('duplicate key'), { code: 11000 }), 409],
   [Object.assign(new Error('invalid candidate'), { name: 'ValidationError' }), 400],
@@ -100,6 +119,14 @@ for (const [failure, statusCode] of [
 test('validation outage does not save or grant candidate status', async (context) => {
   const save = isolate(context);
   const failure = new Error('validation unavailable');
+  studentValidation.validateStudent.mock.mockImplementation(async () => { throw failure; });
+  await assert.rejects(registerCandidate(userId, input), (error) => error === failure);
+  assert.equal(save.mock.callCount(), 0);
+});
+
+test('does not disguise a validation registry conflict as a candidate duplicate', async (context) => {
+  const save = isolate(context);
+  const failure = Object.assign(new Error('registry duplicate'), { code: 11000 });
   studentValidation.validateStudent.mock.mockImplementation(async () => { throw failure; });
   await assert.rejects(registerCandidate(userId, input), (error) => error === failure);
   assert.equal(save.mock.callCount(), 0);
