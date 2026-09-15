@@ -75,9 +75,22 @@ implementados a partir das user stories do Jira em etapas seguintes.
    | `PORT`           | Porta em que a API vai rodar                                       |
    | `BASE_URL`       | URL base usada em logs e no Swagger                                 |
    | `MONGODB_URI`    | String de conexão do MongoDB                                       |
-   | `JWT_SECRET`     | Segredo usado para assinar os tokens JWT                            |
+   | `JWT_SECRET`     | Segredo próprio obrigatório com pelo menos 32 bytes                |
    | `JWT_EXPIRES_IN` | Tempo de expiração do token (ex.: `1h`, `7d`)                       |
    | `CORS_ORIGIN`    | Origem(ns) permitida(s) para CORS, separadas por vírgula, ou `*`     |
+
+3. Gere um segredo e preencha `JWT_SECRET` no `.env`:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+4. Inicie o MongoDB indicado em `MONGODB_URI` e execute `npm run dev` ou `npm start`.
+
+A inicialização falha se o segredo estiver ausente, for curto ou usar o antigo exemplo
+`troque-...`. Porta, URL base, protocolo da conexão e duração do JWT também são validados.
+Use uma duração positiva com unidade em `JWT_EXPIRES_IN`, por exemplo `30m`, `1h` ou `7d`.
+O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionado.
 
 ## Scripts disponíveis
 
@@ -109,6 +122,56 @@ Para rotas autenticadas, envie o token retornado no login/registro no header:
 ```
 Authorization: Bearer <token>
 ```
+
+## Contrato de autenticação e erros
+
+- O cadastro público aceita somente `candidate` (padrão) e `company`. A criação de
+  administradores não é exposta nesta estrutura inicial.
+- E-mails são armazenados e consultados em minúsculas, sem espaços nas extremidades.
+- Senhas exigem pelo menos 6 caracteres no cadastro e no máximo 72 bytes em UTF-8.
+  O banco armazena o hash bcrypt; senhas e hashes nunca aparecem nas respostas.
+- JWTs usam HS256 e expiração configurável. `/api/users/me` exige um Bearer token válido.
+- Erros retornam `{ "message": "..." }`; validações podem incluir `errors` com campo e mensagem.
+- Status: `400` para JSON inválido, `401` para credenciais/token inválidos, `409` para
+  e-mail duplicado (inclusive cadastros concorrentes), `413` para corpo excessivo,
+  `422` para dados inválidos e `503` para indisponibilidade de conexão com o MongoDB.
+- Falhas internas retornam uma mensagem genérica. A stack só é incluída em `development`.
+
+## Conexão e execução
+
+`server.js` aguarda a conexão com o MongoDB antes de abrir a porta HTTP. Na parada por
+`SIGINT` ou `SIGTERM`, encerra o servidor e desconecta o banco.
+
+`src/app.js` exporta o Express e também estabelece a conexão antes das rotas de autenticação
+e perfil. A conexão é reutilizada entre requisições, inclusive quando a aplicação é
+importada por um ambiente de funções. Tentativas simultâneas compartilham a mesma conexão;
+uma falha permite nova tentativa. A seleção do servidor MongoDB tem limite de 5 segundos.
+
+`GET /api/health` verifica apenas se o processo HTTP responde; não atesta a disponibilidade
+do banco. A documentação também pode responder sem uma conexão ativa.
+
+## Validação local
+
+Com MongoDB e API em execução, consulte `/api/health` e `/api-docs`, cadastre um usuário
+em `/api/auth/register`, faça login em `/api/auth/login` e use o token em `/api/users/me`.
+O Swagger permite executar esse fluxo pelo navegador usando **Authorize**.
+
+Confira também e-mail duplicado, senha incorreta, tentativa de `role: admin` e token expirado.
+O projeto ainda não possui suíte automatizada versionada; o antigo script `npm test`,
+que apenas retornava sucesso sem executar testes, foi removido.
+
+## Integração contínua e deploy futuros
+
+- Para o GitHub Actions, use `npm ci` com o `package-lock.json` versionado. Uma suíte de
+  testes e o workflow serão definidos na etapa de integração contínua.
+- A Vercel oferece detecção nativa do Express exportado em `src/app.js`, conforme a
+  [documentação oficial](https://vercel.com/docs/frameworks/backend/express).
+  Configure `NODE_ENV=production`, `BASE_URL` com a URL pública, `MONGODB_URI` com o banco
+  de destino, `JWT_SECRET`, `JWT_EXPIRES_IN` e `CORS_ORIGIN` no ambiente da plataforma.
+- Valide os assets do Swagger no futuro preview: a Vercel documenta que `express.static()`
+  não é servido nesse modo. O Swagger atual serve seus assets localmente por esse mecanismo;
+  será necessário preparar os assets em `public/` ou usar URLs externas na etapa de deploy.
+- GitHub Actions, integração com MongoDB Atlas e deploy na Vercel ainda não foram executados.
 
 ## Próximos passos
 

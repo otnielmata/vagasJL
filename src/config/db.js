@@ -1,27 +1,20 @@
 const mongoose = require('mongoose');
 const config = require('./env');
 
-/**
- * Estabelece a conexao com o MongoDB usando Mongoose.
- * Encerra o processo caso a conexao inicial falhe, pois a API depende do banco.
- */
+let connectionPromise;
+
 async function connectDB() {
+  if (mongoose.connection.readyState === 1) return mongoose;
+  if (connectionPromise) return connectionPromise;
+
   mongoose.set('strictQuery', true);
-
-  try {
-    await mongoose.connect(config.mongodb.uri);
-    // eslint-disable-next-line no-console
-    console.log(`[db] Conectado ao MongoDB (${mongoose.connection.name})`);
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[db] Falha ao conectar ao MongoDB:', error.message);
-    process.exit(1);
-  }
-
-  mongoose.connection.on('disconnected', () => {
-    // eslint-disable-next-line no-console
-    console.warn('[db] Conexao com o MongoDB perdida');
+  connectionPromise = mongoose.connect(config.mongodb.uri, {
+    serverSelectionTimeoutMS: 5000,
+  }).finally(() => {
+    connectionPromise = undefined;
   });
+
+  return connectionPromise;
 }
 
 module.exports = connectDB;

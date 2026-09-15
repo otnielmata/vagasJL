@@ -14,6 +14,7 @@ class ApiError extends Error {
  */
 function generateToken(user) {
   return jwt.sign({ sub: user.id, role: user.role }, config.jwt.secret, {
+    algorithm: 'HS256',
     expiresIn: config.jwt.expiresIn,
   });
 }
@@ -21,7 +22,12 @@ function generateToken(user) {
 /**
  * Cria um novo usuario (hash de senha feito no model) e retorna usuario + token.
  */
-async function register({ name, email, password, role }) {
+async function register({ name, email, password, role = 'candidate' }) {
+  if (!['candidate', 'company'].includes(role)) {
+    throw new ApiError(422, 'Papel (role) invalido');
+  }
+
+  email = email.trim().toLowerCase();
   const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
@@ -37,6 +43,7 @@ async function register({ name, email, password, role }) {
  * Valida credenciais e retorna usuario + token em caso de sucesso.
  */
 async function login({ email, password }) {
+  email = email.trim().toLowerCase();
   const user = await User.findOne({ email }).select('+password');
   if (!user) {
     throw new ApiError(401, 'Credenciais invalidas');
