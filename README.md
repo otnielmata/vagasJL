@@ -347,8 +347,9 @@ backup e execute uma vez, em janela controlada:
 npm run candidates:sync-indexes
 ```
 
-O comando preenche `deletedAt: null` nos registros legados, remove os índices globais obsoletos
-e cria `unique_active_candidate_email` e `unique_current_candidate_user`. Assim, cada conta possui
+O comando cria a coleção `candidates` quando a instalação ainda está vazia, preenche
+`deletedAt: null` nos registros legados, remove os índices globais obsoletos e cria
+`unique_active_candidate_email` e `unique_current_candidate_user`. Assim, cada conta possui
 somente um cadastro atual, mas pode manter históricos inativos e criar um novo candidato após a
 exclusão lógica. Na base de alunos, apenas cria/verifica os índices declarados; não remove índices
 administrativos adicionais. O comando não é executado automaticamente durante o start.
