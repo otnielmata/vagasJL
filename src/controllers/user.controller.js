@@ -42,4 +42,13 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { create, getMe, update, remove };
+async function show(req, res, next) {
+  try {
+    const user = await userService.getPublicUserById(req.params.id);
+    return res.status(200).json({ user });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { create, getMe, update, remove, show };

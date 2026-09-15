@@ -8,7 +8,8 @@ Este repositório contém a estrutura inicial do projeto (arquitetura, autentica
 documentação e scripts de execução), o cadastro de usuários da
 [VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1), o login da
 [VJ-2](https://jl-mentoria.atlassian.net/browse/VJ-2) e a edição dos próprios dados da
-[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4), além da exclusão da própria conta da
+[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4), a consulta pública autenticada da
+[VJ-6](https://jl-mentoria.atlassian.net/browse/VJ-6) e a exclusão da própria conta da
 [VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23).
 Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas próximas histórias.
 
@@ -36,7 +37,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
-│   │   ├── registration.routes.js # POST /usuarios; PUT e DELETE /usuarios/:id
+│   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
@@ -55,6 +56,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │       ├── registration.middleware.js
 │       ├── user-update.middleware.js
 │       ├── user-delete.middleware.js
+│       ├── user-read.middleware.js
 │       ├── login.middleware.js
 │       ├── validate.middleware.js
 │       ├── notFound.middleware.js
@@ -132,6 +134,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
+| GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
 | DELETE | `/usuarios/{id}`   | Sim (Bearer) | Exclui a própria conta e o candidato vinculado (VJ-23) |
 | POST   | `/login`           | Não          | Autentica usuário ativo (VJ-2)       |
 | POST   | `/api/auth/register`| Não          | Cadastra um novo usuário             |
@@ -255,6 +258,34 @@ Para dados válidos e token válido, a existência do alvo é verificada antes d
 alvo inexistente retorna 404; alvo existente de outra pessoa retorna 403, conforme os cenários
 da VJ-4. A edição utiliza o documento Mongoose e `save()` para executar validações e hooks.
 
+### Consulta de usuário — VJ-6
+
+Envie `GET /usuarios/{id}` com `Authorization: Bearer <token>`, sem corpo de requisição.
+Qualquer usuário autenticado pode consultar os dados públicos de um usuário existente,
+incluindo outro usuário. A regra de editar somente os próprios dados continua exclusiva da edição.
+
+Resposta **200**:
+
+```json
+{
+  "user": {
+    "_id": "6512f1e2b3a1c2d3e4f5a6b7",
+    "name": "Maria Silva"
+  }
+}
+```
+
+Como a história não enumera os campos públicos, este contrato define apenas **`_id` e `name`**.
+O service limita os campos consultados no MongoDB e monta a resposta com essa lista explícita.
+E-mail, perfil, status, datas internas, senha, hash e tokens ficam fora da resposta, inclusive
+se novos campos privados forem adicionados ao model no futuro.
+
+- **401**: autenticação ausente, inválida ou expirada; verificada antes do identificador e do banco.
+- **400**: identificador malformado (é necessário um ObjectId com 24 caracteres hexadecimais).
+- **404**: identificador válido, mas usuário inexistente.
+- A consulta inclui usuários existentes sem filtrar por status; não informa se o alvo está ativo.
+- O perfil próprio completo continua disponível em `/api/users/me`, com seu contrato existente.
+
 ### Regras gerais
 
 - O cadastro público aceita somente `candidate` (padrão) e `company`. A criação de
@@ -371,6 +402,14 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | E-mail já utilizado, HTTP 409 | Consulta e erro concorrente do índice único |
 | Dados inválidos e campos não editáveis, HTTP 400 | Regras de validação, controller e whitelist do service |
 | Senha alterada com hash; senha omitida preservada | Hooks do model com gravação simulada |
+
+| Critério da VJ-6 | Cobertura unitária |
+| --- | --- |
+| Consulta de usuário existente, HTTP 200 | Service e controller; permite consultar outro usuário |
+| Somente dados públicos, sem informações de autenticação | Projeção do banco e lista explícita com testes para campos privados e futuros |
+| Usuário inexistente, HTTP 404 | Service, controller e middleware de erros |
+| Autenticação obrigatória, HTTP 401 | Middleware JWT e configuração da rota antes da validação/conexão |
+| Identificador malformado, HTTP 400 | Regras de validação da consulta |
 
 A suíte também cobre a compatibilidade dos endpoints existentes e o middleware de conexão.
 Não há testes de API/E2E nesta implementação.

@@ -7,6 +7,8 @@ const { authenticate, authenticateDeletion } = require('../middleware/auth.middl
 const userUpdateRules = require('../middleware/user-update.middleware');
 const userDeleteRules = require('../middleware/user-delete.middleware');
 
+const userReadRules = require('../middleware/user-read.middleware');
+
 const router = Router();
 
 router.post(
@@ -32,6 +34,15 @@ router.delete(
   userDeleteRules(),
   (req, res, next) => validate(req, res, next, 400),
   userController.remove
+);
+
+router.get(
+  '/:id',
+  authenticate,
+  userReadRules(),
+  (req, res, next) => validate(req, res, next, 400),
+  ensureDatabase,
+  userController.show
 );
 
 module.exports = router;
