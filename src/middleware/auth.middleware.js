@@ -1,11 +1,13 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/env');
+const User = require('../models/user.model');
+const connectDB = require('../config/db');
 
 /**
  * Protege rotas exigindo um Bearer token JWT valido no header Authorization.
  * Em caso de sucesso, popula req.user com { id, role }.
  */
-function authenticate(req, res, next) {
+function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -19,11 +21,39 @@ function authenticate(req, res, next) {
     if (typeof decoded.sub !== 'string' || !/^[a-f\d]{24}$/i.test(decoded.sub)) {
       return res.status(401).json({ message: 'Token invalido ou expirado' });
     }
-    req.user = { id: decoded.sub, role: decoded.role };
-    return next();
+    req.user = { id: decoded.sub.toLowerCase(), role: decoded.role };
   } catch (error) {
     return res.status(401).json({ message: 'Token invalido ou expirado' });
   }
+  return next();
+}
+
+async function authenticateAccount(req, res, next, deleting = false) {
+  try {
+    await connectDB();
+    const user = await User.findById(req.user.id).select('status role');
+    if (!user) {
+      const repeatedDeletion = deleting && req.params.id.toLowerCase() === req.user.id;
+      return res.status(repeatedDeletion ? 404 : 401).json({
+        message: repeatedDeletion ? 'Usuario nao encontrado' : 'Token invalido ou usuario inativo',
+      });
+    }
+    if (user.status !== 'active') {
+      return res.status(401).json({ message: 'Token invalido ou usuario inativo' });
+    }
+    req.user.role = user.role;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function authenticate(req, res, next) {
+  return verifyToken(req, res, () => authenticateAccount(req, res, next));
+}
+
+function authenticateDeletion(req, res, next) {
+  return verifyToken(req, res, () => authenticateAccount(req, res, next, true));
 }
 
 /**
@@ -38,4 +68,4 @@ function authorize(...allowedRoles) {
   };
 }
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, authenticateDeletion, authorize };

@@ -76,6 +76,28 @@ async function updateUser(id, authenticatedId, { name, email, password }) {
   }
 }
 
+async function deleteUser(id, authenticatedId) {
+  try {
+    await User.db.transaction(async (session) => {
+      const user = await User.findById(id).session(session);
+      if (!user) throw new ApiError(404, 'Usuario nao encontrado');
+      if (user.id !== authenticatedId.toLowerCase()) {
+        throw new ApiError(403, 'Voce so pode excluir sua propria conta');
+      }
+      if (user.status !== 'active') throw new ApiError(401, 'Usuario inativo');
+
+      await User.db.collection('candidates').deleteMany({ user: user._id }, { session });
+      const result = await User.deleteOne({ _id: user._id, status: 'active' }, { session });
+      if (result.deletedCount !== 1) throw new ApiError(404, 'Usuario nao encontrado');
+    }, { readPreference: 'primary', readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } });
+  } catch (error) {
+    if (error.code === 20) {
+      throw new ApiError(503, 'Exclusao indisponivel: configure MongoDB com suporte a transacoes');
+    }
+    throw error;
+  }
+}
+
 async function getPublicUserById(id) {
   const user = await User.findById(id).select('_id name').lean();
   if (!user) {
@@ -88,5 +110,6 @@ module.exports = {
   createUser,
   getUserById,
   updateUser,
+  deleteUser,
   getPublicUserById,
 };

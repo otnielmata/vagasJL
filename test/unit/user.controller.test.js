@@ -5,6 +5,33 @@ const userService = require('../../src/services/user.service');
 const userController = require('../../src/controllers/user.controller');
 const ApiError = require('../../src/errors/api.error');
 
+test('deletion uses authenticated identity and returns 204 without a response body', async (context) => {
+  const remove = context.mock.method(userService, 'deleteUser', async () => {});
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    end() { this.ended = true; return this; },
+    json() { assert.fail('204 must not include JSON'); },
+    send() { assert.fail('204 must not include a body'); },
+  };
+  await userController.remove({ params: { id: 'target' }, user: { id: 'actor' }, body: { id: 'untrusted' } },
+    response, () => assert.fail('unexpected failure'));
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.ended, true);
+  assert.deepEqual(remove.mock.calls[0].arguments, ['target', 'actor']);
+});
+
+for (const statusCode of [401, 403, 404, 500, 503]) {
+  test(`deletion forwards ${statusCode} without returning success`, async (context) => {
+    const failure = new ApiError(statusCode, 'Exclusao rejeitada');
+    context.mock.method(userService, 'deleteUser', async () => { throw failure; });
+    let forwarded;
+    await userController.remove({ params: { id: 'target' }, user: { id: 'actor' } }, {
+      status() { assert.fail('must not return success'); },
+    }, (error) => { forwarded = error; });
+    assert.equal(forwarded, failure);
+  });
+}
+
 test('show returns 200 and public data for the requested user even when different from caller', async (context) => {
   const user = { _id: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria Silva' };
   const lookup = context.mock.method(userService, 'getPublicUserById', async () => user);
