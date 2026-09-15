@@ -14,7 +14,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-23](https://jl-mentoria.atlassian.net/browse/VJ-23), além da validação de elegibilidade da
 [VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
-[VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26).
+[VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
+[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -63,6 +64,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
 │       ├── auth.middleware.js
 │       ├── candidate.middleware.js
+│       ├── candidate-delete.middleware.js
 │       ├── candidate-read.middleware.js
 │       ├── candidate-update.middleware.js
 │       ├── candidate-validation.middleware.js
@@ -135,7 +137,7 @@ O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionad
 | Start (dev/watch) | `npm run dev` | Inicia a API com `nodemon`, reiniciando automaticamente a cada alteração  |
 | Testes de unidade | `npm test` | Executa os testes com o runner nativo do Node.js |
 | Revalidação de aluno | `npm run candidates:revalidate -- <id>` | Revalida um candidato pendente pela base confiável |
-| Índices de candidatos | `npm run candidates:sync-indexes` | Migra o índice de e-mail para unicidade apenas entre candidatos ativos |
+| Índices de candidatos | `npm run candidates:sync-indexes` | Migra os índices de e-mail ativo e cadastro atual por usuário |
 
 ## Documentação da API (Swagger)
 
@@ -155,6 +157,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
+| DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
 | POST   | `/candidatos/{id}/validacao` | Sim (Bearer) | Valida a elegibilidade do próprio candidato (VJ-24) |
 | PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | GET    | `/usuarios/{id}`   | Sim (Bearer) | Consulta dados públicos (VJ-6)      |
@@ -285,8 +288,8 @@ O vínculo vem do JWT e o status é definido pelo servidor.
 
 O retorno é **201** com `{ "candidate": { ... } }`, incluindo `status`, resumo de `eligibility`,
 campos do perfil e `visibleToCompanies`. A fonte interna da validação e os comprovantes não são
-expostos. A coleção `candidates` mantém um índice único para `user`, impedindo dois
-perfis do mesmo usuário, e um índice único parcial para `email` somente quando `status` é `active`.
+expostos. A coleção `candidates` mantém um índice único parcial para o cadastro atual de cada
+`user` (`deletedAt: null`) e outro para `email` somente quando `status` é `active`.
 Um segundo cadastro do mesmo usuário ou o uso de um e-mail já associado a candidato ativo retorna
 **409**. Candidatos pendentes, incompletos, inativos ou bloqueados não reservam o e-mail pela regra
 RN-004; a conta de usuário continua sujeita à sua própria regra de e-mail único. O endpoint não
@@ -344,10 +347,11 @@ backup e execute uma vez, em janela controlada:
 npm run candidates:sync-indexes
 ```
 
-O comando sincroniza os índices declarados pelo model de candidatos, removendo o índice global
-obsoleto e criando `unique_active_candidate_email`. Na base de alunos, apenas cria/verifica os
-índices declarados; não remove índices administrativos adicionais. O comando não é executado
-automaticamente durante o start nem por esta implementação.
+O comando preenche `deletedAt: null` nos registros legados, remove os índices globais obsoletos
+e cria `unique_active_candidate_email` e `unique_current_candidate_user`. Assim, cada conta possui
+somente um cadastro atual, mas pode manter históricos inativos e criar um novo candidato após a
+exclusão lógica. Na base de alunos, apenas cria/verifica os índices declarados; não remove índices
+administrativos adicionais. O comando não é executado automaticamente durante o start.
 
 Nenhum aluno foi importado ou autorizado automaticamente. O `.env.example` usa `pending`;
 o `.env` local existente não foi alterado. Após preparar a base, configure `mongodb` e reinicie
@@ -480,6 +484,33 @@ para empresas. O histórico de auditoria e a fonte da validação nunca são ret
 Edições sem troca de e-mail usam atualização condicional atômica e continuam disponíveis em
 MongoDB standalone. A troca de e-mail requer replica set local ou MongoDB Atlas para garantir que
 conta e candidato sejam confirmados ou revertidos juntos.
+
+### Exclusão de candidato — VJ-27
+
+`DELETE /candidatos/{id}` exige JWT válido de uma conta ativa com papel `candidate`, aceita um
+ObjectId e não precisa de corpo. O titular pode excluir somente o próprio cadastro nos status
+`pending_validation`, `incomplete_profile` ou `active`. A API grava `status: inactive` e
+`deletedAt` na mesma atualização atômica e retorna **204 sem corpo**. O campo de auditoria é
+privado e não aparece nas respostas.
+
+A exclusão remove imediatamente o candidato das consultas de empresas e dos futuros fluxos de
+busca e match, pois todos usam apenas `status: active`. A conta em `users`, suas credenciais e o
+registro administrativo em `authorized_students` são preservados. O e-mail deixa de contar para
+a unicidade de candidato ativo e o índice do cadastro atual é liberado; um novo cadastro recebe
+outro ObjectId e passa novamente pela validação de aluno.
+
+| Condição | HTTP | Efeito |
+| --- | --- | --- |
+| Titular exclui candidato pendente, incompleto ou ativo | 204 | Torna inativo e registra a data |
+| Identificador malformado | 400 | Nenhuma alteração |
+| JWT ausente/inválido ou conta inexistente/inativa | 401 | Nenhuma alteração |
+| Papel sem permissão ou candidato de outro usuário | 403 | Nenhuma alteração |
+| Candidato inexistente, já inativo ou segunda exclusão | 404 | Nenhuma nova alteração |
+| Candidato bloqueado | 409 | Permanece bloqueado |
+
+O endpoint ignora qualquer corpo e nunca atribui `blocked`, reativa registros ou exclui a conta.
+Retenção e anonimização do histórico ficam para evolução futura. Em instalações existentes,
+execute `npm run candidates:sync-indexes` em uma janela controlada antes de permitir recadastro.
 
 
 ### Edição de usuário — VJ-4
@@ -711,6 +742,18 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Inativo/bloqueado retorna 409 sem mutação | Verificação anterior à escrita para ambos os estados |
 | Outro candidato retorna 403; inexistente retorna 404 | Titularidade e existência verificadas antes da atualização |
 | Resposta não expõe auditoria ou validação interna | DTO público explícito e histórico com `select: false` |
+
+| Critério da VJ-27 | Cobertura unitária |
+| --- | --- |
+| Exclusão própria nos três status permitidos retorna 204 | Service, controller e atualização simulada |
+| Status inativo e data são persistidos atomicamente | Uma operação `$set` condicional com ambos os campos |
+| Candidato excluído fica invisível para empresas | Status, virtual e filtro ativo do model |
+| Conta, credenciais e base de alunos permanecem | Ausência de remoção e estado preservado nos testes |
+| E-mail pode ser reutilizado com novo candidato | Índices parciais, filtro de cadastro atual e nova validação |
+| Segunda exclusão ou candidato ausente retorna 404 | Service sem nova gravação |
+| Outro candidato retorna 403 | Titularidade verificada antes da alteração |
+| JWT e ObjectId válidos são obrigatórios | Ordem da rota e middleware de validação |
+| Bloqueado não é excluído, reativado ou alterado | Service retorna 409 sem gravação |
 
 | Critério da VJ-6 | Cobertura unitária |
 | --- | --- |

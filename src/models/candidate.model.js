@@ -49,7 +49,7 @@ const eligibilityHistorySchema = new mongoose.Schema({
 }, { _id: false });
 
 const candidateSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
   email: { type: String, required: true, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
   ...optionalProfile,
@@ -66,7 +66,17 @@ const candidateSchema = new mongoose.Schema({
   },
   eligibility: { type: eligibilitySchema, default: () => ({}) },
   eligibilityHistory: { type: [eligibilityHistorySchema], default: () => [], select: false },
+  deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
+
+candidateSchema.index(
+  { user: 1 },
+  {
+    unique: true,
+    name: 'unique_current_candidate_user',
+    partialFilterExpression: { deletedAt: null },
+  }
+);
 
 candidateSchema.index(
   { email: 1 },
@@ -91,6 +101,7 @@ candidateSchema.set('toJSON', {
     delete result.__v;
     delete result.id;
     delete result.eligibilityHistory;
+    delete result.deletedAt;
     if (result.eligibility) delete result.eligibility.source;
     return result;
   },

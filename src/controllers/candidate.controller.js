@@ -45,4 +45,13 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { register, validateEligibility, show, update };
+async function remove(req, res, next) {
+  try {
+    await candidateService.deleteCandidate(req.params.id, req.user.id, req.user.role);
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, validateEligibility, show, update, remove };
