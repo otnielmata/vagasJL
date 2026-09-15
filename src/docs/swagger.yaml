@@ -4,7 +4,7 @@ info:
   description: >
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
-    Inclui cadastro (VJ-1), login (VJ-2) e edicao dos proprios dados (VJ-4).
+    Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4) e consulta publica autenticada (VJ-6).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -19,6 +19,58 @@ tags:
 
 paths:
   /usuarios/{id}:
+    get:
+      tags: [Users]
+      summary: Consulta os dados publicos de um usuario (VJ-6)
+      description: >
+        Exige JWT valido e permite consultar qualquer usuario existente, inclusive
+        outro usuario. O contrato publico contem somente _id e name. Email, role,
+        status, datas internas, senha, hash e tokens nao sao retornados.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do usuario a consultar
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b7
+      responses:
+        '200':
+          description: Dados publicos do usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                additionalProperties: false
+                properties:
+                  user:
+                    $ref: '#/components/schemas/PublicUser'
+        '400':
+          description: Identificador de usuario malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuario nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     put:
       tags: [Users]
       summary: Edita os dados do proprio usuario (VJ-4)
@@ -345,6 +397,17 @@ components:
       bearerFormat: JWT
 
   schemas:
+    PublicUser:
+      type: object
+      required: [_id, name]
+      additionalProperties: false
+      properties:
+        _id:
+          type: string
+          example: 6512f1e2b3a1c2d3e4f5a6b7
+        name:
+          type: string
+          example: Maria Silva
     UpdateUserRequest:
       type: object
       minProperties: 1

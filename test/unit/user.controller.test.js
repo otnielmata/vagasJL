@@ -5,6 +5,32 @@ const userService = require('../../src/services/user.service');
 const userController = require('../../src/controllers/user.controller');
 const ApiError = require('../../src/errors/api.error');
 
+test('show returns 200 and public data for the requested user even when different from caller', async (context) => {
+  const user = { _id: '6512f1e2b3a1c2d3e4f5a6b7', name: 'Maria Silva' };
+  const lookup = context.mock.method(userService, 'getPublicUserById', async () => user);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  await userController.show({ params: { id: user._id }, user: { id: '6512f1e2b3a1c2d3e4f5a6b8' } }, response, () => assert.fail('unexpected error'));
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, { user });
+  assert.deepEqual(Object.keys(response.body.user).sort(), ['_id', 'name']);
+  assert.deepEqual(lookup.mock.calls[0].arguments, [user._id]);
+});
+
+for (const statusCode of [404, 503]) {
+  test(`show forwards ${statusCode} without returning a successful response`, async (context) => {
+    const failure = new ApiError(statusCode, 'Consulta indisponivel');
+    context.mock.method(userService, 'getPublicUserById', async () => { throw failure; });
+    let forwarded;
+    await userController.show({ params: { id: 'target' } }, {
+      status() { assert.fail('must not return success'); },
+    }, (error) => { forwarded = error; });
+    assert.equal(forwarded, failure);
+  });
+}
+
 test('returns 201 and active user without password or JWT', async (context) => {
   const input = { name: 'Maria', email: 'maria@example.com', password: '12345678', status: 'inactive', _id: 'untrusted' };
   const user = new User({ name: input.name, email: input.email, password: 'sensitive-hash' });
