@@ -1,6 +1,7 @@
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const config = require('./src/config/env');
+const mongoose = require('mongoose');
 
 /**
  * Ponto de entrada da aplicacao: conecta ao MongoDB e sobe o servidor HTTP.
@@ -18,7 +19,16 @@ async function start() {
   const shutdown = (signal) => {
     // eslint-disable-next-line no-console
     console.log(`[server] Recebido ${signal}, encerrando servidor...`);
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+        process.exit(0);
+      } catch (error) {
+        console.error('[server] Falha ao encerrar conexao com o MongoDB:', error);
+        process.exit(1);
+      }
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));

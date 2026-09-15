@@ -56,8 +56,20 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '409':
           description: Ja existe um usuario com este email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
-          description: Erro de validacao
+          $ref: '#/components/responses/ValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /api/auth/login:
     post:
@@ -78,8 +90,20 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '401':
           description: Credenciais invalidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
-          description: Erro de validacao
+          $ref: '#/components/responses/ValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /api/users/me:
     get:
@@ -99,10 +123,53 @@ paths:
                     $ref: '#/components/schemas/User'
         '401':
           description: Token ausente, invalido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Usuario nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
 components:
+  responses:
+    BadRequest:
+      description: JSON invalido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: Corpo da requisicao excede o limite permitido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Dados invalidos (incluindo tentativa de cadastro com role admin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Erro interno do servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: Banco de dados temporariamente indisponivel
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
   securitySchemes:
     bearerAuth:
       type: http
@@ -110,6 +177,21 @@ components:
       bearerFormat: JWT
 
   schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
     User:
       type: object
       properties:
@@ -146,10 +228,13 @@ components:
         password:
           type: string
           format: password
+          minLength: 6
+          description: Maximo de 72 bytes em UTF-8
           example: senhaForte123
         role:
           type: string
-          enum: [candidate, company, admin]
+          enum: [candidate, company]
+          default: candidate
           example: candidate
 
     LoginRequest:
@@ -162,6 +247,7 @@ components:
         password:
           type: string
           format: password
+          description: Maximo de 72 bytes em UTF-8
           example: senhaForte123
 
     AuthResponse:

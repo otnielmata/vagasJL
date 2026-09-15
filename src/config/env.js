@@ -1,12 +1,14 @@
 require('dotenv').config();
 
+const corsOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((origin) => origin.trim()).filter(Boolean);
+
 /**
  * Configuracao central da aplicacao, lida a partir das variaveis de ambiente.
  * Mantem um unico ponto de leitura do process.env para o restante do codigo.
  */
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: Number(process.env.PORT) || 3000,
+  port: Number(process.env.PORT || 3000),
   baseUrl: process.env.BASE_URL || 'http://localhost:3000',
 
   mongodb: {
@@ -19,23 +21,38 @@ const config = {
   },
 
   cors: {
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
+    origin: corsOrigins.includes('*') ? '*' : corsOrigins,
   },
 };
 
 function validateConfig() {
-  const missing = [];
+  const errors = [];
 
-  if (!config.jwt.secret) {
-    missing.push('JWT_SECRET');
+  if (!config.jwt.secret || Buffer.byteLength(config.jwt.secret) < 32 || config.jwt.secret.startsWith('troque-')) {
+    errors.push('JWT_SECRET deve conter um segredo proprio de pelo menos 32 bytes');
   }
 
-  if (missing.length > 0 && config.env !== 'test') {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[config] Atencao: variaveis de ambiente ausentes: ${missing.join(', ')}. ` +
-        'Configure o arquivo .env com base no .env.example.'
-    );
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+    errors.push('PORT deve ser um inteiro entre 1 e 65535');
+  }
+
+  if (!/^[1-9]\d*(ms|s|m|h|d|w|y)$/.test(config.jwt.expiresIn)) {
+    errors.push('JWT_EXPIRES_IN deve ser uma duracao positiva com unidade, como 30m, 1h ou 7d');
+  }
+
+  if (!/^mongodb(?:\+srv)?:\/\//.test(config.mongodb.uri)) {
+    errors.push('MONGODB_URI deve ser uma URI MongoDB');
+  }
+
+  try {
+    const baseUrl = new URL(config.baseUrl);
+    if (!['http:', 'https:'].includes(baseUrl.protocol)) throw new Error();
+  } catch {
+    errors.push('BASE_URL deve ser uma URL HTTP ou HTTPS valida');
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Configuracao invalida: ${errors.join('; ')}. Consulte .env.example.`);
   }
 }
 

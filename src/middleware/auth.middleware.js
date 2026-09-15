@@ -15,7 +15,10 @@ function authenticate(req, res, next) {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, config.jwt.secret);
+    const decoded = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] });
+    if (typeof decoded.sub !== 'string' || !/^[a-f\d]{24}$/i.test(decoded.sub)) {
+      return res.status(401).json({ message: 'Token invalido ou expirado' });
+    }
     req.user = { id: decoded.sub, role: decoded.role };
     return next();
   } catch (error) {

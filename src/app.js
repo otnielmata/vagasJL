@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const config = require('./config/env');
+const connectDB = require('./config/db');
 const setupSwagger = require('./config/swagger');
 const routes = require('./routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
@@ -23,6 +24,15 @@ if (config.env !== 'test') {
 
 // Documentacao Swagger (/api-docs e /api-docs.json)
 setupSwagger(app);
+
+app.use(['/api/auth', '/api/users'], async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Rotas da API
 app.use('/api', routes);
