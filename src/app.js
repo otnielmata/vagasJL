@@ -9,6 +9,7 @@ const setupSwagger = require('./config/swagger');
 const routes = require('./routes');
 const registrationRoutes = require('./routes/registration.routes');
 const loginRoutes = require('./routes/login.routes');
+const candidateRoutes = require('./routes/candidate.routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
@@ -33,6 +34,7 @@ app.use(['/api/auth', '/api/users'], ensureDatabase);
 app.use('/api', routes);
 app.use('/usuarios', registrationRoutes);
 app.use('/login', loginRoutes);
+app.use('/candidatos', candidateRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({

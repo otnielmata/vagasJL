@@ -23,10 +23,17 @@ const config = {
   cors: {
     origin: corsOrigins.includes('*') ? '*' : corsOrigins,
   },
+  studentValidation: {
+    source: process.env.STUDENT_VALIDATION_SOURCE || 'pending',
+  },
 };
 
 function validateConfig() {
   const errors = [];
+
+  if (!['pending', 'mongodb'].includes(config.studentValidation.source)) {
+    errors.push('STUDENT_VALIDATION_SOURCE deve ser pending ou mongodb');
+  }
 
   if (!config.jwt.secret || Buffer.byteLength(config.jwt.secret) < 32 || config.jwt.secret.startsWith('troque-')) {
     errors.push('JWT_SECRET deve conter um segredo proprio de pelo menos 32 bytes');
