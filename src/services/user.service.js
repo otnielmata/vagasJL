@@ -38,7 +38,46 @@ async function getUserById(id) {
   return user;
 }
 
+async function updateUser(id, authenticatedId, { name, email, password }) {
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ApiError(404, 'Usuario nao encontrado');
+  }
+  if (user.id !== authenticatedId.toLowerCase()) {
+    throw new ApiError(403, 'Voce so pode editar seus proprios dados');
+  }
+
+  try {
+    if (email !== undefined) {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        await User.init();
+        const existingUser = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
+        if (existingUser) {
+          throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
+        }
+        user.email = normalizedEmail;
+      }
+    }
+    if (name !== undefined) user.name = name;
+    if (password !== undefined) user.password = password;
+    return await user.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
+    }
+    if (error.name === 'ValidationError') {
+      throw new ApiError(400, 'Dados invalidos');
+    }
+    if (error.name === 'DocumentNotFoundError') {
+      throw new ApiError(404, 'Usuario nao encontrado');
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   createUser,
   getUserById,
+  updateUser,
 };

@@ -5,8 +5,9 @@ que empresas encontrem candidatos compatíveis com suas vagas, a partir de um mo
 baseado em uma estrutura padronizada de competências.
 
 Este repositório contém a estrutura inicial do projeto (arquitetura, autenticação,
-documentação e scripts de execução) e o cadastro de usuários da
-[VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1).
+documentação e scripts de execução), o cadastro de usuários da
+[VJ-1](https://jl-mentoria.atlassian.net/browse/VJ-1) e a edição dos próprios dados da
+[VJ-4](https://jl-mentoria.atlassian.net/browse/VJ-4).
 Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas próximas histórias.
 
 ## Stack
@@ -33,7 +34,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │   ├── routes/                # Definição de rotas (mapeiam URL -> controller)
 │   │   ├── index.js
 │   │   ├── auth.routes.js
-│   │   ├── registration.routes.js # POST /usuarios
+│   │   ├── registration.routes.js # POST /usuarios e PUT /usuarios/:id
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
 │   │   ├── auth.controller.js
@@ -49,6 +50,7 @@ Os endpoints de domínio (vagas, candidatos, matching) serão implementados nas 
 │       ├── auth.middleware.js
 │       ├── database.middleware.js
 │       ├── registration.middleware.js
+│       ├── user-update.middleware.js
 │       ├── validate.middleware.js
 │       ├── notFound.middleware.js
 │       └── error.middleware.js
@@ -122,6 +124,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | ------ | ------------------ | ------------ | ------------------------------------ |
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
+| PUT    | `/usuarios/{id}`   | Sim (Bearer) | Edita os próprios dados (VJ-4)       |
 | POST   | `/api/auth/register`| Não          | Cadastra um novo usuário             |
 | POST   | `/api/auth/login`   | Não          | Autentica e retorna um token JWT     |
 | GET    | `/api/users/me`     | Sim (Bearer) | Retorna os dados do usuário logado   |
@@ -178,6 +181,41 @@ Resposta **201**:
 
 ## Contrato de autenticação e erros
 
+### Edição de usuário — VJ-4
+
+Envie `PUT /usuarios/{id}` com `Authorization: Bearer <token>` e ao menos um dos campos
+`name`, `email` ou `password`. Por exemplo:
+
+```json
+{
+  "name": "Maria Silva",
+  "email": "maria.nova@example.com"
+}
+```
+
+- Apesar de usar `PUT` conforme a história, campos omitidos são preservados. O corpo não
+  pode ser vazio. Valores `null` e campos não editáveis, como `_id`, `id`, `role`, `status`,
+  `createdAt`, `updatedAt` e `__v`, são rejeitados com **400**.
+- O identificador deve ser um ObjectId de 24 caracteres hexadecimais. Identificador
+  malformado retorna **400**; usuário inexistente retorna **404**.
+- Somente o titular do JWT pode editar seus dados. Tentativas de editar outro usuário
+  existente retornam **403**, inclusive para administradores. Token ausente, inválido ou
+  expirado retorna **401**.
+- O nome precisa ser uma string não vazia. O novo e-mail é validado e normalizado e deve
+  continuar único. Conflitos, inclusive detectados pelo índice único durante a gravação,
+  retornam **409**. Manter o próprio e-mail é permitido.
+- A senha alterada segue as regras do cadastro: mínimo de 8 caracteres e máximo de 72 bytes
+  em UTF-8. O model gera um novo hash bcrypt antes de salvar. Quando omitida, a senha
+  armazenada permanece intacta. A troca de senha não revoga JWTs já emitidos nesta etapa.
+- Sucesso retorna **200** com `{ "user": { ... } }`, sem senha ou hash. Nenhum token novo
+  é emitido pela edição.
+
+Para dados válidos e token válido, a existência do alvo é verificada antes da titularidade:
+alvo inexistente retorna 404; alvo existente de outra pessoa retorna 403, conforme os cenários
+da VJ-4. A edição utiliza o documento Mongoose e `save()` para executar validações e hooks.
+
+### Regras gerais
+
 - O cadastro público aceita somente `candidate` (padrão) e `company`. A criação de
   administradores não é exposta nesta estrutura inicial.
 - E-mails são armazenados e consultados em minúsculas, sem espaços nas extremidades.
@@ -185,7 +223,7 @@ Resposta **201**:
   O banco armazena o hash bcrypt; senhas e hashes nunca aparecem nas respostas.
 - JWTs usam HS256 e expiração configurável. `/api/users/me` exige um Bearer token válido.
 - Erros retornam `{ "message": "..." }`; validações podem incluir `errors` com campo e mensagem.
-- Status: `400` para JSON inválido e campos inválidos em `/usuarios`, `401` para credenciais/token inválidos, `409` para
+- Status: `400` para JSON inválido e campos inválidos no cadastro/edição em `/usuarios`, `401` para credenciais/token inválidos, `409` para
   e-mail duplicado (inclusive cadastros concorrentes), `413` para corpo excessivo,
   `422` para dados inválidos nas rotas de autenticação e `503` para indisponibilidade de conexão com o MongoDB.
 - Falhas internas retornam uma mensagem genérica. A stack só é incluída em `development`.
@@ -224,6 +262,16 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Campos obrigatórios inválidos, HTTP 400 | Regras de validação, model, controller e middleware de erros |
 | Senha com no mínimo 8 caracteres e hash seguro | Regras de validação e hook do model com persistência simulada |
 | Resposta sem senha | Serialização do model e controller |
+
+| Critério da VJ-4 | Cobertura unitária |
+| --- | --- |
+| Edição própria, HTTP 200 e resposta sem senha | Service, controller e model |
+| Autenticação obrigatória | Middleware JWT: válido, ausente, expirado e inválido |
+| Usuário inexistente, HTTP 404 | Service e erro de remoção durante a gravação |
+| Edição de outro usuário, HTTP 403 | Service sem alterações nem gravação |
+| E-mail já utilizado, HTTP 409 | Consulta e erro concorrente do índice único |
+| Dados inválidos e campos não editáveis, HTTP 400 | Regras de validação, controller e whitelist do service |
+| Senha alterada com hash; senha omitida preservada | Hooks do model com gravação simulada |
 
 A suíte também cobre a compatibilidade do cadastro existente e o middleware de conexão.
 Não há testes de API/E2E nesta implementação.

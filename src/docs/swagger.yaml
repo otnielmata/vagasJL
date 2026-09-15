@@ -4,7 +4,7 @@ info:
   description: >
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
-    Inclui o cadastro de usuarios definido na historia VJ-1.
+    Inclui cadastro (VJ-1) e edicao dos proprios dados (VJ-4).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -18,6 +18,80 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /usuarios/{id}:
+    put:
+      tags: [Users]
+      summary: Edita os dados do proprio usuario (VJ-4)
+      description: >
+        Exige JWT valido. Permite alterar name, email e password; campos omitidos
+        permanecem inalterados. Campos nao editaveis e corpo vazio sao rejeitados.
+        O usuario deve existir e pertencer ao titular do token, inclusive para administradores.
+        A senha alterada e persistida com hash bcrypt e nunca aparece na resposta.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do usuario a editar
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          example: 6512f1e2b3a1c2d3e4f5a6b7
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Dados atualizados sem senha ou hash na resposta
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Identificador, JSON ou dados invalidos; corpo vazio ou campos nao editaveis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tentativa de editar outro usuario existente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuario inexistente ou removido durante a edicao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email ja utilizado por outro usuario, inclusive em alteracoes concorrentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /usuarios:
     post:
       tags: [Users]
@@ -223,6 +297,28 @@ components:
       bearerFormat: JWT
 
   schemas:
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Nome nao vazio apos remover espacos nas extremidades
+          example: Maria Silva
+        email:
+          type: string
+          format: email
+          description: Email unico, normalizado para minusculas e sem espacos nas extremidades
+          example: maria.nova@example.com
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 8
+          description: Maximo de 72 bytes em UTF-8; mesmos limites do cadastro
+          example: novaSenhaForte123
     Error:
       type: object
       required: [message]

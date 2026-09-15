@@ -23,4 +23,14 @@ async function getMe(req, res, next) {
   }
 }
 
-module.exports = { create, getMe };
+async function update(req, res, next) {
+  try {
+    const { name, email, password } = req.body;
+    const user = await userService.updateUser(req.params.id, req.user.id, { name, email, password });
+    return res.status(200).json({ user: user.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { create, getMe, update };

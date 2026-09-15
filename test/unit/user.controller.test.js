@@ -33,3 +33,30 @@ for (const status of [400, 409]) {
     assert.equal(forwarded, failure);
   });
 }
+
+test('update uses token identity and returns 200 without password', async (context) => {
+  const user = new User({ name: 'Maria Silva', email: 'maria@example.com', password: 'sensitive-hash' });
+  const update = context.mock.method(userService, 'updateUser', async () => user);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  await userController.update({ params: { id: user.id }, user: { id: user.id }, body: { name: 'Maria Silva', role: 'admin', status: 'inactive', id: 'untrusted' } }, response, () => assert.fail('unexpected error'));
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.user.password, undefined);
+  assert.equal(response.body.user.name, 'Maria Silva');
+  assert.equal(JSON.stringify(response.body).includes('sensitive-hash'), false);
+  assert.deepEqual(update.mock.calls[0].arguments, [user.id, user.id, { name: 'Maria Silva', email: undefined, password: undefined }]);
+});
+
+for (const statusCode of [400, 403, 404, 409]) {
+  test(`update forwards ${statusCode} without returning success`, async (context) => {
+    const failure = new ApiError(statusCode, 'Edicao rejeitada');
+    context.mock.method(userService, 'updateUser', async () => { throw failure; });
+    let forwarded;
+    await userController.update({ params: { id: 'target' }, user: { id: 'actor' }, body: {} }, {
+      status() { assert.fail('must not return success'); },
+    }, (error) => { forwarded = error; });
+    assert.equal(forwarded, failure);
+  });
+}

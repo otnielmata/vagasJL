@@ -5,8 +5,8 @@ const { test } = require('node:test');
 const ApiError = require('../../src/errors/api.error');
 const errorHandler = require('../../src/middleware/error.middleware');
 
-for (const status of [400, 409]) {
-  test(`renders registration error as ${status} with a safe message`, () => {
+for (const status of [400, 403, 404, 409]) {
+  test(`renders user service error as ${status} with a safe message`, () => {
     const response = {
       status(code) { this.statusCode = code; return this; },
       json(body) { this.body = body; return this; },
