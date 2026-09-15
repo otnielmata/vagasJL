@@ -16,3 +16,13 @@ for (const status of [400, 409]) {
     assert.deepEqual(response.body, { message: 'Cadastro rejeitado' });
   });
 }
+
+test('returns generic 401 for rejected login without credential details', () => {
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  errorHandler(new ApiError(401, 'Credenciais invalidas'), {}, response, () => assert.fail('unexpected delegation'));
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { message: 'Credenciais invalidas' });
+});

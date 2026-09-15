@@ -4,7 +4,7 @@ info:
   description: >
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
-    Inclui o cadastro de usuarios definido na historia VJ-1.
+    Inclui cadastro (VJ-1) e login de usuarios (VJ-2).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -18,6 +18,50 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /login:
+    post:
+      tags: [Auth]
+      summary: Autentica um usuario ativo (VJ-2)
+      description: >
+        Exige email e senha. Valida a senha contra o hash bcrypt armazenado e retorna
+        um JWT HS256 com expiracao configurada por JWT_EXPIRES_IN (padrao 1d).
+        Email desconhecido, senha incorreta e usuario inativo retornam a mesma mensagem
+        de credenciais invalidas. Senha e hash nunca aparecem na resposta.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Usuario autenticado e token de acesso com expiracao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Email ou senha ausentes/invalidos ou JSON invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Credenciais invalidas ou usuario inativo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Credenciais invalidas
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /usuarios:
     post:
       tags: [Users]
@@ -120,7 +164,11 @@ paths:
   /api/auth/login:
     post:
       tags: [Auth]
-      summary: Autentica um usuario existente
+      summary: Autentica um usuario ativo (endpoint existente)
+      description: >
+        Compartilha as regras e o retorno de /login. Mantem HTTP 422 para campos
+        invalidos. Usuario inativo, email desconhecido ou senha incorreta retornam
+        HTTP 401 com a mesma mensagem de credenciais invalidas.
       requestBody:
         required: true
         content:
@@ -295,18 +343,23 @@ components:
       properties:
         email:
           type: string
+          format: email
           example: maria.silva@example.com
         password:
           type: string
           format: password
+          minLength: 1
+          writeOnly: true
           description: Maximo de 72 bytes em UTF-8
           example: senhaForte123
 
     AuthResponse:
       type: object
+      required: [user, token]
       properties:
         user:
           $ref: '#/components/schemas/User'
         token:
           type: string
+          description: JWT HS256 com sub, role, iat e exp; expiracao definida por JWT_EXPIRES_IN
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...

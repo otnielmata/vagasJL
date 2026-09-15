@@ -34,7 +34,7 @@ async function register({ name, email, password, role = 'candidate' }) {
 async function login({ email, password }) {
   email = email.trim().toLowerCase();
   const user = await User.findOne({ email }).select('+password');
-  if (!user) {
+  if (!user || user.status !== 'active') {
     throw new ApiError(401, 'Credenciais invalidas');
   }
 
