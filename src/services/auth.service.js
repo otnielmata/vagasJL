@@ -1,13 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const config = require('../config/env');
-
-class ApiError extends Error {
-  constructor(statusCode, message) {
-    super(message);
-    this.statusCode = statusCode;
-  }
-}
+const ApiError = require('../errors/api.error');
+const userService = require('./user.service');
 
 /**
  * Gera um token JWT assinado para o usuario informado.
@@ -27,13 +22,7 @@ async function register({ name, email, password, role = 'candidate' }) {
     throw new ApiError(422, 'Papel (role) invalido');
   }
 
-  email = email.trim().toLowerCase();
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
-  }
-
-  const user = await User.create({ name, email, password, role });
+  const user = await userService.createUser({ name, email, password, role });
   const token = generateToken(user);
 
   return { user, token };

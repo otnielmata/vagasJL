@@ -1,0 +1,35 @@
+const assert = require('node:assert/strict');
+const { test } = require('node:test');
+const User = require('../../src/models/user.model');
+const userService = require('../../src/services/user.service');
+const userController = require('../../src/controllers/user.controller');
+const ApiError = require('../../src/errors/api.error');
+
+test('returns 201 and active user without password or JWT', async (context) => {
+  const input = { name: 'Maria', email: 'maria@example.com', password: '12345678', status: 'inactive', _id: 'untrusted' };
+  const user = new User({ name: input.name, email: input.email, password: 'sensitive-hash' });
+  const create = context.mock.method(userService, 'createUser', async () => user);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  await userController.create({ body: input }, response, () => assert.fail('unexpected error'));
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.body.user.status, 'active');
+  assert.equal(response.body.user.email, input.email);
+  assert.equal(response.body.user.password, undefined);
+  assert.equal(response.body.user.__v, undefined);
+  assert.equal(response.body.token, undefined);
+  assert.deepEqual(create.mock.calls[0].arguments, [{ name: input.name, email: input.email, password: input.password, role: undefined }]);
+});
+
+for (const status of [400, 409]) {
+  test(`forwards ${status} service error without returning success`, async (context) => {
+    const failure = new ApiError(status, 'Cadastro rejeitado');
+    context.mock.method(userService, 'createUser', async () => { throw failure; });
+    const response = { status() { assert.fail('must not return success'); } };
+    let forwarded;
+    await userController.create({ body: {} }, response, (error) => { forwarded = error; });
+    assert.equal(forwarded, failure);
+  });
+}

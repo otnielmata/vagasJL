@@ -21,13 +21,23 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: [true, 'A senha e obrigatoria'],
-      minlength: 6,
+      minlength: 8,
+      validate: {
+        validator: (password) => Buffer.byteLength(password) <= 72,
+        message: 'A senha deve ter no maximo 72 bytes',
+      },
       select: false,
     },
     role: {
       type: String,
       enum: ['candidate', 'company', 'admin'],
       default: 'candidate',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active',
+      required: true,
     },
   },
   {

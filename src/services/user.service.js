@@ -1,5 +1,31 @@
 const User = require('../models/user.model');
-const { ApiError } = require('./auth.service');
+const ApiError = require('../errors/api.error');
+
+async function createUser({ name, email, password, role = 'candidate' }) {
+  if (!['candidate', 'company'].includes(role)) {
+    throw new ApiError(400, 'Papel (role) invalido');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    await User.init();
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
+    }
+
+    return await User.create({ name, email: normalizedEmail, password, role, status: 'active' });
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
+    }
+    if (error.name === 'ValidationError') {
+      throw new ApiError(400, 'Dados invalidos');
+    }
+    throw error;
+  }
+}
 
 /**
  * Retorna o perfil de um usuario pelo id, lancando erro 404 caso nao exista.
@@ -13,5 +39,6 @@ async function getUserById(id) {
 }
 
 module.exports = {
+  createUser,
   getUserById,
 };

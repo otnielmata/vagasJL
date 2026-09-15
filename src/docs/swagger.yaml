@@ -4,7 +4,7 @@ info:
   description: >
     API REST que conecta profissionais de testes de software a oportunidades de trabalho,
     e permite que empresas encontrem profissionais compativeis com suas vagas.
-    Esta e a especificacao da estrutura inicial do projeto.
+    Inclui o cadastro de usuarios definido na historia VJ-1.
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -13,11 +13,57 @@ tags:
   - name: Auth
     description: Cadastro e autenticacao de usuarios
   - name: Users
-    description: Dados do usuario autenticado
+    description: Cadastro e dados de usuarios
   - name: Health
     description: Verificacao de disponibilidade da API
 
 paths:
+  /usuarios:
+    post:
+      tags: [Users]
+      summary: Registra um usuario (VJ-1)
+      description: >
+        Cadastro publico. Cria o usuario com status active e retorna seus dados sem
+        senha ou token JWT. O email e unico entre todos os endpoints de cadastro,
+        normalizado para minusculas e sem espacos nas extremidades.
+        O status e definido pelo servidor; valores enviados pelo cliente sao ignorados.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario ativo criado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Campos obrigatorios ausentes ou invalidos, perfil invalido ou JSON invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email ja cadastrado, inclusive em cadastros concorrentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /api/health:
     get:
       tags: [Health]
@@ -208,6 +254,12 @@ components:
           type: string
           enum: [candidate, company, admin]
           example: candidate
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+          readOnly: true
+          example: active
         createdAt:
           type: string
           format: date-time
@@ -228,7 +280,7 @@ components:
         password:
           type: string
           format: password
-          minLength: 6
+          minLength: 8
           description: Maximo de 72 bytes em UTF-8
           example: senhaForte123
         role:
