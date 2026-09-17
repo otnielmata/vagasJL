@@ -7,12 +7,14 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27).
+    logica de candidatos (VJ-27) e configuracao versionada do Perfil de Match (VJ-28).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Match Profile
+    description: Configuracao administrativa dos campos, pesos e catalogos compartilhados
   - name: Candidates
     description: Cadastro, validacao, visualizacao, alteracao e exclusao logica de candidatos
   - name: Auth
@@ -23,6 +25,64 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /perfil-match/configuracao:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao versionada do Perfil de Match (VJ-28)
+      description: >
+        Apenas administrador autenticado. Exige exatamente as 22 chaves tecnicas iniciais;
+        cada campo tem peso inteiro positivo e uma lista de opcoes canonicas. Opcoes do catalogo
+        sao fornecidas pelo produto, nao geradas pela API. Repetir configuracao identica retorna
+        a mesma versao. Alteracao publica nova versao imutavel. IDs canonicos anteriores nao podem
+        ser removidos. Alias compartilhado ou transferido entre IDs no mesmo campo retorna 409.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchProfileConfigurationRequest'
+      responses:
+        '200':
+          description: Configuracao publicada ou repeticao idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    $ref: '#/components/schemas/MatchProfileConfiguration'
+        '400':
+          description: Campo, peso, opcao ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Alias em conflito, ID removido ou publicacao concorrente diferente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /candidatos:
     post:
       tags: [Candidates]
@@ -831,6 +891,79 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchProfileOption:
+      type: object
+      required: [id, label, aliases]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]*$'
+          example: cypress
+        label:
+          type: string
+          example: Cypress
+        aliases:
+          type: array
+          items:
+            type: string
+          example: [Cypress.io, Cypress Framework]
+    MatchProfileFieldInput:
+      type: object
+      required: [weight, options]
+      additionalProperties: false
+      properties:
+        weight:
+          type: integer
+          minimum: 1
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchProfileOption'
+    MatchProfileConfigurationRequest:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields:
+          type: object
+          description: >
+            Exatamente as chaves type, agile, programming, automation, webTesting, apiTesting,
+            mobileTesting, desktopTesting, higherEducationDegree, english, spanish,
+            yearsOfExperience, continuousIntegration, certification,
+            testAutomationTechnologies, tecnologies, programmingLanguages, genAITools,
+            level, classification, role e specialization. A grafia tecnologies e intencional
+            para preservar o contrato inicial.
+          minProperties: 22
+          maxProperties: 22
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileFieldInput'
+    MatchProfileConfiguration:
+      type: object
+      required: [_id, version, fields, createdAt]
+      properties:
+        _id:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key, weight, options]
+            properties:
+              key:
+                type: string
+              weight:
+                type: integer
+              options:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchProfileOption'
+        createdAt:
+          type: string
+          format: date-time
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
