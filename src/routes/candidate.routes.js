@@ -8,8 +8,11 @@ const candidateDeleteRules = require('../middleware/candidate-delete.middleware'
 const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
+const matchProfileController = require('../controllers/candidate-match-profile.controller');
 
 const router = Router();
+
+router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 
 router.post('/', authenticate, authorize('candidate'), candidateRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.register);
