@@ -19,6 +19,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-28](https://jl-mentoria.atlassian.net/browse/VJ-28) e do cadastro do Perfil de Match do
 candidato na [VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29) e sua edição na
 [VJ-30](https://jl-mentoria.atlassian.net/browse/VJ-30).
+O Perfil de Match pode ser consultado conforme as permissões da
+[VJ-31](https://jl-mentoria.atlassian.net/browse/VJ-31).
 Vagas e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -165,6 +167,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica campos, pesos e catalogos versionados (VJ-28) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
+| GET    | `/candidatos/{id}/perfil-match` | Candidato/empresa (Bearer) | Consulta o Perfil de Match permitido (VJ-31) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -356,6 +359,21 @@ ou bloqueado recebe **403**; cadastro ou perfil atual ausente recebe **404**. A 
 o status cadastral. `matchEligible` na resposta indica apenas a aptidão técnica inicial: candidato
 `active` com ao menos um valor informado; não habilita por si só acesso de empresas. O cadastro
 continua visível a empresas somente quando seu status é `active`.
+
+### Consulta do Perfil de Match — VJ-31
+
+`GET /candidatos/{id}/perfil-match` exige JWT válido. O candidato titular consulta seu perfil
+atual mesmo enquanto o cadastro está pendente ou incompleto; outro candidato recebe **403**.
+Empresa recebe **200** somente se o candidato estiver `active` e houver perfil atual com ao menos
+um valor informado. Cadastro inexistente, excluído, inativo ou perfil vazio/excluído retornam o
+mesmo **404**, sem revelar a causa. ID malformado retorna **400**.
+
+A resposta contém `profile` com `_id`, `candidate` e **todas as 22 chaves** em `values`.
+Cada campo de catálogo informado é uma lista de `{ "id", "label" }`; o rótulo pode ser `null`
+se a configuração histórica não estiver disponível. Campos pendentes aparecem como `null`;
+`yearsOfExperience` é número ou `null`. Somente o titular recebe `revision`, útil para o
+`If-Match` da edição. Não são expostos pesos, aliases, auditoria, provas de elegibilidade ou
+score. A consulta não modifica dados e não cria busca, listagem ou cálculo de Match.
 
 ### Cadastro de candidato — VJ-22
 

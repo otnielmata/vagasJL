@@ -8,7 +8,7 @@ info:
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), configuracao versionada do Perfil de Match (VJ-28)
-    e cadastro (VJ-29) e edicao (VJ-30) do Perfil de Match do candidato.
+    e cadastro (VJ-29), edicao (VJ-30) e consulta (VJ-31) do Perfil de Match do candidato.
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -279,6 +279,64 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Revisao desatualizada ou alteracao concorrente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/{id}/perfil-match:
+    get:
+      tags: [Match Profile]
+      summary: Consulta o Perfil de Match permitido do candidato (VJ-31)
+      description: >
+        O titular visualiza seu perfil atual. Empresa visualiza somente candidato active
+        com perfil atual apto (ao menos um campo informado); demais casos retornam 404
+        sem revelar a causa. A resposta tem as 22 chaves com IDs canonicos e rotulos
+        publicos, ou null para nao informado. Nao retorna pesos, aliases, auditoria ou score.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do candidato
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Perfil publico permitido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                additionalProperties: false
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/PublicCandidateMatchProfile'
+        '400':
+          description: Identificador malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Outro candidato ou papel nao permitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Perfil indisponivel sem revelar a causa
           content:
             application/json:
               schema:
@@ -1216,6 +1274,62 @@ components:
           description: Retornado pela edicao; true somente para candidato active com algum valor informado
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PublicMatchChoice:
+      type: object
+      required: [id, label]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        label: { type: string, nullable: true }
+    PublicMatchChoices:
+      type: array
+      nullable: true
+      items:
+        $ref: '#/components/schemas/PublicMatchChoice'
+    PublicCandidateMatchValues:
+      type: object
+      description: Todas as 22 chaves; null indica nao informado.
+      additionalProperties: false
+      required: [type, agile, programming, automation, webTesting, apiTesting, mobileTesting,
+        desktopTesting, higherEducationDegree, english, spanish, yearsOfExperience,
+        continuousIntegration, certification, testAutomationTechnologies, tecnologies,
+        programmingLanguages, genAITools, level, classification, role, specialization]
+      properties:
+        type: { $ref: '#/components/schemas/PublicMatchChoices' }
+        agile: { $ref: '#/components/schemas/PublicMatchChoices' }
+        programming: { $ref: '#/components/schemas/PublicMatchChoices' }
+        automation: { $ref: '#/components/schemas/PublicMatchChoices' }
+        webTesting: { $ref: '#/components/schemas/PublicMatchChoices' }
+        apiTesting: { $ref: '#/components/schemas/PublicMatchChoices' }
+        mobileTesting: { $ref: '#/components/schemas/PublicMatchChoices' }
+        desktopTesting: { $ref: '#/components/schemas/PublicMatchChoices' }
+        higherEducationDegree: { $ref: '#/components/schemas/PublicMatchChoices' }
+        english: { $ref: '#/components/schemas/PublicMatchChoices' }
+        spanish: { $ref: '#/components/schemas/PublicMatchChoices' }
+        yearsOfExperience: { type: number, nullable: true }
+        continuousIntegration: { $ref: '#/components/schemas/PublicMatchChoices' }
+        certification: { $ref: '#/components/schemas/PublicMatchChoices' }
+        testAutomationTechnologies: { $ref: '#/components/schemas/PublicMatchChoices' }
+        tecnologies: { $ref: '#/components/schemas/PublicMatchChoices' }
+        programmingLanguages: { $ref: '#/components/schemas/PublicMatchChoices' }
+        genAITools: { $ref: '#/components/schemas/PublicMatchChoices' }
+        level: { $ref: '#/components/schemas/PublicMatchChoices' }
+        classification: { $ref: '#/components/schemas/PublicMatchChoices' }
+        role: { $ref: '#/components/schemas/PublicMatchChoices' }
+        specialization: { $ref: '#/components/schemas/PublicMatchChoices' }
+    PublicCandidateMatchProfile:
+      type: object
+      required: [_id, candidate, values]
+      additionalProperties: false
+      properties:
+        _id: { type: string }
+        candidate: { type: string }
+        revision:
+          type: integer
+          minimum: 1
+          description: Visivel apenas ao candidato titular
+        values:
+          $ref: '#/components/schemas/PublicCandidateMatchValues'
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
