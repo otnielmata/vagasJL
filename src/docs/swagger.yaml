@@ -12,7 +12,7 @@ info:
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
-    do candidato (VJ-29).
+    do candidato (VJ-29) e sua edicao (VJ-30).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -873,6 +873,78 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Perfil atual ja existe ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      tags: [Match Profile]
+      summary: Edita parcialmente o Perfil de Match do proprio candidato (VJ-30)
+      description: >
+        Somente o titular ativo da conta, com cadastro e perfil atuais, pode editar.
+        Campos omitidos permanecem iguais; null ou lista vazia remove o valor informado.
+        Valores de catalogo sao normalizados aos IDs canonicos da ultima configuracao.
+        Exige If-Match com a revisao atual. A atualizacao e atomica e eleva revision.
+        Nao altera o status do candidato nem os pesos da configuracao.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: Revisao atual entre aspas, por exemplo "1"
+          schema:
+            type: string
+            pattern: '^"[1-9][0-9]*"$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateMatchProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil atualizado; ETag traz a nova revisao
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '400':
+          description: Revisao, corpo, campo ou valor invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel nao candidate ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro ou Perfil de Match atual nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Revisao desatualizada ou alteracao concorrente
           content:
             application/json:
               schema:
@@ -1901,20 +1973,75 @@ components:
             classification: { $ref: '#/components/schemas/MatchProfileChoices' }
             role: { $ref: '#/components/schemas/MatchProfileChoices' }
             specialization: { $ref: '#/components/schemas/MatchProfileChoices' }
+    CandidateMatchProfileUpdateRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          description: Campos omitidos permanecem iguais; null ou lista vazia remove valor.
+          properties:
+            type: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            english: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            spanish: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            yearsOfExperience:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 100
+              multipleOf: 0.1
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            tecnologies: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            programmingLanguages: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            genAITools: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            level: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            classification: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            role: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            specialization: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+    MatchProfileUpdateChoices:
+      nullable: true
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 100
+        - type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
     CandidateMatchProfile:
       type: object
-      required: [_id, candidate, configurationVersion, values, pendingFields, createdAt, updatedAt]
+      required: [_id, candidate, configurationVersion, revision, values, pendingFields, createdAt, updatedAt]
       additionalProperties: false
       properties:
         _id: { type: string }
         candidate: { type: string }
         configurationVersion: { type: integer, minimum: 1 }
+        revision: { type: integer, minimum: 1 }
         values:
           type: object
           description: Somente valores canonicos preenchidos
         pendingFields:
           type: array
           items: { type: string }
+        matchEligible:
+          type: boolean
+          readOnly: true
+          description: Retornado pela edicao; true somente para candidato active com algum valor informado
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CandidateStatus:

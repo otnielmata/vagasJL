@@ -16,7 +16,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
 [VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
-[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29), da regra de pontuação isolada na
+[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29) e sua edição na
+[VJ-30](https://jl-mentoria.atlassian.net/browse/VJ-30), da regra de pontuação isolada na
 [VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33), da deduplicação de competências na
 [VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34), da exclusão de palavras-chave livres
 do cálculo inicial na [VJ-35](https://jl-mentoria.atlassian.net/browse/VJ-35) e cadastro
@@ -191,6 +192,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
+| PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -800,6 +802,31 @@ Mesmo que exista um catálogo controlado de tipos de teste em outro componente, 
 habilita a pontuação. Incluir `testingRelatedKeywords` nos pesos da configuração v1 é inválido;
 uma eventual inclusão futura exigirá nova versão da regra e testes próprios. Nenhum endpoint
 é criado nesta história.
+
+### Edição do Perfil de Match — VJ-30
+
+`PATCH /candidatos/me/perfil-match` altera apenas as chaves enviadas em `values`; as demais
+permanecem iguais. Exige o cabeçalho `If-Match` com a revisão atual devolvida no perfil, por
+exemplo `If-Match: "1"`. Uma revisão desatualizada retorna **409**, sem sobrescrever alterações
+concorrentes. A resposta **200** traz a nova `revision` e o cabeçalho `ETag` correspondente.
+
+```json
+{
+  "values": {
+    "testAutomationTechnologies": ["Cypress Framework"],
+    "yearsOfExperience": null
+  }
+}
+```
+
+`null` (ou lista vazia nos campos de catálogo) remove explicitamente o valor e torna o campo
+pendente; os outros não mudam. Valores novos seguem o catálogo da configuração mais recente e
+são salvos pelos IDs canônicos. Chave desconhecida, valor fora do catálogo, corpo vazio e
+metadados como peso, status ou versão retornam **400**, sem gravação parcial. Candidato inativo
+ou bloqueado recebe **403**; cadastro ou perfil atual ausente recebe **404**. A edição não altera
+o status cadastral. `matchEligible` na resposta indica apenas a aptidão técnica inicial: candidato
+`active` com ao menos um valor informado; não habilita por si só acesso de empresas. O cadastro
+continua visível a empresas somente quando seu status é `active`.
 
 ### Cadastro de candidato — VJ-22
 

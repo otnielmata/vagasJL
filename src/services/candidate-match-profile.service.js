@@ -46,12 +46,13 @@ function normalizeChoices(value, field) {
   return [...selected].sort();
 }
 
-function normalizeValues(input, configuration) {
+function normalizeValues(input, configuration, allowRemoval = false) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).length !== 1 || !Object.prototype.hasOwnProperty.call(input, 'values') ||
       !input.values || typeof input.values !== 'object' || Array.isArray(input.values)) invalid();
   const submitted = input.values;
   if (Object.keys(submitted).some((key) => !KEYS.includes(key))) invalid();
+  if (allowRemoval && Object.keys(submitted).length === 0) invalid();
 
   const catalog = new Map(configuration.fields.map((field) => [field.key, field]));
   if (catalog.size !== KEYS.length || KEYS.some((key) => !catalog.has(key))) {
@@ -59,6 +60,10 @@ function normalizeValues(input, configuration) {
   }
   const values = {};
   for (const [key, value] of Object.entries(submitted)) {
+    if (allowRemoval && (value === null || (Array.isArray(value) && value.length === 0))) {
+      values[key] = null;
+      continue;
+    }
     if (key === 'yearsOfExperience') {
       values[key] = normalizeYears(value);
     } else {
@@ -100,4 +105,43 @@ async function registerMatchProfile(user, input) {
   }
 }
 
-module.exports = { registerMatchProfile };
+async function updateMatchProfile(user, input, ifMatch) {
+  if (user?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem editar Perfil de Match');
+  if (!/^"[1-9]\d*"$/.test(ifMatch || '')) invalid('Informe If-Match com a revisao atual entre aspas');
+  const expectedRevision = Number(ifMatch.slice(1, -1));
+  if (!Number.isSafeInteger(expectedRevision)) invalid('Revisao invalida');
+
+  const candidate = await Candidate.findOne({ user: user.id, deletedAt: null }).select('_id status');
+  if (!candidate) throw new ApiError(404, 'Cadastro de candidato atual nao encontrado');
+  if (![CANDIDATE_STATUS.PENDING_VALIDATION, CANDIDATE_STATUS.INCOMPLETE_PROFILE,
+    CANDIDATE_STATUS.ACTIVE].includes(candidate.status)) {
+    throw new ApiError(403, 'Candidato inativo ou bloqueado nao pode editar Perfil de Match');
+  }
+  const filter = { candidate: candidate._id, deletedAt: null };
+  const current = await MatchProfile.findOne(filter).lean();
+  if (!current) throw new ApiError(404, 'Perfil de Match atual nao encontrado');
+  const currentRevision = current.revision ?? 1;
+  if (currentRevision !== expectedRevision) throw new ApiError(409, 'Perfil de Match alterado por outra requisicao');
+
+  const configuration = await Configuration.findOne().sort({ version: -1 });
+  if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
+  const values = normalizeValues(input, configuration, true);
+  const changes = { configurationVersion: configuration.version };
+  const removals = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value === null) removals[`values.${key}`] = 1;
+    else changes[`values.${key}`] = value;
+  }
+  const legacy = current.revision == null;
+  if (legacy) changes.revision = 2;
+  const operation = { $set: changes };
+  if (!legacy) operation.$inc = { revision: 1 };
+  if (Object.keys(removals).length) operation.$unset = removals;
+  const revisionFilter = legacy ? { revision: { $exists: false } } : { revision: expectedRevision };
+  const updated = await MatchProfile.findOneAndUpdate({ ...filter, ...revisionFilter }, operation,
+    { new: true, runValidators: true });
+  if (!updated) throw new ApiError(409, 'Perfil de Match alterado por outra requisicao');
+  return { profile: updated, candidateStatus: candidate.status };
+}
+
+module.exports = { registerMatchProfile, updateMatchProfile };

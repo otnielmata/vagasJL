@@ -12,6 +12,7 @@ const profileSchema = new mongoose.Schema({
   candidate: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, select: false },
   configurationVersion: { type: Number, required: true, min: 1 },
+  revision: { type: Number, required: true, min: 1, default: 1 },
   values: { type: valuesSchema, required: true, default: () => ({}) },
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
