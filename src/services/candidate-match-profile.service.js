@@ -1,4 +1,5 @@
 const Candidate = require('../models/candidate.model');
+const mongoose = require('mongoose');
 const Configuration = require('../models/match-profile-configuration.model');
 const MatchProfile = require('../models/candidate-match-profile.model');
 const { CANDIDATE_STATUS } = require('../config/candidate');
@@ -138,4 +139,45 @@ async function updateMatchProfile(user, input, ifMatch) {
   return { profile: updated, candidateStatus: candidate.status };
 }
 
-module.exports = { registerMatchProfile, updateMatchProfile };
+function hasMatchValues(values) {
+  return KEYS.some((key) => values?.[key] !== undefined && values[key] !== null &&
+    (!Array.isArray(values[key]) || values[key].length > 0));
+}
+
+function publicMatchProfile(profile, configuration, includeRevision) {
+  const catalog = new Map((configuration?.fields || []).map((field) => [field.key,
+    new Map(field.options.map((option) => [option.id, option.label]))]));
+  const values = {};
+  for (const key of KEYS) {
+    const selected = profile.values?.[key];
+    if (key === 'yearsOfExperience') {
+      values[key] = typeof selected === 'number' ? selected : null;
+    } else {
+      values[key] = Array.isArray(selected) && selected.length
+        ? selected.map((id) => ({ id, label: catalog.get(key)?.get(id) || null })) : null;
+    }
+  }
+  const result = { _id: profile._id, candidate: profile.candidate, values };
+  if (includeRevision) result.revision = profile.revision ?? 1;
+  return result;
+}
+
+async function showMatchProfile(user, candidateId) {
+  if (!['candidate', 'company'].includes(user?.role)) throw new ApiError(403, 'Acesso negado');
+  if (!mongoose.isValidObjectId(candidateId)) throw new ApiError(400, 'Identificador de candidato invalido');
+  const isCompany = user.role === 'company';
+  const candidateFilter = { _id: candidateId, deletedAt: null };
+  if (isCompany) candidateFilter.status = CANDIDATE_STATUS.ACTIVE;
+  const candidate = await Candidate.findOne(candidateFilter).select('_id user status');
+  if (!candidate) throw new ApiError(404, 'Perfil de Match nao encontrado');
+  if (!isCompany && candidate.user.toString() !== user.id) throw new ApiError(403, 'Acesso negado');
+
+  const profile = await MatchProfile.findOne({ candidate: candidate._id, deletedAt: null });
+  if (!profile || (isCompany && !hasMatchValues(profile.values))) {
+    throw new ApiError(404, 'Perfil de Match nao encontrado');
+  }
+  const configuration = await Configuration.findOne({ version: profile.configurationVersion });
+  return publicMatchProfile(profile, configuration, !isCompany);
+}
+
+module.exports = { registerMatchProfile, updateMatchProfile, showMatchProfile, hasMatchValues };

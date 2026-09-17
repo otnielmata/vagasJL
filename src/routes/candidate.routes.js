@@ -14,6 +14,8 @@ const router = Router();
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.patch('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.update);
+router.get('/:id/perfil-match', authenticate, authorize('candidate', 'company'), candidateReadRules(),
+  (req, res, next) => validate(req, res, next, 400), ensureDatabase, matchProfileController.show);
 
 router.post('/', authenticate, authorize('candidate'), candidateRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, candidateController.register);
