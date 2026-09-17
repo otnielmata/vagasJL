@@ -11,7 +11,8 @@ info:
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
-    rastreavel independente do Perfil de Match (VJ-43).
+    rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
+    do candidato (VJ-29).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -570,6 +571,67 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/me/perfil-match:
+    post:
+      tags: [Match Profile]
+      summary: Cadastra o Perfil de Match do proprio candidato (VJ-29)
+      description: >
+        Exige conta ativa com papel candidate e cadastro atual pendente, incompleto ou ativo.
+        Usa a ultima configuracao VJ-28 publicada; aceita IDs, rotulos e aliases de catalogo,
+        mas persiste apenas IDs canonicos. Campos omitidos permanecem pendentes. Nao altera
+        o status nem a visibilidade para empresas. So um perfil atual por candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateMatchProfileRequest'
+      responses:
+        '201':
+          description: Perfil criado com valores canonicos e campos pendentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '400':
+          description: Corpo, campo, catalogo ou anos de experiencia invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro atual de candidato nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Perfil atual ja existe ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -1514,6 +1576,69 @@ components:
         linkedinUrl: { type: string, nullable: true }
         segment: { type: string, nullable: true }
         status: { type: string, enum: [pending, active, inactive, blocked] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MatchProfileChoices:
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 100
+        - type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+    CandidateMatchProfileRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values:
+          type: object
+          description: Catalogos aceitam somente valores publicados; chaves omitidas ficam pendentes.
+          additionalProperties: false
+          properties:
+            type: { $ref: '#/components/schemas/MatchProfileChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileChoices' }
+            english: { $ref: '#/components/schemas/MatchProfileChoices' }
+            spanish: { $ref: '#/components/schemas/MatchProfileChoices' }
+            yearsOfExperience:
+              type: number
+              minimum: 0
+              maximum: 100
+              multipleOf: 0.1
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
+            tecnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
+            programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }
+            genAITools: { $ref: '#/components/schemas/MatchProfileChoices' }
+            level: { $ref: '#/components/schemas/MatchProfileChoices' }
+            classification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            role: { $ref: '#/components/schemas/MatchProfileChoices' }
+            specialization: { $ref: '#/components/schemas/MatchProfileChoices' }
+    CandidateMatchProfile:
+      type: object
+      required: [_id, candidate, configurationVersion, values, pendingFields, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        _id: { type: string }
+        candidate: { type: string }
+        configurationVersion: { type: integer, minimum: 1 }
+        values:
+          type: object
+          description: Somente valores canonicos preenchidos
+        pendingFields:
+          type: array
+          items: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CandidateStatus:
