@@ -382,6 +382,46 @@ Refresh token e alteração de status de usuários não fazem parte deste escopo
 
 ## Contrato de autenticação e erros
 
+### Configuração do Perfil de Match — VJ-28
+
+`PUT /perfil-match/configuracao` exige JWT de uma conta existente, ativa e com papel `admin`.
+Contas `admin` não são criadas pelo cadastro público; devem ser provisionadas de forma controlada.
+O corpo contém `fields` com **exatamente 22 chaves**. Cada chave recebe `weight` inteiro positivo
+e `options` (lista que pode começar vazia, pois a história não fornece o catálogo completo).
+IDs de opção são canônicos e estáveis; `label` e `aliases` são normalizados para comparação sem
+diferença de caixa, acento ou espaços. Por exemplo, `Cypress`, `cypress`, `Cypress.io` e
+`Cypress Framework` podem apontar para o ID único `cypress` no campo adequado.
+
+| Campo técnico | Peso inicial | Campo técnico | Peso inicial |
+| --- | ---: | --- | ---: |
+| `type` | 8 | `agile` | 4 |
+| `programming` | 3 | `automation` | 5 |
+| `webTesting` | 6 | `apiTesting` | 7 |
+| `mobileTesting` | 5 | `desktopTesting` | 4 |
+| `higherEducationDegree` | 3 | `english` | 7 |
+| `spanish` | 3 | `yearsOfExperience` | 9 |
+| `continuousIntegration` | 6 | `certification` | 2 |
+| `testAutomationTechnologies` | 10 | `tecnologies` | 5 |
+| `programmingLanguages` | 9 | `genAITools` | 5 |
+| `level` | 10 | `classification` | 3 |
+| `role` | 5 | `specialization` | 7 |
+
+A grafia `tecnologies` segue o anexo original; alterá-la depois exige migração deliberada. O
+objeto de pesos iniciais está em `src/config/match-profile.js`. Para gerar um corpo inicial sem
+inventar opções de catálogo:
+
+```bash
+node -e "const {INITIAL_MATCH_WEIGHTS}=require('./src/config/match-profile'); console.log(JSON.stringify({fields:Object.fromEntries(Object.entries(INITIAL_MATCH_WEIGHTS).map(([key,weight])=>[key,{weight,options:[]}]))},null,2))"
+```
+
+O administrador publica o JSON gerado no endpoint e acrescenta as opções reais aprovadas pelo
+produto. A primeira publicação retorna versão `1`; repetir o mesmo conteúdo retorna a mesma
+versão. Mudança de peso, rótulo ou alias cria um novo documento versionado, preservando o anterior.
+IDs já publicados não podem ser removidos; aliases atribuídos ou transferidos a IDs diferentes
+no mesmo campo retornam **409**. Chaves desconhecidas, pesos inválidos e metadados controlados pelo servidor
+retornam **400**. Nenhum perfil de candidato ou vaga é alterado por essa operação. As futuras
+histórias de cadastro e Match deverão ler a versão publicada e referenciar os mesmos IDs.
+
 ### Cadastro de candidato — VJ-22
 
 `POST /candidatos` exige JWT válido e uma conta existente, ativa e com papel `candidate`.
