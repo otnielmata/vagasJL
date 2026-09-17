@@ -16,7 +16,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
 [VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
-[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29) e cadastro empresarial separado na
+[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29), da regra de pontuação isolada na
+[VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33) e cadastro empresarial separado na
 [VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
 
 ## Stack
@@ -68,6 +69,7 @@ documentação e scripts de execução), o cadastro de usuários da
 │   │   ├── vacancy-content.service.js # Validação técnica compartilhada entre origens
 │   │   ├── vacancy-origin.service.js # Procedência e preparação para Match
 │   │   ├── match-profile-configuration.service.js
+│   │   ├── match-scoring.service.js # Pontuação técnica isolada (VJ-33)
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -538,6 +540,22 @@ Candidatos `pending_validation` ou `incomplete_profile` podem criar rascunho; `i
 `blocked` recebem **409**. Somente um perfil atual é permitido por candidato; repetição ou
 criação concorrente retorna **409**. Conta sem papel de candidato recebe **403**, cadastro
 inexistente **404**, configuração ausente **503** e autenticação inválida/inativa **401**.
+
+### Pontuação técnica isolada — VJ-33
+
+`src/services/match-scoring.service.js` fornece `calculateMatchScore` para o futuro motor de
+Match; **não cria endpoint** nem busca vagas/candidatos. A função recebe a configuração VJ-28
+publicada e resultados técnicos já comparados, por chave, no formato
+`{ applicable: true|false, matched: true|false }`. Apenas as 22 chaves técnicas configuradas
+podem entrar no denominador e no detalhamento. Critérios não aplicáveis ou ausentes não pontuam;
+o percentual é `pontos obtidos / pontos possíveis × 100` (ou `0` sem critérios aplicáveis).
+
+`skillsRequiredCounter`, `amountOfTestingRelatedKeywords`, `amountOfGenAITools`, `hasGenAI`,
+`isTestingRelated` e `reasonToBeRemoved` são ignorados na pontuação, mesmo se informados, nulos
+ou legados. `vacancy.reasonToBeRemoved` aparece somente em `eligibility`, separado de
+`percentage` e `details`, sem bônus ou penalidade. Os pesos vêm exclusivamente da configuração
+publicada para os campos técnicos; uma configuração incompleta/inválida impede o cálculo.
+Comparação de competências entre vaga e candidato e ranking continuam fora desta história.
 
 ### Cadastro de candidato — VJ-22
 
