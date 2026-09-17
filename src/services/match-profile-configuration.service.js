@@ -1,6 +1,6 @@
 const Configuration = require('../models/match-profile-configuration.model');
 const ApiError = require('../errors/api.error');
-const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-profile');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const OPTION_ID = /^[a-z][a-z0-9_-]*$/;
@@ -20,8 +20,7 @@ function exactKeys(value, expected) {
 
 function normalizeAlias(value) {
   if (typeof value !== 'string') invalid();
-  const normalized = value.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/\s+/g, ' ');
+  const normalized = normalizeMatchAlias(value);
   if (!normalized || normalized.length > 100) invalid();
   return normalized;
 }
