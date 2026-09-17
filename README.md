@@ -15,9 +15,9 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
-[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27) e cadastro empresarial separado na
+[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
+[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29) e cadastro empresarial separado na
 [VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
-Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
 
@@ -182,6 +182,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
+| POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -506,6 +507,37 @@ IDs já publicados não podem ser removidos; aliases atribuídos ou transferidos
 no mesmo campo retornam **409**. Chaves desconhecidas, pesos inválidos e metadados controlados pelo servidor
 retornam **400**. Nenhum perfil de candidato ou vaga é alterado por essa operação. As futuras
 histórias de cadastro e Match deverão ler a versão publicada e referenciar os mesmos IDs.
+
+### Cadastro do Perfil de Match — VJ-29
+
+`POST /candidatos/me/perfil-match` exige JWT de uma conta ativa com papel `candidate` e um
+cadastro atual de candidato. O perfil técnico fica separado dos dados cadastrais. O corpo contém
+apenas `values`, com qualquer subconjunto das 22 chaves acima. Valores omitidos ficam pendentes;
+não são inferidos. A configuração VJ-28 precisa estar publicada antes do primeiro cadastro.
+
+```json
+{
+  "values": {
+    "testAutomationTechnologies": ["Cypress.io"],
+    "yearsOfExperience": 2.5
+  }
+}
+```
+
+Valores de catálogo podem ser enviados por ID, rótulo ou alias publicado; a API persiste
+somente IDs canônicos (por exemplo, `cypress`). Se um campo ainda não tiver opções publicadas,
+ele deve ser omitido. Texto livre ou ID desconhecido retorna **400** sem criar perfil. Cada
+competência aceita um valor ou lista de até 50 valores; duplicatas são consolidadas.
+`yearsOfExperience` é numérico, entre 0 e 100, com no máximo uma casa decimal. Pesos,
+versão de configuração, vínculo com o usuário e status não são aceitos do cliente.
+
+Resposta **201** inclui `{ "profile": { "_id", "candidate", "configurationVersion", "values", "pendingFields", "createdAt", "updatedAt" } }`.
+`pendingFields` lista as chaves não preenchidas. O registro não ativa o candidato nem o torna
+visível a empresas: essa visibilidade continua dependente do status `active` do cadastro.
+Candidatos `pending_validation` ou `incomplete_profile` podem criar rascunho; `inactive` ou
+`blocked` recebem **409**. Somente um perfil atual é permitido por candidato; repetição ou
+criação concorrente retorna **409**. Conta sem papel de candidato recebe **403**, cadastro
+inexistente **404**, configuração ausente **503** e autenticação inválida/inativa **401**.
 
 ### Cadastro de candidato — VJ-22
 
