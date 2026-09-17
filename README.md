@@ -21,6 +21,7 @@ candidato na [VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29) e sua ediç
 [VJ-30](https://jl-mentoria.atlassian.net/browse/VJ-30).
 O Perfil de Match pode ser consultado conforme as permissões da
 [VJ-31](https://jl-mentoria.atlassian.net/browse/VJ-31).
+A exclusão lógica do perfil está na [VJ-32](https://jl-mentoria.atlassian.net/browse/VJ-32).
 Vagas e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -167,6 +168,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica campos, pesos e catalogos versionados (VJ-28) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
+| DELETE | `/candidatos/me/perfil-match` | Candidato (Bearer) | Exclui logicamente o próprio Perfil de Match (VJ-32) |
 | GET    | `/candidatos/{id}/perfil-match` | Candidato/empresa (Bearer) | Consulta o Perfil de Match permitido (VJ-31) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
@@ -374,6 +376,17 @@ se a configuração histórica não estiver disponível. Campos pendentes aparec
 `yearsOfExperience` é número ou `null`. Somente o titular recebe `revision`, útil para o
 `If-Match` da edição. Não são expostos pesos, aliases, auditoria, provas de elegibilidade ou
 score. A consulta não modifica dados e não cria busca, listagem ou cálculo de Match.
+
+### Exclusão do Perfil de Match — VJ-32
+
+`DELETE /candidatos/me/perfil-match` exige JWT de uma conta ativa com papel `candidate` e
+cadastro atual vinculado. A resposta é **204** sem corpo. A exclusão grava `deletedAt` no perfil
+em uma operação atômica, preservando sua auditoria interna, a conta e os dados cadastrais.
+O status do candidato não muda. Consultas do perfil por candidato ou empresa deixam de retornar
+o documento excluído (**404**), mesmo se o cadastro continuar `active`; o futuro motor de Match
+deverá consultar apenas perfis atuais (`deletedAt: null`). Uma segunda exclusão retorna **404**
+sem nova mutação. A recriação usa o endpoint de cadastro e valida os valores contra o catálogo
+publicado; o índice único parcial permite novo perfil atual após a exclusão.
 
 ### Cadastro de candidato — VJ-22
 

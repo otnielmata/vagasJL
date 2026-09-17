@@ -121,3 +121,32 @@ test('show returns only service public projection and forwards failure', async (
   await controller.show(req, {}, (error) => { forwarded = error; });
   assert.equal(forwarded, failure);
 });
+
+test('DELETE route authenticates candidate and controller returns empty 204', async (context) => {
+  const route = router.stack.find((layer) => layer.route?.path === '/me/perfil-match' && layer.route.methods.delete).route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  assert.equal(handlers[0], authenticate);
+  assert.equal(handlers[2], ensureDatabase);
+  assert.equal(handlers[3], controller.remove);
+  const unauthenticated = { status(code) { this.code = code; return this; }, json() {} };
+  handlers[0]({ headers: {} }, unauthenticated, () => assert.fail('missing token must stop'));
+  assert.equal(unauthenticated.code, 401);
+  const denied = { status(code) { this.code = code; return this; }, json() {} };
+  handlers[1]({ user: { role: 'company' } }, denied, () => assert.fail('company must stop'));
+  assert.equal(denied.code, 403);
+  const deletion = context.mock.method(service, 'deleteMatchProfile', async () => undefined);
+  const req = { user: { id: 'owner', role: 'candidate' } };
+  const res = { status(code) { this.code = code; return this; }, end() { this.ended = true; return this; } };
+  await controller.remove(req, res, () => assert.fail('unexpected error'));
+  assert.equal(res.code, 204);
+  assert.equal(res.ended, true);
+  assert.deepEqual(deletion.mock.calls[0].arguments, [req.user]);
+});
+
+test('delete controller forwards error without success', async (context) => {
+  const failure = new Error('not found');
+  context.mock.method(service, 'deleteMatchProfile', async () => { throw failure; });
+  let forwarded;
+  await controller.remove({ user: { id: 'owner', role: 'candidate' } }, {}, (error) => { forwarded = error; });
+  assert.equal(forwarded, failure);
+});

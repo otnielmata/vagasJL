@@ -180,4 +180,15 @@ async function showMatchProfile(user, candidateId) {
   return publicMatchProfile(profile, configuration, !isCompany);
 }
 
-module.exports = { registerMatchProfile, updateMatchProfile, showMatchProfile, hasMatchValues };
+async function deleteMatchProfile(user) {
+  if (user?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem excluir Perfil de Match');
+  const candidate = await Candidate.findOne({ user: user.id, deletedAt: null }).select('_id');
+  if (!candidate) throw new ApiError(404, 'Perfil de Match atual nao encontrado');
+  const deleted = await MatchProfile.updateOne(
+    { candidate: candidate._id, deletedAt: null },
+    { $set: { deletedAt: new Date() } }
+  );
+  if (deleted.matchedCount === 0) throw new ApiError(404, 'Perfil de Match atual nao encontrado');
+}
+
+module.exports = { registerMatchProfile, updateMatchProfile, showMatchProfile, deleteMatchProfile, hasMatchValues };

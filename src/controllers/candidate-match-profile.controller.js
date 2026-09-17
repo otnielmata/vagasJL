@@ -30,4 +30,13 @@ async function show(req, res, next) {
   }
 }
 
-module.exports = { register, update, show };
+async function remove(req, res, next) {
+  try {
+    await service.deleteMatchProfile(req.user);
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, update, show, remove };
