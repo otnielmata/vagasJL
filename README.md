@@ -18,8 +18,9 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
 [VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29), da regra de pontuação isolada na
 [VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33), da deduplicação de competências na
-[VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34) e cadastro empresarial separado na
-[VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
+[VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34), da exclusão de palavras-chave livres
+do cálculo inicial na [VJ-35](https://jl-mentoria.atlassian.net/browse/VJ-35) e cadastro
+empresarial separado na [VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
 
 ## Stack
 
@@ -573,6 +574,19 @@ Campos derivados como `hasGenAI` e `amountOfGenAITools` continuam fora da fórmu
 publicado é rejeitado, não aproximado por semelhança. O serviço não modifica os dados recebidos.
 Comparações quantitativas como `yearsOfExperience`, elegibilidade da vaga, busca e ranking
 continuam responsabilidades separadas do futuro motor completo.
+
+### Palavras-chave fora do Match v1 — VJ-35
+
+`testingRelatedKeywords` é texto livre legado e está **explicitamente excluído** da versão 1
+do serviço de pontuação. Sua presença, ausência ou alteração, assim como a do contador
+`amountOfTestingRelatedKeywords`, não altera numerador, denominador, percentual ou
+`details`. O texto original não é modificado nem promovido automaticamente a um ID do catálogo;
+por exemplo, `Testes de API` nesse campo não vira `apiTesting` sem regra de conversão explícita.
+
+Mesmo que exista um catálogo controlado de tipos de teste em outro componente, isso não
+habilita a pontuação. Incluir `testingRelatedKeywords` nos pesos da configuração v1 é inválido;
+uma eventual inclusão futura exigirá nova versão da regra e testes próprios. Nenhum endpoint
+é criado nesta história.
 
 ### Cadastro de candidato — VJ-22
 
