@@ -19,7 +19,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-28](https://jl-mentoria.atlassian.net/browse/VJ-28) e da regra de pontuação isolada da
 [VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33) e da deduplicação de competências da
 [VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34) e da exclusão de palavras-chave livres
-do cálculo inicial na [VJ-35](https://jl-mentoria.atlassian.net/browse/VJ-35).
+do cálculo inicial na [VJ-35](https://jl-mentoria.atlassian.net/browse/VJ-35), além do catálogo
+versionado de tipos de teste da [VJ-36](https://jl-mentoria.atlassian.net/browse/VJ-36).
 Vagas e o motor completo de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -47,7 +48,7 @@ Vagas e o motor completo de match serão implementados nas próximas histórias.
 │   │   ├── index.js
 │   │   ├── auth.routes.js
 │   │   ├── candidate.routes.js # Operações de candidatos
-│   │   ├── match-profile-configuration.routes.js # PUT administrativo do Perfil de Match
+│   │   ├── match-profile-configuration.routes.js # PUT de configuração e catálogo de tipos de teste
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
@@ -55,12 +56,14 @@ Vagas e o motor completo de match serão implementados nas próximas histórias.
 │   │   ├── auth.controller.js
 │   │   ├── candidate.controller.js
 │   │   ├── match-profile-configuration.controller.js
+│   │   ├── test-type-catalog.controller.js
 │   │   └── user.controller.js
 │   ├── services/               # Regra de negócio, isolada do Express (req/res)
 │   │   ├── auth.service.js
 │   │   ├── candidate.service.js
 │   │   ├── match-profile-configuration.service.js
 │   │   ├── match-scoring.service.js # Pontuação técnica isolada (VJ-33)
+│   │   ├── test-type-catalog.service.js
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -68,6 +71,7 @@ Vagas e o motor completo de match serão implementados nas próximas histórias.
 │   ├── models/                # Schemas do Mongoose
 │   │   ├── candidate.model.js
 │   │   ├── match-profile-configuration.model.js
+│   │   ├── test-type-catalog.model.js
 │   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
@@ -165,6 +169,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica campos, pesos e catalogos versionados (VJ-28) |
+| PUT    | `/perfil-match/catalogos/tipos-de-teste` | Admin (Bearer) | Publica taxonomia versionada de tipos de teste (VJ-36) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -345,6 +350,40 @@ Mesmo que exista um catálogo controlado de tipos de teste em outro componente, 
 habilita a pontuação. Incluir `testingRelatedKeywords` nos pesos da configuração v1 é inválido;
 uma eventual inclusão futura exigirá nova versão da regra e testes próprios. Nenhum endpoint
 é criado nesta história.
+
+### Catálogo de tipos de teste — VJ-36
+
+`PUT /perfil-match/catalogos/tipos-de-teste` exige uma conta ativa com papel `admin`.
+O corpo contém `types`, lista de objetos `{ "id", "label", "aliases" }`; `aliases` é opcional.
+A primeira publicação exige exatamente estes 12 pares estáveis, sem valores extras:
+
+| ID canônico | Rótulo | ID canônico | Rótulo |
+| --- | --- | --- | --- |
+| `testes-funcionais` | Testes Funcionais | `regressao` | Regressão |
+| `testes-exploratorios` | Testes Exploratórios | `testes-de-api` | Testes de API |
+| `uat` | UAT | `performance` | Performance |
+| `seguranca` | Segurança | `acessibilidade` | Acessibilidade |
+| `smoke` | Smoke | `e2e` | E2E |
+| `integracao` | Integração | `bdd` | BDD |
+
+Para gerar o corpo inicial:
+
+```bash
+node -e "const {INITIAL_TEST_TYPES}=require('./src/config/test-type-catalog'); console.log(JSON.stringify({types:INITIAL_TEST_TYPES},null,2))"
+```
+
+Caixa, acentos e espaços são normalizados ao resolver IDs, rótulos e aliases. O serviço
+`resolveTestType` retorna apenas o ID canônico para novos registros estruturados; texto
+desconhecido retorna **400** e não é cadastrado automaticamente. `reviewLegacyTestType` só
+prepara revisão manual: preserva `originalText`, pode sugerir um ID exato e sempre marca
+`requiresReview: true`, sem gravar uma conversão.
+
+O endpoint retorna **200** com `{ "catalog": { "version", "types", "createdAt" } }`.
+Repetir o mesmo conteúdo não cria versão; mudança válida cria a próxima. IDs anteriores não
+podem ser removidos e aliases já publicados não podem migrar para outro conceito (**409**).
+ID duplicado, formato inválido ou primeira lista diferente dos 12 pares retornam **400**;
+alias ambíguo retorna **409**. A coleção `test_type_catalogs` preserva versões anteriores;
+publicação não altera o Match v1. A inclusão futura na fórmula exige pesos e versão próprios.
 
 ### Cadastro de candidato — VJ-22
 

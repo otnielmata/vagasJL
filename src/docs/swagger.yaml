@@ -7,7 +7,8 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27) e configuracao versionada do Perfil de Match (VJ-28).
+    logica de candidatos (VJ-27), configuracao versionada do Perfil de Match (VJ-28)
+    e catalogo versionado de tipos de teste (VJ-36).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -80,6 +81,61 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /perfil-match/catalogos/tipos-de-teste:
+    put:
+      tags: [Match Profile]
+      summary: Publica catalogo versionado de tipos de teste (VJ-36)
+      description: >
+        Apenas administrador autenticado. Primeira publicacao exige os 12 pares ID/rotulo
+        definidos pelo produto; aliases sao opcionais. Repeticao identica e idempotente.
+        Mudanca valida cria nova versao imutavel. IDs anteriores nao podem ser removidos
+        e aliases nao podem migrar de conceito. Nao ativa pontuacao no Match v1.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestTypeCatalogRequest'
+      responses:
+        '200':
+          description: Catalogo publicado ou repeticao idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [catalog]
+                properties:
+                  catalog:
+                    $ref: '#/components/schemas/TestTypeCatalog'
+        '400':
+          description: Corpo, ID, rotulo ou lista inicial invalida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Alias ambiguo, ID removido ou publicacao concorrente diferente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -891,6 +947,49 @@ components:
       bearerFormat: JWT
 
   schemas:
+    TestTypeOption:
+      type: object
+      required: [id, label]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+          maxLength: 100
+          example: testes-de-api
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Testes de API
+        aliases:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 100 }
+    TestTypeCatalogRequest:
+      type: object
+      required: [types]
+      additionalProperties: false
+      properties:
+        types:
+          type: array
+          minItems: 12
+          maxItems: 500
+          description: Primeira versao exige exatamente os 12 pares iniciais documentados no README.
+          items:
+            $ref: '#/components/schemas/TestTypeOption'
+    TestTypeCatalog:
+      type: object
+      required: [_id, version, types, createdAt]
+      additionalProperties: false
+      properties:
+        _id: { type: string }
+        version: { type: integer, minimum: 1 }
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestTypeOption'
+        createdAt: { type: string, format: date-time }
     MatchProfileOption:
       type: object
       required: [id, label, aliases]
