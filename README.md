@@ -17,7 +17,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
 [VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
 [VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29), da regra de pontuação isolada na
-[VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33) e cadastro empresarial separado na
+[VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33), da deduplicação de competências na
+[VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34) e cadastro empresarial separado na
 [VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
 
 ## Stack
@@ -556,6 +557,22 @@ ou legados. `vacancy.reasonToBeRemoved` aparece somente em `eligibility`, separa
 `percentage` e `details`, sem bônus ou penalidade. Os pesos vêm exclusivamente da configuração
 publicada para os campos técnicos; uma configuração incompleta/inválida impede o cálculo.
 Comparação de competências entre vaga e candidato e ranking continuam fora desta história.
+
+### Competências sem dupla pontuação — VJ-34
+
+`calculateCompetencyMatch` no mesmo serviço compara os valores de catálogo da vaga e do
+candidato sem criar endpoint. Cada valor é resolvido para o **ID canônico** da configuração
+VJ-28: ID, rótulo e aliases publicados representam a mesma competência. Repetições, inclusive
+em dados legados, são reduzidas a um único ID antes da pontuação. Para cada par
+`campo técnico + ID canônico` exigido pela vaga, o peso configurado entra uma vez no
+denominador e, se o candidato possuir o ID, uma vez no numerador. `details` registra um único
+lançamento por par. IDs diferentes permanecem separados, mesmo com nomes semelhantes.
+
+Campos derivados como `hasGenAI` e `amountOfGenAITools` continuam fora da fórmula; por exemplo,
+`ChatGPT` em `genAITools` não ganha pontos extras por `hasGenAI: true`. Texto sem ID/alias
+publicado é rejeitado, não aproximado por semelhança. O serviço não modifica os dados recebidos.
+Comparações quantitativas como `yearsOfExperience`, elegibilidade da vaga, busca e ranking
+continuam responsabilidades separadas do futuro motor completo.
 
 ### Cadastro de candidato — VJ-22
 
