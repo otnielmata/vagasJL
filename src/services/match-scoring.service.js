@@ -1,6 +1,6 @@
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
 
-const TECHNICAL_FIELDS = Object.freeze(Object.keys(INITIAL_MATCH_WEIGHTS));
+const MATCH_SCORING_VERSION = 1;
 const DERIVED_FIELDS = Object.freeze([
   'skillsRequiredCounter',
   'amountOfTestingRelatedKeywords',
@@ -9,6 +9,9 @@ const DERIVED_FIELDS = Object.freeze([
   'isTestingRelated',
   'reasonToBeRemoved',
 ]);
+const MATCH_V1_EXCLUDED_FIELDS = Object.freeze([...DERIVED_FIELDS, 'testingRelatedKeywords']);
+const TECHNICAL_FIELDS = Object.freeze(Object.keys(INITIAL_MATCH_WEIGHTS)
+  .filter((key) => !MATCH_V1_EXCLUDED_FIELDS.includes(key)));
 
 function configuredWeights(configuration) {
   const fields = configuration?.fields;
@@ -102,4 +105,11 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   return buildScoreResult(details, vacancy);
 }
 
-module.exports = { calculateMatchScore, calculateCompetencyMatch, TECHNICAL_FIELDS, DERIVED_FIELDS };
+module.exports = {
+  calculateMatchScore,
+  calculateCompetencyMatch,
+  TECHNICAL_FIELDS,
+  DERIVED_FIELDS,
+  MATCH_V1_EXCLUDED_FIELDS,
+  MATCH_SCORING_VERSION,
+};
