@@ -9,12 +9,17 @@ info:
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
-    protegida do cadastro empresarial (VJ-40) e exclusao logica com revogacao (VJ-41).
+    protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
+    catalogo versionado (VJ-28) e cadastro de vaga propria (VJ-42).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Match Profile
+    description: Configuracao administrativa dos campos, pesos e catalogos compartilhados
+  - name: Vacancies
+    description: Oportunidades cadastradas pelas empresas
   - name: Companies
     description: Cadastro administrativo de empresas
   - name: Candidates
@@ -27,6 +32,124 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /perfil-match/configuracao:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao versionada do Perfil de Match (VJ-28)
+      description: >
+        Apenas administrador autenticado. Exige exatamente as 22 chaves tecnicas iniciais;
+        cada campo tem peso inteiro positivo e uma lista de opcoes canonicas. Repetir
+        configuracao identica retorna a mesma versao. IDs publicados nao podem ser removidos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchProfileConfigurationRequest'
+      responses:
+        '200':
+          description: Configuracao publicada ou repeticao idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    $ref: '#/components/schemas/MatchProfileConfiguration'
+        '400':
+          description: Campo, peso, opcao ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Alias em conflito, ID removido ou publicacao concorrente diferente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/vagas:
+    post:
+      tags: [Vacancies]
+      summary: Cadastra vaga propria pendente (VJ-42)
+      description: >
+        Exige conta company ativa e verificada, vinculo recruiter ativo e empresa active.
+        A origem COMPANY, o status pending, a empresa e o autor sao definidos pelo servidor.
+        Valores do Perfil de Match usam IDs canonicos da configuracao VJ-28 mais recente;
+        aliases publicados sao convertidos ao mesmo ID. Nao calcula pontuacao nem publica
+        a vaga no ranking. A referencia operacional e unica por empresa atual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa ativa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyVacancyRequest'
+      responses:
+        '201':
+          description: Vaga propria criada como pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vacancy]
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400':
+          description: Corpo, localizacao, modalidade ou competencia fora do catalogo invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Sem papel company, vinculo autorizado ou empresa ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Referencia de vaga duplicada nesta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /empresas:
     post:
       tags: [Companies]
@@ -1144,6 +1267,107 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchProfileOption:
+      type: object
+      required: [id, label, aliases]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_-]*$', example: cypress }
+        label: { type: string, example: Cypress }
+        aliases:
+          type: array
+          items: { type: string }
+    MatchProfileFieldInput:
+      type: object
+      required: [weight, options]
+      additionalProperties: false
+      properties:
+        weight: { type: integer, minimum: 1 }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchProfileOption'
+    MatchProfileConfigurationRequest:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields:
+          type: object
+          description: Exatamente as 22 chaves tecnicas definidas no contrato VJ-28
+          minProperties: 22
+          maxProperties: 22
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileFieldInput'
+    MatchProfileConfiguration:
+      type: object
+      required: [_id, version, fields, createdAt]
+      properties:
+        _id: { type: string }
+        version: { type: integer, minimum: 1 }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key, weight, options]
+            properties:
+              key: { type: string }
+              weight: { type: integer }
+              options:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchProfileOption'
+        createdAt: { type: string, format: date-time }
+    CompanyVacancyRequest:
+      type: object
+      required: [reference, title, description, matchProfile]
+      additionalProperties: false
+      properties:
+        reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 10000 }
+        location:
+          type: object
+          nullable: true
+          required: [city, state, country]
+          additionalProperties: false
+          properties:
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+        matchProfile:
+          type: object
+          required: [values]
+          additionalProperties: false
+          properties:
+            values:
+              type: object
+              minProperties: 1
+              required: [type]
+              description: >
+                Chaves tecnicas da VJ-28. type representa modalidade; demais campos de catalogo
+                aceitam ID, rotulo ou alias publicado, sempre persistido como ID canonico.
+                yearsOfExperience aceita numero de 0 a 100 com uma casa decimal.
+              additionalProperties: true
+    Vacancy:
+      type: object
+      required: [_id, company, reference, title, description, matchProfile, origin, status]
+      properties:
+        _id: { type: string }
+        company: { type: string }
+        reference: { type: string }
+        title: { type: string }
+        description: { type: string }
+        location: { type: object, nullable: true }
+        matchProfile:
+          type: object
+          properties:
+            configurationVersion: { type: integer, minimum: 1 }
+            values: { type: object }
+        origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
+        status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     CompanyRegistrationUpdateRequest:
       type: object
       minProperties: 1
