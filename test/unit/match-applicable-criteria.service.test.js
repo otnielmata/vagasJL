@@ -9,9 +9,11 @@ const configuration = { version: 3, fields: Object.keys(INITIAL_MATCH_WEIGHTS).m
     : key === 'automation' ? [{ id: 'automated', label: 'Automacao', aliases: [] }]
       : key === 'type' ? [{ id: 'remote', label: 'Remoto', aliases: [] }] : [],
 })) };
+const multipliers = { required: 1, desirable: 0.5, indifferent: 0 };
 
 test('only classified applicable requirements form numerator and denominator', () => {
-  const result = calculateCompetencyMatch({ configuration, vacancy: { origin: 'IMPORTED' },
+  const result = calculateCompetencyMatch({ configuration, multipliers,
+    vacancy: { origin: 'IMPORTED' },
     vacancyValues: { testAutomationTechnologies: ['cypress'], automation: ['automated'],
       type: ['remote'], apiTesting: false, testingRelatedKeywords: ['Cypress'] },
     candidateValues: { testAutomationTechnologies: ['cypress'], automation: [],
@@ -30,13 +32,13 @@ test('only classified applicable requirements form numerator and denominator', (
 });
 
 test('desirable weight affects both sides while unknown candidate earns zero', () => {
-  const result = calculateCompetencyMatch({ configuration,
+  const result = calculateCompetencyMatch({ configuration, multipliers,
     vacancyValues: { testAutomationTechnologies: ['cypress'], automation: ['automated'] },
     candidateValues: { testAutomationTechnologies: ['cypress'] },
     requirements: [
       { field: 'testAutomationTechnologies', id: 'cypress', importance: 'desirable' },
       { field: 'automation', id: 'automated', importance: 'required' },
-    ], desirableFactor: 0.5 });
+    ] });
   assert.equal(result.earnedPoints, 5);
   assert.equal(result.possiblePoints, 10);
   assert.equal(result.percentage, 50);
@@ -44,7 +46,8 @@ test('desirable weight affects both sides while unknown candidate earns zero', (
 
 test('identical repeated canonical requirement contributes once, conflicting duplicate is rejected', () => {
   const requirement = { field: 'testAutomationTechnologies', id: 'cypress', importance: 'required' };
-  const input = { configuration, vacancyValues: { testAutomationTechnologies: ['cypress'] },
+  const input = { configuration, multipliers,
+    vacancyValues: { testAutomationTechnologies: ['cypress'] },
     candidateValues: { testAutomationTechnologies: ['cypress'] } };
   const result = calculateCompetencyMatch({ ...input, requirements: [requirement, { ...requirement }] });
   assert.equal(result.earnedPoints, 10);
@@ -56,7 +59,7 @@ test('identical repeated canonical requirement contributes once, conflicting dup
 
 test('zero applicable points is explicitly not calculable for every origin', () => {
   for (const origin of ['IMPORTED', 'COMPANY', 'ADMIN']) {
-    const result = calculateCompetencyMatch({ configuration, vacancy: { origin },
+    const result = calculateCompetencyMatch({ configuration, multipliers, vacancy: { origin },
       vacancyValues: { type: ['remote'] }, candidateValues: { type: ['remote'] },
       requirements: [{ field: 'type', id: 'remote', importance: 'indifferent' }] });
     assert.equal(result.earnedPoints, 0);
@@ -67,7 +70,7 @@ test('zero applicable points is explicitly not calculable for every origin', () 
 });
 
 test('numeric threshold and eliminatory decision remain separate from score', () => {
-  const input = { configuration, vacancyValues: { yearsOfExperience: 3 },
+  const input = { configuration, multipliers, vacancyValues: { yearsOfExperience: 3 },
     candidateValues: { yearsOfExperience: 2 }, requirements: [{
       field: 'yearsOfExperience', value: 3, importance: 'required', eliminatory: true,
     }] };
