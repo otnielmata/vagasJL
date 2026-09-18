@@ -83,7 +83,8 @@ function canonicalValues(values, field) {
   return ids;
 }
 
-function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {} }) {
+function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {},
+  requirements, desirableFactor = 0.5 }) {
   const weights = configuredWeights(configuration);
   if (!vacancyValues || typeof vacancyValues !== 'object' || Array.isArray(vacancyValues) ||
       !candidateValues || typeof candidateValues !== 'object' || Array.isArray(candidateValues)) {
@@ -91,6 +92,36 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   }
   const fields = new Map(configuration.fields.map((field) => [field.key, field]));
   const details = [];
+  if (requirements !== undefined) {
+    if (!Array.isArray(requirements) || !Number.isFinite(desirableFactor) ||
+        desirableFactor <= 0 || desirableFactor >= 1) throw new TypeError('Importancia invalida');
+    const seen = new Set();
+    for (const requirement of requirements) {
+      const { field, id, value, importance } = requirement;
+      if (!weights.has(field) || !['required', 'desirable', 'indifferent'].includes(importance)) {
+        throw new TypeError('Requisito invalido');
+      }
+      if (importance === 'indifferent') continue;
+      const key = field === 'yearsOfExperience' ? field : `${field}:${id}`;
+      if (seen.has(key)) throw new TypeError('Requisito duplicado');
+      seen.add(key);
+      const weight = weights.get(field) * (importance === 'desirable' ? desirableFactor : 1);
+      let matched;
+      if (field === 'yearsOfExperience') {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
+            vacancyValues[field] !== value) throw new TypeError('Experiencia invalida');
+        matched = typeof candidateValues[field] === 'number' && candidateValues[field] >= value;
+      } else {
+        if (typeof id !== 'string' || !canonicalValues(vacancyValues[field], fields.get(field)).has(id)) {
+          throw new TypeError('Competencia fora do perfil da vaga');
+        }
+        matched = canonicalValues(candidateValues[field], fields.get(field)).has(id);
+      }
+      details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
+        weight, earnedPoints: matched ? weight : 0 });
+    }
+    return buildScoreResult(details, vacancy);
+  }
   for (const key of TECHNICAL_FIELDS) {
     if (key === 'yearsOfExperience') continue;
     const field = fields.get(key);

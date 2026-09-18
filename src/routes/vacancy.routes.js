@@ -7,5 +7,7 @@ const router = Router();
 
 router.patch('/:id/status', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.updateStatus);
+router.patch('/:id/requisitos', authenticate, authorize('admin', 'company'), ensureDatabase,
+  controller.updateRequirements);
 
 module.exports = router;
