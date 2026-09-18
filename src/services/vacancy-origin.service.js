@@ -1,5 +1,6 @@
 const User = require('../models/user.model');
 const Vacancy = require('../models/vacancy.model');
+const ImportImportanceConfiguration = require('../models/import-importance-configuration.model');
 const { prepareVacancyContent } = require('./vacancy-content.service');
 const { initialRequirementsAudit } = require('./vacancy-requirements.service');
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
@@ -24,15 +25,51 @@ async function registerImportedVacancy(provenance, input) {
   const importSource = provenance.source.trim().toLowerCase();
   const importSourceId = provenance.sourceId.trim();
   const rawValues = input?.matchProfile?.values;
+  const identified = [];
+  const preparedValues = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
+    ? Object.fromEntries(Object.entries(rawValues).map(([field, submitted]) => {
+      if (!Object.hasOwn(INITIAL_MATCH_WEIGHTS, field)) return [field, submitted];
+      const choices = Array.isArray(submitted) ? submitted : [submitted];
+      const mapped = choices.map((choice) => {
+        if (choice === true) invalid();
+        if (!choice || typeof choice !== 'object' || Array.isArray(choice)) return choice;
+        const numeric = field === 'yearsOfExperience';
+        const expected = numeric ? 'identified,value' : 'id,identified';
+        if (Object.keys(choice).sort().join(',') !== expected || choice.identified !== true ||
+            (numeric ? typeof choice.value !== 'number' : typeof choice.id !== 'string')) invalid();
+        identified.push(numeric ? { field, value: choice.value } : { field, id: choice.id });
+        return numeric ? choice.value : choice.id;
+      });
+      return [field, Array.isArray(submitted) ? mapped : mapped[0]];
+    })) : rawValues;
   const rawFalseFields = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
     ? Object.entries(rawValues).filter(([field, value]) =>
       Object.hasOwn(INITIAL_MATCH_WEIGHTS, field) && value === false).map(([field]) => field)
     : [];
-  const mappedInput = rawFalseFields.length ? { ...input, matchProfile: {
-    ...input.matchProfile, values: Object.fromEntries(Object.entries(rawValues)
-      .filter(([field]) => !rawFalseFields.includes(field))),
-  } } : input;
+  const mappedInput = { ...input, matchProfile: { ...input?.matchProfile,
+    values: preparedValues && typeof preparedValues === 'object' && !Array.isArray(preparedValues)
+      ? Object.fromEntries(Object.entries(preparedValues)
+        .filter(([field]) => !rawFalseFields.includes(field))) : preparedValues } };
   const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
+  let importImportance = null;
+  if (identified.length) {
+    const configuration = await ImportImportanceConfiguration.findOne().sort({ version: -1 });
+    if (!configuration) throw new ApiError(409, 'Importancia padrao da importacao nao publicada');
+    const seen = new Set();
+    const requirements = identified.map((item) => {
+      const selected = content.matchProfile.values[item.field];
+      if (item.id !== undefined ? !Array.isArray(selected) || !selected.includes(item.id)
+        : selected !== item.value) invalid();
+      const key = item.id === undefined ? item.field : `${item.field}:${item.id}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return { ...item, importance: configuration.importance, eliminatory: false };
+    }).filter(Boolean);
+    const appliedAt = new Date();
+    content.matchProfile.requirements = requirements;
+    importImportance = { version: configuration.version, importance: configuration.importance,
+      appliedAt };
+  }
   await Vacancy.init();
   if (await Vacancy.findOne({ origin: 'IMPORTED', importSource, importSourceId })) {
     throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');
@@ -40,6 +77,12 @@ async function registerImportedVacancy(provenance, input) {
   try {
     return await Vacancy.create({
       ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
+      importImportance,
+      ...(importImportance ? { requirementsRevision: 1, requirementsHistory: [{
+        at: importImportance.appliedAt, actor: null, process: 'import',
+        reason: `Importancia padrao v${importImportance.version} aplicada na importacao`,
+        revision: 1, requirements: content.matchProfile.requirements,
+      }] } : {}),
       importMappingAudit: { rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
     });
   } catch (error) {
