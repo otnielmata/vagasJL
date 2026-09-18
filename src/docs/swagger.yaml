@@ -10,7 +10,8 @@ info:
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
-    catalogo versionado (VJ-28) e cadastro de vaga propria (VJ-42).
+    catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
+    rastreavel independente do Perfil de Match (VJ-43).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -1351,10 +1352,19 @@ components:
               additionalProperties: true
     Vacancy:
       type: object
-      required: [_id, company, reference, title, description, matchProfile, origin, status]
+      required: [_id, reference, title, description, matchProfile, origin, status]
+      description: >
+        Vagas COMPANY, IMPORTED e ADMIN compartilham as mesmas chaves, tipos e versao
+        tecnica do Perfil de Match. A origem e procedencia sao atribuídas por fluxos
+        confiaveis do servidor e nao participam do calculo tecnico. Para COMPANY,
+        company e obrigatoria; para IMPORTED, importSource e importSourceId; para ADMIN,
+        o autor administrativo e armazenado internamente. Sem origem verificavel,
+        a vaga requer saneamento e nao fica apta ao Match.
       properties:
         _id: { type: string }
-        company: { type: string }
+        company: { type: string, nullable: true }
+        importSource: { type: string, nullable: true }
+        importSourceId: { type: string, nullable: true }
         reference: { type: string }
         title: { type: string }
         description: { type: string }
