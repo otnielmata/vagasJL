@@ -7,9 +7,16 @@ const matchFields = Object.fromEntries(Object.keys(INITIAL_MATCH_WEIGHTS).map((k
     : { type: [String], default: undefined },
 ]));
 const matchValuesSchema = new mongoose.Schema(matchFields, { _id: false, strict: 'throw' });
+const requirementSchema = new mongoose.Schema({
+  field: { type: String, enum: Object.keys(INITIAL_MATCH_WEIGHTS), required: true },
+  id: { type: String, default: undefined },
+  value: { type: Number, default: undefined },
+  importance: { type: String, enum: ['required', 'desirable', 'indifferent'], required: true },
+}, { _id: false });
 const matchProfileSchema = new mongoose.Schema({
   configurationVersion: { type: Number, required: true, min: 1 },
   values: { type: matchValuesSchema, required: true },
+  requirements: { type: [requirementSchema], default: [] },
 }, { _id: false });
 const locationSchema = new mongoose.Schema({
   city: { type: String, required: true, trim: true, maxlength: 200 },
@@ -60,6 +67,15 @@ const vacancySchema = new mongoose.Schema({
     process: { type: String, enum: ['api', 'deadline'], required: true },
     reason: { type: String, required: true, maxlength: 500 },
   }],
+  requirementsRevision: { type: Number, default: 0, min: 0 },
+  requirementsHistory: [{
+    at: { type: Date, required: true },
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    process: { type: String, enum: ['api', 'import'], required: true },
+    reason: { type: String, required: true, maxlength: 500 },
+    revision: { type: Number, required: true },
+    requirements: { type: [requirementSchema], required: true },
+  }],
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
@@ -82,6 +98,7 @@ vacancySchema.set('toJSON', {
     delete result.createdBy;
     delete result.deletedAt;
     delete result.statusHistory;
+    delete result.requirementsHistory;
     return result;
   },
 });
