@@ -15,8 +15,12 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
-[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27).
-Vagas, competências e motor de match serão implementados nas próximas histórias.
+[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27), do Perfil de Match do candidato na
+[VJ-29](https://jl-mentoria.atlassian.net/browse/VJ-29), da regra de pontuação isolada na
+[VJ-33](https://jl-mentoria.atlassian.net/browse/VJ-33), da deduplicação de competências na
+[VJ-34](https://jl-mentoria.atlassian.net/browse/VJ-34), da exclusão de palavras-chave livres
+do cálculo inicial na [VJ-35](https://jl-mentoria.atlassian.net/browse/VJ-35) e cadastro
+empresarial separado na [VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
 
 ## Stack
 
@@ -43,22 +47,41 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── index.js
 │   │   ├── auth.routes.js
 │   │   ├── candidate.routes.js # Operações de candidatos
+│   │   ├── company.routes.js   # Cadastro administrativo de empresas
+│   │   ├── match-profile-configuration.routes.js # Configuração do Perfil de Match
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
 │   │   ├── auth.controller.js
 │   │   ├── candidate.controller.js
+│   │   ├── company.controller.js
+│   │   ├── vacancy.controller.js
+│   │   ├── match-profile-configuration.controller.js
 │   │   └── user.controller.js
 │   ├── services/               # Regra de negócio, isolada do Express (req/res)
 │   │   ├── auth.service.js
 │   │   ├── candidate.service.js
+│   │   ├── company.service.js
+│   │   ├── company-user.service.js # Vínculo verificado de recrutadores
+│   │   ├── company-registration.service.js # Edição atômica de empresa e recrutador
+│   │   ├── company-read.service.js # Consulta pública autorizada do cadastro empresarial
+│   │   ├── company-delete.service.js # Exclusão lógica e revogação transacional
+│   │   ├── vacancy.service.js # Cadastro de vagas próprias com catálogo canônico
+│   │   ├── vacancy-content.service.js # Validação técnica compartilhada entre origens
+│   │   ├── vacancy-origin.service.js # Procedência e preparação para Match
+│   │   ├── match-profile-configuration.service.js
+│   │   ├── match-scoring.service.js # Pontuação técnica isolada (VJ-33)
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
 │   │   └── api.error.js        # Erro de negócio com status HTTP
 │   ├── models/                # Schemas do Mongoose
 │   │   ├── candidate.model.js
+│   │   ├── company.model.js
+│   │   ├── company-user.model.js # Associação empresa/usuário
+│   │   ├── vacancy.model.js # Entidade compartilhada de vagas
+│   │   ├── match-profile-configuration.model.js
 │   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
@@ -138,6 +161,7 @@ O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionad
 | Testes de unidade | `npm test` | Executa os testes com o runner nativo do Node.js |
 | Revalidação de aluno | `npm run candidates:revalidate -- <id>` | Revalida um candidato pendente pela base confiável |
 | Índices de candidatos | `npm run candidates:sync-indexes` | Migra os índices de e-mail ativo e cadastro atual por usuário |
+| Auditoria de origem de vagas | `npm run vacancies:audit-origins` | Lista vagas legadas sem procedência verificável; não altera o banco |
 
 ## Documentação da API (Swagger)
 
@@ -155,6 +179,16 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
+| POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
+| POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
+| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
+| GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
+| DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
+| PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
+| POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
+| POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
+| GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
+| PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -172,6 +206,252 @@ Para rotas autenticadas, envie o token retornado no login/registro no header:
 ```
 Authorization: Bearer <token>
 ```
+
+## Cadastro de empresa — VJ-37
+
+`POST /empresas` exige JWT de uma conta ativa com papel `admin` (operador autorizado).
+Recebe `legalName` (razão/nome), `responsibleName` (contato responsável), `email` corporativo,
+`city`, `state` e `country` como campos obrigatórios. Aceita opcionalmente `tradeName`, `website`,
+`description`, `phone`, `linkedinUrl` e `segment`. URLs devem ser HTTP/HTTPS. Não aceita
+`password`, `user`, `status`, auditoria ou outros campos controlados pelo servidor.
+
+```json
+{
+  "legalName": "Empresa de Testes Ltda",
+  "responsibleName": "Ana Souza",
+  "email": "contato@empresa.com.br",
+  "city": "São Paulo",
+  "state": "SP",
+  "country": "Brasil"
+}
+```
+
+A resposta **201** contém `{ "company": { "_id", ... } }` com status inicial sempre
+`pending`. A empresa é independente das coleções `users` e `candidates`; o responsável é
+contato comercial, não uma credencial. E-mail é normalizado e único entre empresas atuais,
+inclusive em cadastros concorrentes (**409**); dados inválidos retornam **400**, sem gravação.
+`registeredBy` e `deletedAt` ficam somente na auditoria interna. Nenhuma conta de recrutador é
+criada implicitamente.
+
+Uma conta com papel `company` não obtém acesso a candidatos apenas por possuir esse papel.
+O acesso exige as condições descritas na VJ-38 abaixo.
+
+## Usuário da empresa — VJ-38
+
+`POST /empresas/{id}/usuarios` exige JWT de administrador ativo e corpo `{ "userId": "<ObjectId>" }`.
+O usuário já deve existir com papel `company`, status `active` e identidade previamente verificada
+(`emailVerifiedAt` gravado por um processo confiável de verificação de titularidade). O registro
+público de usuários **não verifica e-mail** e não pode marcar essa data. Sem verificação confiável,
+o vínculo retorna **403**; não basta conhecer um e-mail ou informar que ele é seu. Esta história
+não implementa envio de convites nem fluxo de verificação de e-mail: até que esse processo seja
+disponibilizado, a identidade deve ser provisionada/verificada administrativamente de forma segura.
+
+A empresa deve existir e estar `pending` ou `active`. O endpoint cria somente um documento
+`companyusers` com papel `recruiter` e status `active`; nunca cria outra credencial. A resposta
+**201** contém `{ "membership": { ... }, "user": { "_id", "name", "email" } }`, sem senha,
+hash, token, convite ou dados internos de auditoria. Dados inválidos retornam **400**, empresa
+inexistente **404**, e empresa inativa/bloqueada ou vínculo ativo duplicado **409**. Índices únicos
+impedem mais de um vínculo ativo por empresa e que o mesmo usuário represente duas empresas.
+A troca do e-mail da conta invalida sua verificação; a exclusão da conta remove a associação na
+mesma transação.
+
+Em `GET /candidatos/{id}`, apenas conta `company` ativa com associação ativa e empresa `active`
+pode consultar candidato `active`. Empresas `pending`, `inactive`, `blocked` ou sem vínculo recebem
+**403**; candidatos em outros status não são expostos (**404**). O status e a associação podem ser
+administrados em histórias futuras, sem embutir recrutadores no documento Empresa.
+
+## Edição do cadastro empresarial — VJ-39
+
+`PATCH /empresas/{id}/cadastro` aceita os objetos opcionais `empresa` (campos públicos do cadastro)
+e `usuarioAtual` (somente `name` do recrutador vinculado), além de `status` e
+`verificationReference` para administradores. Pelo menos uma alteração é obrigatória. Exemplo:
+
+```json
+{
+  "empresa": { "tradeName": "Vagas JL Tecnologia", "website": "https://example.com" },
+  "usuarioAtual": { "name": "Ana Silva" }
+}
+```
+
+O recrutador precisa de conta ativa, e-mail previamente verificado e associação ativa **com a
+empresa indicada**. Não pode editar outra empresa, alterar status ou permissões. Administradores
+podem editar dados empresariais, mas não os dados públicos de outro usuário neste endpoint.
+`usuarioAtual.email`, senha e credenciais não são aceitos; a troca do e-mail de login ou da senha
+continua no fluxo `/usuarios/{id}`. Campos omitidos e status permanecem inalterados.
+
+Somente administradores transitam `pending → active`, `active → inactive/blocked` e
+`inactive/blocked → active`. Toda ativação/revalidação exige `verificationReference` (referência
+da verificação empresarial concluída pelo operador) e grava data/autor internos não expostos na
+resposta. Esta API registra a atestação do operador; não implementa um serviço externo de
+verificação empresarial. Inativar ou bloquear revoga imediatamente o acesso à leitura de
+candidatos, mesmo com JWT ainda válido. E-mail corporativo é normalizado e único; duplicidade
+retorna **409**, URL inválida **400**, sem atualização parcial. A edição conjunta usa transação
+MongoDB e, portanto, requer replica set; sem suporte retorna **503**.
+
+## Consulta do cadastro empresarial — VJ-40
+
+`GET /empresas/{id}/cadastro` exige JWT de conta ativa. Administradores consultam a empresa
+para revisão; recrutadores consultam apenas a empresa com a qual mantêm vínculo ativo. A
+resposta **200** contém `{ "company": { ... }, "usuarios": [ ... ] }`. `company` expõe os
+campos cadastrais e o status; `usuarios` é uma lista para futura expansão além do primeiro
+recrutador. Cada usuário inclui somente `_id`, `name` e `email`. O recrutador vê apenas seus
+próprios dados públicos; o administrador vê os usuários com vínculo ativo da empresa.
+
+Empresas `pending`, `inactive` ou `blocked` continuam visíveis ao próprio recrutador vinculado
+e ao administrador, **sem conceder acesso aos candidatos**. Senhas, hashes, tokens, convites,
+dados de candidato e auditoria interna não aparecem. A consulta não grava nem altera status.
+JWT ausente/inválido retorna **401**, ID malformado **400**, outra empresa **403** e empresa
+inexistente **404**.
+
+## Exclusão do cadastro empresarial — VJ-41
+
+`DELETE /empresas/{id}/cadastro` exige JWT de administrador ativo ou de recrutador ativo,
+vinculado à empresa indicada e com `canDeleteCompany=true` no vínculo. Essa permissão é
+**falsa por padrão** e não pode ser atribuída pelo próprio recrutador nos endpoints do MVP;
+seu provisionamento exige processo administrativo confiável. Outros perfis e recrutadores
+sem essa permissão recebem **403**.
+
+A operação retorna **204 sem corpo** após definir o status da empresa como `inactive`, registrar
+`deletedAt`/`deletedBy` internamente e revogar os vínculos ativos (`status=inactive`,
+`revokedAt`) na **mesma transação MongoDB**. Falha na revogação aborta toda a exclusão; sem
+suporte a transações, retorna **503**. Contas `User`, credenciais, candidatos, vagas e outras
+empresas não são removidos. Empresas já excluídas ou inexistentes retornam **404**, inclusive
+em chamadas repetidas. Uma empresa `blocked` pode ser encerrada, mas não é reativada por DELETE.
+
+As leituras empresariais de candidatos verificam vínculo ativo, empresa `active` e
+`deletedAt=null` no banco a cada requisição; assim o acesso cessa após a exclusão mesmo com
+JWT ainda válido. Um cadastro posterior com o mesmo e-mail, se permitido, cria **nova empresa
+`pending` com novo identificador**, sem reativar a excluída.
+
+## Cadastro de vaga própria — VJ-42
+
+`POST /empresas/{id}/vagas` exige JWT de conta `company` ativa e verificada, vínculo
+`recruiter` ativo com a empresa do caminho e empresa `active` não excluída. O corpo requer
+`reference` (chave operacional única por empresa), `title`, `description` e
+`matchProfile.values.type` (modalidade do catálogo publicado). `location` é opcional e, quando
+informada, exige `city`, `state` e `country`. Outros campos técnicos da VJ-28 são opcionais;
+`yearsOfExperience` aceita 0–100 com uma casa decimal. Exemplo:
+
+```json
+{
+  "reference": "QA-2026-01",
+  "title": "Pessoa QA",
+  "description": "Testes automatizados de aplicações web",
+  "location": { "city": "São Paulo", "state": "SP", "country": "Brasil" },
+  "matchProfile": {
+    "values": {
+      "type": "Remoto",
+      "testAutomationTechnologies": ["Cypress.io"],
+      "yearsOfExperience": 2.5
+    },
+    "requirements": [
+      { "field": "type", "id": "remote", "importance": "required" },
+      { "field": "testAutomationTechnologies", "id": "cypress", "importance": "desirable" },
+      { "field": "yearsOfExperience", "value": 2.5, "importance": "indifferent" }
+    ]
+  }
+}
+```
+
+O catálogo da VJ-28 deve ser publicado antes do cadastro, incluindo opções para `type` e
+demais campos usados; ausência de configuração retorna **503**. IDs, rótulos e aliases
+publicados são convertidos aos mesmos **IDs canônicos** usados nos perfis de candidatos;
+valores fora do catálogo retornam **400**, sem nova competência ou vaga parcial. A resposta
+**201** contém `{ "vacancy": { ... } }` com `origin: "COMPANY"`, `status: "pending"` e a
+versão do catálogo. `origin`, `status`, `company` e `createdBy` são definidos pelo servidor;
+tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa retorna **409**.
+O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
+com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
+ativação válida em história posterior.
+
+## Origem e Perfil de Match das vagas — VJ-43
+
+Todas as vagas usam o mesmo `Vacancy.matchProfile` e a mesma configuração versionada da VJ-28,
+independentemente da origem. O cadastro público existente atribui `COMPANY` no servidor. Os
+serviços internos `registerImportedVacancy` e `registerAdminVacancy` preparam, respectivamente,
+`IMPORTED` com `importSource`/`importSourceId` e `ADMIN` com autor administrativo. **Não há
+endpoint de importação nem fonte externa inventada nesta história.** O integrador futuro deve
+fornecer uma origem externa real e seu ID confiável. IDs, rótulos e aliases publicados são
+normalizados pelo mesmo validador; nenhuma origem cria texto técnico livre pontuável.
+
+O modelo exige origem e procedência compatíveis, sem origem presumida, e mantém esses campos
+imutáveis. O serviço de preparação `assessVacancyForMatch` devolve apenas o perfil técnico e
+sinaliza `needsOriginReview=true` para vagas legadas sem origem/procedência verificável, que
+ficam inelegíveis até saneamento. Ele não utiliza a origem para modificar competências, pesos
+ou pontuação. O motor de cálculo percentual não faz parte deste endpoint/história; quando
+integrado, deve consumir apenas esse perfil técnico. Para localizar registros legados sem
+modificar o banco, execute `npm run vacancies:audit-origins` com `MONGODB_URI` configurada.
+
+## Status e prazo das vagas — VJ-44
+
+`PATCH /vagas/{id}/status` recebe apenas `{ "status": "active", "reason": "Revisão aprovada" }`.
+Vagas novas começam `pending`. O administrador pode publicar, rejeitar, pausar, expirar ou
+remover; a publicação valida dados essenciais, catálogo versionado e empresa ativa quando a
+origem é `COMPANY`. O recrutador ativo e vinculado pode apenas pausar, retomar ou remover
+vagas próprias. A reativação de `expired` é reservada ao administrador, requer prazo futuro
+previamente atualizado por fluxo confiável e motivo de revalidação expresso. `removed` e
+`rejected` são terminais. A transição registra origem, destino, data, ator/processo e motivo,
+com atualização atômica condicionada ao status e à versão da vaga. Origem e competências
+não são alteradas. ID/corpo inválido retorna **400**, sem JWT **401**, sem permissão **403**,
+vaga ausente **404**, e transição inválida ou corrida **409**.
+
+O cadastro aceita `expiresAt` opcional em ISO UTC futuro. Uma vaga cujo prazo terminou fica
+inelegível ao Match imediatamente, mesmo antes da atualização materializada do status.
+Execute `npm run vacancies:expire` no servidor ou agendador para converter vagas `active`
+ou `paused` vencidas em `expired` com registro de auditoria; em deploy serverless, agende
+essa execução externamente, pois timers locais não são confiáveis.
+
+## Ranking de vagas elegíveis — VJ-45
+
+`GET /candidatos/me/vagas/ranking?page=1&limit=20` exige JWT de candidato com cadastro e
+Perfil de Match atual. `page` começa em 1 e `limit` aceita 1–50. A resposta contém `items`
+com `vacancy` e `percentage`, além de `total`, `page`, `limit` e `pages`. Apenas vagas `active`,
+não excluídas e com prazo vigente entram no cálculo; vagas `COMPANY` também exigem empresa
+`active`. Origem e status não acrescentam pontos. O percentual reutiliza a comparação de
+competências canônicas e pesos da configuração versionada, sem inventar uma fórmula para
+campos ainda não contemplados pelo motor. A ordenação é percentual decrescente, data de
+criação decrescente e ID como desempate. O total e as páginas contam apenas vagas elegíveis.
+Não há cache; a próxima consulta reflete pausas, bloqueios e vencimentos. Sem cadastro retorna
+**404**, sem Perfil de Match **409**, parâmetros inválidos **400**, sem autenticação **401**
+e papel diferente de candidato **403**.
+
+## Importância dos requisitos — VJ-46
+
+O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave
+técnica da VJ-28 a um ID canônico já presente em `matchProfile.values` (ou a `value`
+numérico para `yearsOfExperience`) e a `importance`: `required`, `desirable` ou
+`indifferent`. O PATCH `/vagas/{id}/requisitos` recebe apenas o conjunto completo
+`requirements` e `reason`; substitui-o atomicamente, incrementa `requirementsRevision` e
+registra ator, data, motivo e snapshot na trilha de auditoria. Duplicatas retornam **409**;
+classificações informadas no cadastro inicial também começam na revisão 1 com auditoria.
+IDs, campos ou importâncias inválidos retornam **400**, sem gravação parcial. Recrutador
+verificado só edita vaga `COMPANY` da própria empresa ativa; administrador pode editar as
+demais origens. Vagas `removed`/`rejected` não são editáveis.
+
+Para publicar, todos os valores técnicos da vaga devem estar classificados e ao menos um
+requisito deve pontuar. Importações sem evidência confiável não recebem classificação
+automática e permanecem pendentes de revisão. `required` usa peso integral, sem eliminar
+automaticamente o candidato; `desirable` usa o fator `MATCH_DESIRABLE_FACTOR` (padrão
+`0.5`, configurável entre 0 e 1); `indifferent` pesa zero no numerador e denominador.
+Descrição livre, campos derivados e `testingRelatedKeywords` não viram requisitos.
+O ranking considera somente vagas ativas com requisitos classificados; a mudança aparece
+na próxima consulta, sem cache.
+
+## Critério eliminatório — VJ-47
+
+Cada requisito estruturado aceita `eliminatory: true|false` no cadastro ou no mesmo
+`PATCH /vagas/{id}/requisitos`; o padrão é `false`. Apenas requisitos `required` ou
+`desirable` podem ser eliminatórios. `indifferent`, texto livre e
+`testingRelatedKeywords` são recusados para essa finalidade. O sinalizador segue a mesma
+autorização, revisão e auditoria da VJ-46. `required` sem o sinalizador **não elimina**.
+
+Com `MATCH_ELIMINATORY_ENABLED=true` (padrão), requisito eliminatório não comprovado,
+ausente ou desconhecido torna a avaliação `ineligible` com motivo estruturado no serviço
+de Match, separado do percentual. A vaga não aparece no ranking personalizado desse
+candidato e sai de `total`/paginação, mas não recebe penalidade extra na pontuação.
+Valores numéricos exigem atingir ao menos o nível da vaga. `false` desativa a política
+global sem alterar requisitos, pesos ou percentuais. Não há cache; a próxima consulta
+reflete imediatamente a alteração, sem expor o motivo interno a outros usuários.
 
 ## Cadastro de usuários — VJ-1
 
@@ -250,6 +530,122 @@ efetiva de tokens após exclusão, consultando a conta em cada requisição aute
 Refresh token e alteração de status de usuários não fazem parte deste escopo.
 
 ## Contrato de autenticação e erros
+
+### Configuração do Perfil de Match — VJ-28
+
+`PUT /perfil-match/configuracao` exige JWT de uma conta existente, ativa e com papel `admin`.
+Contas `admin` não são criadas pelo cadastro público; devem ser provisionadas de forma controlada.
+O corpo contém `fields` com **exatamente 22 chaves**. Cada chave recebe `weight` inteiro positivo
+e `options` (lista que pode começar vazia, pois a história não fornece o catálogo completo).
+IDs de opção são canônicos e estáveis; `label` e `aliases` são normalizados para comparação sem
+diferença de caixa, acento ou espaços. Por exemplo, `Cypress`, `cypress`, `Cypress.io` e
+`Cypress Framework` podem apontar para o ID único `cypress` no campo adequado.
+
+| Campo técnico | Peso inicial | Campo técnico | Peso inicial |
+| --- | ---: | --- | ---: |
+| `type` | 8 | `agile` | 4 |
+| `programming` | 3 | `automation` | 5 |
+| `webTesting` | 6 | `apiTesting` | 7 |
+| `mobileTesting` | 5 | `desktopTesting` | 4 |
+| `higherEducationDegree` | 3 | `english` | 7 |
+| `spanish` | 3 | `yearsOfExperience` | 9 |
+| `continuousIntegration` | 6 | `certification` | 2 |
+| `testAutomationTechnologies` | 10 | `tecnologies` | 5 |
+| `programmingLanguages` | 9 | `genAITools` | 5 |
+| `level` | 10 | `classification` | 3 |
+| `role` | 5 | `specialization` | 7 |
+
+A grafia `tecnologies` segue o anexo original; alterá-la depois exige migração deliberada. O
+objeto de pesos iniciais está em `src/config/match-profile.js`. Para gerar um corpo inicial sem
+inventar opções de catálogo:
+
+```bash
+node -e "const {INITIAL_MATCH_WEIGHTS}=require('./src/config/match-profile'); console.log(JSON.stringify({fields:Object.fromEntries(Object.entries(INITIAL_MATCH_WEIGHTS).map(([key,weight])=>[key,{weight,options:[]}]))},null,2))"
+```
+
+O administrador publica o JSON gerado no endpoint e acrescenta as opções reais aprovadas pelo
+produto. A primeira publicação retorna versão `1`; repetir o mesmo conteúdo retorna a mesma
+versão. Mudança de peso, rótulo ou alias cria um novo documento versionado, preservando o anterior.
+IDs já publicados não podem ser removidos; aliases atribuídos ou transferidos a IDs diferentes
+no mesmo campo retornam **409**. Chaves desconhecidas, pesos inválidos e metadados controlados pelo servidor
+retornam **400**. Nenhum perfil de candidato ou vaga é alterado por essa operação. As futuras
+histórias de cadastro e Match deverão ler a versão publicada e referenciar os mesmos IDs.
+
+### Cadastro do Perfil de Match — VJ-29
+
+`POST /candidatos/me/perfil-match` exige JWT de uma conta ativa com papel `candidate` e um
+cadastro atual de candidato. O perfil técnico fica separado dos dados cadastrais. O corpo contém
+apenas `values`, com qualquer subconjunto das 22 chaves acima. Valores omitidos ficam pendentes;
+não são inferidos. A configuração VJ-28 precisa estar publicada antes do primeiro cadastro.
+
+```json
+{
+  "values": {
+    "testAutomationTechnologies": ["Cypress.io"],
+    "yearsOfExperience": 2.5
+  }
+}
+```
+
+Valores de catálogo podem ser enviados por ID, rótulo ou alias publicado; a API persiste
+somente IDs canônicos (por exemplo, `cypress`). Se um campo ainda não tiver opções publicadas,
+ele deve ser omitido. Texto livre ou ID desconhecido retorna **400** sem criar perfil. Cada
+competência aceita um valor ou lista de até 50 valores; duplicatas são consolidadas.
+`yearsOfExperience` é numérico, entre 0 e 100, com no máximo uma casa decimal. Pesos,
+versão de configuração, vínculo com o usuário e status não são aceitos do cliente.
+
+Resposta **201** inclui `{ "profile": { "_id", "candidate", "configurationVersion", "values", "pendingFields", "createdAt", "updatedAt" } }`.
+`pendingFields` lista as chaves não preenchidas. O registro não ativa o candidato nem o torna
+visível a empresas: essa visibilidade continua dependente do status `active` do cadastro.
+Candidatos `pending_validation` ou `incomplete_profile` podem criar rascunho; `inactive` ou
+`blocked` recebem **409**. Somente um perfil atual é permitido por candidato; repetição ou
+criação concorrente retorna **409**. Conta sem papel de candidato recebe **403**, cadastro
+inexistente **404**, configuração ausente **503** e autenticação inválida/inativa **401**.
+
+### Pontuação técnica isolada — VJ-33
+
+`src/services/match-scoring.service.js` fornece `calculateMatchScore` para o futuro motor de
+Match; **não cria endpoint** nem busca vagas/candidatos. A função recebe a configuração VJ-28
+publicada e resultados técnicos já comparados, por chave, no formato
+`{ applicable: true|false, matched: true|false }`. Apenas as 22 chaves técnicas configuradas
+podem entrar no denominador e no detalhamento. Critérios não aplicáveis ou ausentes não pontuam;
+o percentual é `pontos obtidos / pontos possíveis × 100` (ou `0` sem critérios aplicáveis).
+
+`skillsRequiredCounter`, `amountOfTestingRelatedKeywords`, `amountOfGenAITools`, `hasGenAI`,
+`isTestingRelated` e `reasonToBeRemoved` são ignorados na pontuação, mesmo se informados, nulos
+ou legados. `vacancy.reasonToBeRemoved` aparece somente em `eligibility`, separado de
+`percentage` e `details`, sem bônus ou penalidade. Os pesos vêm exclusivamente da configuração
+publicada para os campos técnicos; uma configuração incompleta/inválida impede o cálculo.
+Comparação de competências entre vaga e candidato e ranking continuam fora desta história.
+
+### Competências sem dupla pontuação — VJ-34
+
+`calculateCompetencyMatch` no mesmo serviço compara os valores de catálogo da vaga e do
+candidato sem criar endpoint. Cada valor é resolvido para o **ID canônico** da configuração
+VJ-28: ID, rótulo e aliases publicados representam a mesma competência. Repetições, inclusive
+em dados legados, são reduzidas a um único ID antes da pontuação. Para cada par
+`campo técnico + ID canônico` exigido pela vaga, o peso configurado entra uma vez no
+denominador e, se o candidato possuir o ID, uma vez no numerador. `details` registra um único
+lançamento por par. IDs diferentes permanecem separados, mesmo com nomes semelhantes.
+
+Campos derivados como `hasGenAI` e `amountOfGenAITools` continuam fora da fórmula; por exemplo,
+`ChatGPT` em `genAITools` não ganha pontos extras por `hasGenAI: true`. Texto sem ID/alias
+publicado é rejeitado, não aproximado por semelhança. O serviço não modifica os dados recebidos.
+Comparações quantitativas como `yearsOfExperience`, elegibilidade da vaga, busca e ranking
+continuam responsabilidades separadas do futuro motor completo.
+
+### Palavras-chave fora do Match v1 — VJ-35
+
+`testingRelatedKeywords` é texto livre legado e está **explicitamente excluído** da versão 1
+do serviço de pontuação. Sua presença, ausência ou alteração, assim como a do contador
+`amountOfTestingRelatedKeywords`, não altera numerador, denominador, percentual ou
+`details`. O texto original não é modificado nem promovido automaticamente a um ID do catálogo;
+por exemplo, `Testes de API` nesse campo não vira `apiTesting` sem regra de conversão explícita.
+
+Mesmo que exista um catálogo controlado de tipos de teste em outro componente, isso não
+habilita a pontuação. Incluir `testingRelatedKeywords` nos pesos da configuração v1 é inválido;
+uma eventual inclusão futura exigirá nova versão da regra e testes próprios. Nenhum endpoint
+é criado nesta história.
 
 ### Cadastro de candidato — VJ-22
 
@@ -425,26 +821,25 @@ os metadados legados uma única vez, sem promoção para `active`.
 
 ### Visualização de candidato — VJ-25
 
-`GET /candidatos/{id}` exige JWT válido de uma conta ativa com papel `candidate` ou `company`.
-O candidato pode consultar somente o próprio cadastro, independentemente de estar pendente,
-incompleto, ativo, inativo ou bloqueado. A empresa recebe dados somente quando o candidato está
-`active`; cadastro inexistente ou em qualquer outro status retorna a mesma resposta **404**, sem
-revelar o estado real.
+`GET /candidatos/{id}` exige JWT válido de uma conta ativa. O candidato pode consultar somente
+o próprio cadastro, independentemente de estar pendente, incompleto, ativo, inativo ou
+bloqueado. Por segurança, o papel `company` isolado recebe **403** até haver vínculo verificável
+com uma empresa ativa (VJ-37), mesmo quando o candidato consultado está `active`.
 
 A resposta contém apenas `_id`, nome, foto, e-mail de contato, telefone, localização, LinkedIn,
-GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`;
-a empresa não. Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
+GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`.
+Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
 como `UNKNOWN`, nunca como `false`. Conta vinculada, senha, hashes, tokens, comprovantes, datas e
 detalhes internos de elegibilidade não fazem parte da projeção nem do objeto retornado.
 
 | Condição | HTTP |
 | --- | --- |
 | Titular consulta o próprio cadastro em qualquer status | 200 |
-| Empresa consulta candidato ativo | 200 |
+| Papel `company` sem vínculo empresarial autorizado | 403 |
 | Identificador malformado | 400 |
 | JWT ausente/inválido ou conta inexistente/inativa | 401 |
 | Candidato consulta outro candidato ou papel sem permissão | 403 |
-| Candidato inexistente ou não ativo para empresa | 404 |
+| Candidato inexistente para o titular | 404 |
 
 A consulta não executa gravações e não altera os dados nem o status do candidato. Listagem,
 filtros, busca textual e cálculo de match continuam fora do escopo desta história.
@@ -722,8 +1117,8 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Critério da VJ-25 | Cobertura unitária |
 | --- | --- |
 | Titular consulta o próprio perfil em qualquer status | Service com todos os status controlados e controller HTTP 200 |
-| Empresa consulta somente candidato ativo | Filtro atômico por `_id` e `status: active` no banco |
-| Status não ativo permanece oculto para empresa | Mesmo erro 404 para pendente, incompleto, inativo e bloqueado |
+| Papel `company` não obtém acesso sem vínculo autorizado (VJ-38) | Service exige conta, associação e empresa ativas antes da busca |
+| Status não ativo permanece oculto para empresa | Busca empresarial filtra somente candidatos `active` |
 | Candidato não consulta outro candidato | Verificação de titularidade e erro 403 |
 | Campos opcionais desconhecidos usam `UNKNOWN` | Normalização explícita, inclusive contra valores legados `false` |
 | Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |
@@ -797,7 +1192,7 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
 
 ## Próximos passos
 
-- Implementar vagas, empresas, competências e complementar o perfil de candidato a partir das
+- Implementar vagas, usuários vinculados a empresas, competências e complementar o perfil de candidato a partir das
   user stories do Jira.
 - Implementar o motor de match entre vagas e candidatos.
 - Configurar CI via GitHub Actions e deploy via Vercel.
