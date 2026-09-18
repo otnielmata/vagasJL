@@ -54,8 +54,10 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
     const score = scorePair(vacancy, candidateValues, configuration, now);
     return { vacancy: vacancy.toJSON(), percentage: score.percentage,
+      earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
+      configurationVersion: vacancy.matchProfile.configurationVersion,
       eligible: score.eligibility.eligible && score.possiblePoints > 0 };
-  }).filter((item) => item.eligible).map(({ vacancy, percentage }) => ({ vacancy, percentage }));
+  }).filter((item) => item.eligible).map(({ eligible, ...item }) => item);
   ranked.sort((left, right) => right.percentage - left.percentage ||
     new Date(right.vacancy.createdAt) - new Date(left.vacancy.createdAt) ||
     String(left.vacancy._id).localeCompare(String(right.vacancy._id)));

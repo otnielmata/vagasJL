@@ -33,16 +33,16 @@ function buildScoreResult(details, vacancy) {
   const earnedPoints = details.reduce((total, detail) => total + detail.earnedPoints, 0);
   const possiblePoints = details.reduce((total, detail) => total + detail.weight, 0);
   const reason = vacancy?.reasonToBeRemoved || null;
-  const nonCalculableImport = vacancy?.origin === 'IMPORTED' && possiblePoints === 0;
+  const notCalculable = possiblePoints === 0;
   return {
-    percentage: nonCalculableImport ? null : possiblePoints
-      ? Number((earnedPoints / possiblePoints * 100).toFixed(2)) : 0,
+    percentage: notCalculable ? null : Number((earnedPoints / possiblePoints * 100).toFixed(2)),
     earnedPoints,
     possiblePoints,
+    calculationStatus: notCalculable ? 'not_calculable' : 'calculable',
     details,
     eligibility: { eligible: !reason, reason },
     ...(vacancy?.origin === 'IMPORTED'
-      ? { technicalCompatibility: nonCalculableImport ? 'not_calculable' : 'calculable' } : {}),
+      ? { technicalCompatibility: notCalculable ? 'not_calculable' : 'calculable' } : {}),
   };
 }
 
@@ -104,7 +104,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
     if (!Array.isArray(requirements) || !Number.isFinite(desirableFactor) ||
         desirableFactor <= 0 || desirableFactor >= 1 ||
         typeof eliminatoryPolicyEnabled !== 'boolean') throw new TypeError('Importancia invalida');
-    const seen = new Set();
+    const seen = new Map();
     let unmetEliminatory = null;
     for (const requirement of requirements) {
       const { field, id, value, importance, eliminatory = false } = requirement;
@@ -115,8 +115,13 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         throw new TypeError('Sinalizador eliminatorio invalido');
       }
       const key = field === 'yearsOfExperience' ? field : `${field}:${id}`;
-      if (seen.has(key)) throw new TypeError('Requisito duplicado');
-      seen.add(key);
+      if (seen.has(key)) {
+        const previous = seen.get(key);
+        if (previous.importance !== importance || previous.eliminatory !== eliminatory ||
+            previous.value !== value) throw new TypeError('Requisito duplicado conflitante');
+        continue;
+      }
+      seen.set(key, { importance, eliminatory, value });
       if (importance === 'indifferent') continue;
       const weight = weights.get(field) * (importance === 'desirable' ? desirableFactor : 1);
       let matched;
