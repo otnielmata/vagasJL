@@ -185,6 +185,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
+| PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
@@ -452,6 +453,25 @@ Sem pontos possíveis, o serviço de cálculo devolve `percentage: null` e
 Rankings não incluem pares não calculáveis; resultados autorizados incluem pontos
 obtidos, pontos possíveis e a versão da configuração técnica aplicada.
 
+## Multiplicadores do Match — VJ-52
+
+Antes de calcular novos rankings, um administrador ativo deve publicar os
+multiplicadores em `PUT /configuracoes/match/multiplicadores` com corpo
+`{"required":1,"desirable":0.5,"indifferent":0}`. `required=1` e
+`indifferent=0` são invariantes; `desirable` aceita número estritamente entre 0 e 1.
+A proposta inicial do produto é `0.5`: uma ferramenta com peso-base 10 vale 10
+pontos se obrigatória, 5 se desejável e 0 se indiferente. O valor **não é mais lido
+de `MATCH_DESIRABLE_FACTOR`** nem embutido no cálculo. A ausência ou invalidade da
+configuração publicada impede novo cálculo com **503**, sem presumir um padrão.
+
+A resposta administrativa contém `version`, `author`, `effectiveAt` e os fatores.
+Publicar conteúdo idêntico mantém a versão; mudar `desirable` cria uma nova versão
+auditável e afeta as próximas consultas dos dois rankings. Cada item de ranking
+informa `multipliersVersion` além da versão dos pesos-base. Configurações antigas
+continuam registradas; o histórico de resultados calculados é escopo da VJ-71.
+Corpo inválido retorna **400**, falta de autenticação **401** e ausência de permissão
+**403**.
+
 ## Importância dos requisitos — VJ-46
 
 O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave
@@ -468,8 +488,8 @@ demais origens. Vagas `removed`/`rejected` não são editáveis.
 Para publicar, todos os valores técnicos da vaga devem estar classificados e ao menos um
 requisito deve pontuar. Importações sem evidência confiável não recebem classificação
 automática e permanecem pendentes de revisão. `required` usa peso integral, sem eliminar
-automaticamente o candidato; `desirable` usa o fator `MATCH_DESIRABLE_FACTOR` (padrão
-`0.5`, configurável entre 0 e 1); `indifferent` pesa zero no numerador e denominador.
+automaticamente o candidato; `desirable` usa o multiplicador publicado na VJ-52;
+`indifferent` pesa zero no numerador e denominador.
 Descrição livre, campos derivados e `testingRelatedKeywords` não viram requisitos.
 O ranking considera somente vagas ativas com requisitos classificados; a mudança aparece
 na próxima consulta, sem cache.

@@ -2,6 +2,7 @@ const Candidate = require('../models/candidate.model');
 const CandidateMatchProfile = require('../models/candidate-match-profile.model');
 const Company = require('../models/company.model');
 const Configuration = require('../models/match-profile-configuration.model');
+const { getPublishedMultipliers } = require('./match-multipliers-configuration.service');
 const Vacancy = require('../models/vacancy.model');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair } = require('./match-ranking.service');
@@ -45,6 +46,7 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
     vacancy.matchProfile.requirements?.some((item) => item.importance !== 'indifferent'));
 
   const versions = [...new Set(eligible.map((vacancy) => vacancy.matchProfile.configurationVersion))];
+  const matchConfiguration = eligible.length && await getPublishedMultipliers();
   const configurations = versions.length ? await Configuration.find({ version: { $in: versions } }) : [];
   const byVersion = new Map(configurations.map((configuration) => [configuration.version, configuration]));
   const candidateValues = typeof profile.values.toObject === 'function'
@@ -52,10 +54,12 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
   const ranked = eligible.map((vacancy) => {
     const configuration = byVersion.get(vacancy.matchProfile.configurationVersion);
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
-    const score = scorePair(vacancy, candidateValues, configuration, now);
+    const score = scorePair(vacancy, candidateValues, configuration,
+      matchConfiguration.multipliers, now);
     return { vacancy: vacancy.toJSON(), percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
       configurationVersion: vacancy.matchProfile.configurationVersion,
+      multipliersVersion: matchConfiguration.version,
       eligible: score.eligibility.eligible && score.possiblePoints > 0 };
   }).filter((item) => item.eligible).map(({ eligible, ...item }) => item);
   ranked.sort((left, right) => right.percentage - left.percentage ||

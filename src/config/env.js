@@ -27,7 +27,6 @@ const config = {
     source: process.env.STUDENT_VALIDATION_SOURCE || 'pending',
   },
   match: {
-    desirableFactor: Number(process.env.MATCH_DESIRABLE_FACTOR ?? '0.5'),
     eliminatoryEnabled: (process.env.MATCH_ELIMINATORY_ENABLED ?? 'true') === 'true',
   },
 };
@@ -37,10 +36,6 @@ function validateConfig() {
 
   if (!['pending', 'mongodb'].includes(config.studentValidation.source)) {
     errors.push('STUDENT_VALIDATION_SOURCE deve ser pending ou mongodb');
-  }
-  if (!Number.isFinite(config.match.desirableFactor) || config.match.desirableFactor <= 0 ||
-      config.match.desirableFactor >= 1) {
-    errors.push('MATCH_DESIRABLE_FACTOR deve ser maior que 0 e menor que 1');
   }
   if (!['true', 'false'].includes(process.env.MATCH_ELIMINATORY_ENABLED ?? 'true')) {
     errors.push('MATCH_ELIMINATORY_ENABLED deve ser true ou false');

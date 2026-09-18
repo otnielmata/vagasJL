@@ -7,6 +7,7 @@ const CandidateMatchProfile = require('../../src/models/candidate-match-profile.
 const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
+const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const User = require('../../src/models/user.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -38,6 +39,11 @@ function vacancy(overrides = {}) {
 }
 
 function setup(context, currentVacancy = vacancy()) {
+  const matchConfiguration = { version: 1,
+    multipliers: { required: 1, desirable: 0.5, indifferent: 0 } };
+  context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({
+    sort: async () => matchConfiguration,
+  }));
   const vacancyLookup = { select: async () => currentVacancy };
   context.mock.method(Vacancy, 'findById', () => vacancyLookup);
   const companyLookup = { select: async () => ({ _id: companyId }) };
@@ -58,7 +64,8 @@ function setup(context, currentVacancy = vacancy()) {
   ];
   const profileQuery = { select: async () => profiles };
   context.mock.method(CandidateMatchProfile, 'find', () => profileQuery);
-  return { candidates, candidateQuery, profiles, profileQuery, companyLookup, findCandidates };
+  return { candidates, candidateQuery, profiles, profileQuery, companyLookup, findCandidates,
+    matchConfiguration };
 }
 
 test('company ranking scores from vacancy requirements, sorts and hides private candidate fields', async (context) => {
@@ -71,6 +78,7 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(result.items[0].percentage, 100);
   assert.deepEqual([result.items[0].earnedPoints, result.items[0].possiblePoints,
     result.items[0].configurationVersion], [16, 16, 1]);
+  assert.equal(result.items[0].multipliersVersion, 1);
   assert.equal(result.items[0].candidate.email, undefined);
   assert.equal(findCandidates.mock.calls[0].arguments[0].status, 'active');
   const second = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId,
@@ -93,6 +101,40 @@ test('both ranking directions use identical score and vacancy denominator for sa
   const fromCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(fromCandidate.items[0].percentage, 50);
   assert.equal(fromCandidate.items[0].percentage, fromCompany.items[0].percentage);
+});
+
+test('recalibrating published desirable multiplier affects both ranking directions equally', async (context) => {
+  const row = vacancy();
+  row.matchProfile.requirements[1].importance = 'desirable';
+  const { candidates, profiles, matchConfiguration } = setup(context, row);
+  candidates.splice(1);
+  profiles.splice(1);
+  context.mock.method(Candidate, 'findOne', () => ({ select: async () => ({ _id: candidateId }) }));
+  context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
+  context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
+  context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
+  context.mock.method(Configuration, 'find', async () => [configuration]);
+  const beforeCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
+  const beforeCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
+  assert.equal(beforeCandidate.items[0].percentage, 66.67);
+  assert.equal(beforeCompany.items[0].percentage, 66.67);
+  assert.equal(beforeCandidate.items[0].multipliersVersion, 1);
+  matchConfiguration.version = 2;
+  matchConfiguration.multipliers.desirable = 0.4;
+  const afterCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
+  const afterCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
+  assert.equal(afterCandidate.items[0].percentage, 71.43);
+  assert.equal(afterCompany.items[0].percentage, 71.43);
+  assert.equal(afterCandidate.items[0].multipliersVersion, 2);
+  assert.equal(afterCompany.items[0].multipliersVersion, 2);
+  assert.equal(beforeCandidate.items[0].percentage, 66.67);
+});
+
+test('unpublished multipliers block candidate ranking before candidate data is read', async (context) => {
+  const { findCandidates } = setup(context);
+  context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => null }));
+  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, {}, now), { statusCode: 503 });
+  assert.equal(findCandidates.mock.callCount(), 0);
 });
 
 test('inactive candidates and missing profiles are omitted from total', async (context) => {
