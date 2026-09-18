@@ -1,5 +1,6 @@
 const service = require('../services/company.service');
 const companyUserService = require('../services/company-user.service');
+const registrationService = require('../services/company-registration.service');
 
 async function register(req, res, next) {
   try {
@@ -19,4 +20,13 @@ async function addUser(req, res, next) {
   }
 }
 
-module.exports = { register, addUser };
+async function updateRegistration(req, res, next) {
+  try {
+    const result = await registrationService.updateRegistration(req.user, req.params.id, req.body);
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, addUser, updateRegistration };
