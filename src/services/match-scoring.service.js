@@ -1,4 +1,5 @@
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { validMultipliers } = require('../config/match-multipliers');
 
 const MATCH_SCORING_VERSION = 1;
 const DERIVED_FIELDS = Object.freeze([
@@ -92,7 +93,7 @@ function canonicalValues(values, field, ignoreUnknown = false) {
 }
 
 function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {},
-  requirements, desirableFactor = 0.5, eliminatoryPolicyEnabled = true }) {
+  requirements, multipliers, eliminatoryPolicyEnabled = true }) {
   const weights = configuredWeights(configuration);
   if (!vacancyValues || typeof vacancyValues !== 'object' || Array.isArray(vacancyValues) ||
       !candidateValues || typeof candidateValues !== 'object' || Array.isArray(candidateValues)) {
@@ -101,8 +102,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   const fields = new Map(configuration.fields.map((field) => [field.key, field]));
   const details = [];
   if (requirements !== undefined) {
-    if (!Array.isArray(requirements) || !Number.isFinite(desirableFactor) ||
-        desirableFactor <= 0 || desirableFactor >= 1 ||
+    if (!Array.isArray(requirements) || !validMultipliers(multipliers) ||
         typeof eliminatoryPolicyEnabled !== 'boolean') throw new TypeError('Importancia invalida');
     const seen = new Map();
     let unmetEliminatory = null;
@@ -123,7 +123,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
       }
       seen.set(key, { importance, eliminatory, value });
       if (importance === 'indifferent') continue;
-      const weight = weights.get(field) * (importance === 'desirable' ? desirableFactor : 1);
+      const weight = weights.get(field) * multipliers[importance];
       let matched;
       if (field === 'yearsOfExperience') {
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
