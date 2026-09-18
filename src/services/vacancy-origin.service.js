@@ -56,7 +56,7 @@ async function registerAdminVacancy(actor, input) {
   }
 }
 
-function assessVacancyForMatch(vacancy) {
+function assessVacancyForMatch(vacancy, now = new Date()) {
   const origin = vacancy?.origin;
   const identifiable = origin === 'COMPANY'
     ? Boolean(vacancy.company && vacancy.createdBy && !vacancy.importSource && !vacancy.importSourceId)
@@ -73,7 +73,8 @@ function assessVacancyForMatch(vacancy) {
   }
   return {
     needsOriginReview: false,
-    eligible: vacancy.status === 'active' && !vacancy.deletedAt,
+    eligible: vacancy.status === 'active' && !vacancy.deletedAt &&
+      (!vacancy.expiresAt || new Date(vacancy.expiresAt) > now),
     technicalProfile: {
       configurationVersion: matchProfile.configurationVersion,
       values: typeof matchProfile.values.toObject === 'function'
