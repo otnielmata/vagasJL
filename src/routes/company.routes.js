@@ -9,5 +9,7 @@ router.post('/', authenticate, authorize('admin'), ensureDatabase, controller.re
 router.post('/:id/usuarios', authenticate, authorize('admin'), ensureDatabase, controller.addUser);
 router.patch('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.updateRegistration);
+router.get('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureDatabase,
+  controller.showRegistration);
 
 module.exports = router;
