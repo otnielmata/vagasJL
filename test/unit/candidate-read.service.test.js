@@ -3,6 +3,9 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Candidate = require('../../src/models/candidate.model');
+const Company = require('../../src/models/company.model');
+const CompanyUser = require('../../src/models/company-user.model');
+const User = require('../../src/models/user.model');
 const { getCandidateById } = require('../../src/services/candidate.service');
 const { UNKNOWN, PROFILE_FIELDS, CANDIDATE_STATUS } = require('../../src/config/candidate');
 
@@ -80,10 +83,58 @@ for (const status of Object.values(CANDIDATE_STATUS)) {
 for (const status of Object.values(CANDIDATE_STATUS)) {
   test(`company role alone cannot view a ${status} candidate`, async (context) => {
     const { findOne } = isolateLookup(context, storedCandidate({ status }));
+    context.mock.method(User, 'findOne', async () => null);
     await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
     assert.equal(findOne.mock.callCount(), 0);
   });
 }
+
+test('active recruiter of active company sees only active candidates', async (context) => {
+  const account = { _id: otherUserId };
+  const findUser = context.mock.method(User, 'findOne', async () => account);
+  const findMembership = context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+  const findCompany = context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+  const { findOne } = isolateLookup(context, storedCandidate());
+  const result = await getCandidateById(candidateId, otherUserId, 'company');
+  assert.equal(result.name, 'Maria Silva');
+  assert.equal(result.status, undefined);
+  assert.deepEqual(findUser.mock.calls[0].arguments[0], {
+    _id: otherUserId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+  });
+  assert.deepEqual(findMembership.mock.calls[0].arguments[0], { user: otherUserId, status: 'active' });
+  assert.deepEqual(findCompany.mock.calls[0].arguments[0], {
+    _id: 'company-id', status: 'active', deletedAt: null,
+  });
+  assert.deepEqual(findOne.mock.calls[0].arguments[0], { _id: candidateId, status: CANDIDATE_STATUS.ACTIVE });
+});
+
+for (const status of Object.values(CANDIDATE_STATUS).filter((value) => value !== CANDIDATE_STATUS.ACTIVE)) {
+  test(`company cannot see a ${status} candidate even with active membership`, async (context) => {
+    context.mock.method(User, 'findOne', async () => ({ _id: otherUserId }));
+    context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+    context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+    isolateLookup(context, storedCandidate({ status }));
+    await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 404 });
+  });
+}
+
+test('inactive account, missing membership or non-active company deny access before candidate lookup', async (context) => {
+  const { findOne } = isolateLookup(context, storedCandidate());
+  const account = { _id: otherUserId };
+  const membership = { company: 'company-id' };
+  const findUser = context.mock.method(User, 'findOne', async () => account);
+  const findMembership = context.mock.method(CompanyUser, 'findOne', async () => membership);
+  const findCompany = context.mock.method(Company, 'findOne', async () => null);
+  for (const companyStatus of ['pending', 'inactive', 'blocked']) {
+    await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  }
+  findMembership.mock.mockImplementation(async () => null);
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  findUser.mock.mockImplementation(async () => null);
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  assert.equal(findOne.mock.callCount(), 0);
+  assert.equal(findCompany.mock.callCount(), 3);
+});
 
 test('candidate cannot view another candidate profile', async (context) => {
   isolateLookup(context, storedCandidate({ user: otherUserId }));
