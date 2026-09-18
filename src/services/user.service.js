@@ -57,6 +57,7 @@ async function updateUser(id, authenticatedId, { name, email, password }) {
           throw new ApiError(409, 'Ja existe um usuario cadastrado com este email');
         }
         user.email = normalizedEmail;
+        user.emailVerifiedAt = null;
       }
     }
     if (name !== undefined) user.name = name;
@@ -87,6 +88,7 @@ async function deleteUser(id, authenticatedId) {
       if (user.status !== 'active') throw new ApiError(401, 'Usuario inativo');
 
       await User.db.collection('candidates').deleteMany({ user: user._id }, { session });
+      await User.db.collection('companyusers').deleteMany({ user: user._id }, { session });
       const result = await User.deleteOne({ _id: user._id, status: 'active' }, { session });
       if (result.deletedCount !== 1) throw new ApiError(404, 'Usuario nao encontrado');
     }, { readPreference: 'primary', readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } });
