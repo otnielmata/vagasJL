@@ -58,6 +58,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── candidate.service.js
 │   │   ├── company.service.js
 │   │   ├── company-user.service.js # Vínculo verificado de recrutadores
+│   │   ├── company-registration.service.js # Edição atômica de empresa e recrutador
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -164,6 +165,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
 | POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
+| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -234,6 +236,34 @@ Em `GET /candidatos/{id}`, apenas conta `company` ativa com associação ativa e
 pode consultar candidato `active`. Empresas `pending`, `inactive`, `blocked` ou sem vínculo recebem
 **403**; candidatos em outros status não são expostos (**404**). O status e a associação podem ser
 administrados em histórias futuras, sem embutir recrutadores no documento Empresa.
+
+## Edição do cadastro empresarial — VJ-39
+
+`PATCH /empresas/{id}/cadastro` aceita os objetos opcionais `empresa` (campos públicos do cadastro)
+e `usuarioAtual` (somente `name` do recrutador vinculado), além de `status` e
+`verificationReference` para administradores. Pelo menos uma alteração é obrigatória. Exemplo:
+
+```json
+{
+  "empresa": { "tradeName": "Vagas JL Tecnologia", "website": "https://example.com" },
+  "usuarioAtual": { "name": "Ana Silva" }
+}
+```
+
+O recrutador precisa de conta ativa, e-mail previamente verificado e associação ativa **com a
+empresa indicada**. Não pode editar outra empresa, alterar status ou permissões. Administradores
+podem editar dados empresariais, mas não os dados públicos de outro usuário neste endpoint.
+`usuarioAtual.email`, senha e credenciais não são aceitos; a troca do e-mail de login ou da senha
+continua no fluxo `/usuarios/{id}`. Campos omitidos e status permanecem inalterados.
+
+Somente administradores transitam `pending → active`, `active → inactive/blocked` e
+`inactive/blocked → active`. Toda ativação/revalidação exige `verificationReference` (referência
+da verificação empresarial concluída pelo operador) e grava data/autor internos não expostos na
+resposta. Esta API registra a atestação do operador; não implementa um serviço externo de
+verificação empresarial. Inativar ou bloquear revoga imediatamente o acesso à leitura de
+candidatos, mesmo com JWT ainda válido. E-mail corporativo é normalizado e único; duplicidade
+retorna **409**, URL inválida **400**, sem atualização parcial. A edição conjunta usa transação
+MongoDB e, portanto, requer replica set; sem suporte retorna **503**.
 
 ## Cadastro de usuários — VJ-1
 
