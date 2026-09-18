@@ -4,9 +4,8 @@ const Company = require('../models/company.model');
 const Configuration = require('../models/match-profile-configuration.model');
 const Vacancy = require('../models/vacancy.model');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
-const { calculateCompetencyMatch } = require('./match-scoring.service');
+const { scorePair } = require('./match-ranking.service');
 const ApiError = require('../errors/api.error');
-const config = require('../config/env');
 
 function pagination(query = {}) {
   if (Object.keys(query).some((key) => !['page', 'limit'].includes(key))) {
@@ -53,14 +52,9 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
   const ranked = eligible.map((vacancy) => {
     const configuration = byVersion.get(vacancy.matchProfile.configurationVersion);
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
-    const technicalProfile = assessVacancyForMatch(vacancy, now).technicalProfile;
-    const score = calculateCompetencyMatch({ vacancyValues: technicalProfile.values,
-      candidateValues, configuration, requirements: vacancy.matchProfile.requirements,
-      desirableFactor: config.match.desirableFactor,
-      eliminatoryPolicyEnabled: config.match.eliminatoryEnabled,
-      vacancy: { origin: vacancy.origin } });
+    const score = scorePair(vacancy, candidateValues, configuration, now);
     return { vacancy: vacancy.toJSON(), percentage: score.percentage,
-      eligible: score.eligibility.eligible };
+      eligible: score.eligibility.eligible && score.possiblePoints > 0 };
   }).filter((item) => item.eligible).map(({ vacancy, percentage }) => ({ vacancy, percentage }));
   ranked.sort((left, right) => right.percentage - left.percentage ||
     new Date(right.vacancy.createdAt) - new Date(left.vacancy.createdAt) ||
