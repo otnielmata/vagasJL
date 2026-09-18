@@ -49,16 +49,21 @@ test('returns 403 for another existing user before modifying or saving anything'
 
 test('updates to a normalized unique email excluding the current user from lookup', async (context) => {
   const user = isolateUser(context);
+  user.emailVerifiedAt = new Date();
   await userService.updateUser(userId, userId, { email: ' NEW@Example.COM ' });
   assert.equal(user.email, 'new@example.com');
+  assert.equal(user.emailVerifiedAt, null);
   assert.deepEqual(User.findOne.mock.calls[0].arguments, [{ email: 'new@example.com', _id: { $ne: user._id } }]);
   assert.equal(user.save.mock.callCount(), 1);
 });
 
 test('allows keeping the same email without reporting a conflict', async (context) => {
   const user = isolateUser(context);
+  const verifiedAt = new Date();
+  user.emailVerifiedAt = verifiedAt;
   await userService.updateUser(userId, userId, { email: ' MARIA@Example.COM ' });
   assert.equal(user.email, 'maria@example.com');
+  assert.equal(user.emailVerifiedAt, verifiedAt);
   assert.equal(User.findOne.mock.callCount(), 0);
   assert.equal(user.save.mock.callCount(), 1);
 });
