@@ -184,7 +184,10 @@ paths:
         apenas vagas COMPANY da propria empresa ativa. A classificacao substitui o
         conjunto completo de requisitos da vaga e incrementa a revisao auditada.
         IDs devem existir nos valores canonicos ja registrados. Vagas importadas sem
-        evidencia de importancia permanecem pendentes de classificacao.
+        evidencia de importancia permanecem pendentes de classificacao. eliminatory e
+        opcional e falso por padrao; somente required ou desirable podem recebe-lo.
+        Quando a politica MATCH_ELIMINATORY_ENABLED esta ativa, ausencia do requisito
+        torna o candidato inelegivel no ranking sem penalidade adicional no percentual.
       security:
         - bearerAuth: []
       parameters:
@@ -1562,6 +1565,10 @@ components:
         id: { type: string, description: ID canonico; ausente em yearsOfExperience }
         value: { type: number, description: Valor numerico apenas em yearsOfExperience }
         importance: { type: string, enum: [required, desirable, indifferent] }
+        eliminatory:
+          type: boolean
+          default: false
+          description: Criterio eliminatorio explicito; invalido com importance indifferent
     Vacancy:
       type: object
       required: [_id, reference, title, description, matchProfile, origin, status]
