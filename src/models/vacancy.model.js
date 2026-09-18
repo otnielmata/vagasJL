@@ -51,6 +51,15 @@ const vacancySchema = new mongoose.Schema({
   },
   status: { type: String, enum: ['pending', 'active', 'paused', 'expired', 'removed', 'rejected'],
     default: 'pending', required: true },
+  expiresAt: { type: Date, default: null },
+  statusHistory: [{
+    from: { type: String, required: true },
+    to: { type: String, required: true },
+    at: { type: Date, required: true },
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    process: { type: String, enum: ['api', 'deadline'], required: true },
+    reason: { type: String, required: true, maxlength: 500 },
+  }],
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
@@ -72,6 +81,7 @@ vacancySchema.set('toJSON', {
     delete result.__v;
     delete result.createdBy;
     delete result.deletedAt;
+    delete result.statusHistory;
     return result;
   },
 });
