@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "test": "node --test test/unit/*.test.js",
     "candidates:revalidate": "node scripts/revalidate-candidate.js",
-    "candidates:sync-indexes": "node scripts/sync-candidate-indexes.js"
+    "candidates:sync-indexes": "node scripts/sync-candidate-indexes.js",
+    "vacancies:audit-origins": "node scripts/audit-vacancy-origins.js",
+    "vacancies:expire": "node scripts/expire-vacancies.js"
   },
   "keywords": [
     "express",
