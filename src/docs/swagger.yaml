@@ -119,6 +119,59 @@ paths:
         '404': { description: Cadastro de candidato inexistente }
         '409': { description: Perfil de Match nao cadastrado }
         '503': { description: Configuracao tecnica indisponivel }
+  /vagas/{id}/candidatos/ranking:
+    get:
+      tags: [Vacancies]
+      summary: Lista candidatos ativos compativeis com a vaga (VJ-50)
+      description: >
+        Reutiliza o mesmo calculo tecnico do ranking do candidato, com a vaga como
+        referencia de requisitos e denominador. Recrutador vinculado consulta apenas
+        vaga COMPANY da propria empresa ativa; admin pode consultar origens validas.
+        Exclui candidatos inativos, sem perfil ou inelegiveis e retorna somente ID e nome.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Ranking elegivel paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit, pages]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [candidate, percentage]
+                      properties:
+                        candidate:
+                          type: object
+                          required: [_id, name]
+                          properties:
+                            _id: { type: string }
+                            name: { type: string }
+                        percentage: { type: number, minimum: 0, maximum: 100 }
+                  total: { type: integer, minimum: 0 }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 50 }
+                  pages: { type: integer, minimum: 0 }
+        '400': { description: ID ou paginacao invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao empresarial ou administrativa }
+        '404': { description: Vaga inexistente ou indisponivel }
+        '503': { description: Configuracao tecnica indisponivel }
   /perfil-match/configuracao:
     put:
       tags: [Match Profile]

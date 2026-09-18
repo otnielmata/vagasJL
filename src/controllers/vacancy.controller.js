@@ -1,6 +1,7 @@
 const service = require('../services/vacancy.service');
 const statusService = require('../services/vacancy-status.service');
 const requirementsService = require('../services/vacancy-requirements.service');
+const candidateRankingService = require('../services/candidate-ranking.service');
 
 async function registerCompany(req, res, next) {
   try {
@@ -29,4 +30,13 @@ async function updateRequirements(req, res, next) {
   }
 }
 
-module.exports = { registerCompany, updateStatus, updateRequirements };
+async function rankCandidates(req, res, next) {
+  try {
+    const ranking = await candidateRankingService.rankCandidates(req.user, req.params.id, req.query);
+    return res.status(200).json(ranking);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { registerCompany, updateStatus, updateRequirements, rankCandidates };
