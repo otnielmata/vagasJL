@@ -2,6 +2,7 @@ const service = require('../services/company.service');
 const companyUserService = require('../services/company-user.service');
 const registrationService = require('../services/company-registration.service');
 const companyReadService = require('../services/company-read.service');
+const companyDeleteService = require('../services/company-delete.service');
 
 async function register(req, res, next) {
   try {
@@ -39,4 +40,13 @@ async function showRegistration(req, res, next) {
   }
 }
 
-module.exports = { register, addUser, updateRegistration, showRegistration };
+async function removeRegistration(req, res, next) {
+  try {
+    await companyDeleteService.deleteRegistration(req.user, req.params.id);
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, addUser, updateRegistration, showRegistration, removeRegistration };
