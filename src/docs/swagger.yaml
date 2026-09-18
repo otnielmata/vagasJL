@@ -7,12 +7,23 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27).
+    logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
+    de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
+    protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
+    catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
+    rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
+    do candidato (VJ-29).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Match Profile
+    description: Configuracao administrativa dos campos, pesos e catalogos compartilhados
+  - name: Vacancies
+    description: Oportunidades cadastradas pelas empresas
+  - name: Companies
+    description: Cadastro administrativo de empresas
   - name: Candidates
     description: Cadastro, validacao, visualizacao, alteracao e exclusao logica de candidatos
   - name: Auth
@@ -23,6 +34,611 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /configuracoes/importacao/importancia-padrao:
+    put:
+      tags: [Match Profile]
+      summary: Publica importancia padrao versionada para vagas importadas (VJ-49)
+      description: >
+        Apenas administrador autenticado. Aceita somente importance. Retorna a
+        versao, autor e data de vigencia. A mesma importancia mantem a versao;
+        alteracoes afetam apenas novas importacoes, sem recalcular vagas existentes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [importance]
+              additionalProperties: false
+              properties:
+                importance: { type: string, enum: [required, desirable, indifferent] }
+      responses:
+        '200':
+          description: Configuracao publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configuration:
+                    type: object
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      importance: { type: string, enum: [required, desirable, indifferent] }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Corpo ou importancia invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra importancia }
+  /candidatos/me/vagas/ranking:
+    get:
+      tags: [Vacancies]
+      summary: Lista apenas vagas elegiveis para o candidato (VJ-45)
+      description: >
+        Requer JWT de candidato com cadastro e Perfil de Match. Aplica status active,
+        prazo vigente e empresa active para vagas COMPANY antes de pontuar, ordenar e
+        paginar. Nao usa cache. Origem nao modifica o percentual tecnico. Campos false
+        de vagas IMPORTED nao pontuam nem eliminam; sem requisito pontuavel, a
+        compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Ranking elegivel paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit, pages]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [vacancy, percentage]
+                      properties:
+                        vacancy: { $ref: '#/components/schemas/Vacancy' }
+                        percentage: { type: number, minimum: 0, maximum: 100 }
+                  total: { type: integer, minimum: 0 }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 50 }
+                  pages: { type: integer, minimum: 0 }
+        '400': { description: Paginacao invalida }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Conta nao e candidata }
+        '404': { description: Cadastro de candidato inexistente }
+        '409': { description: Perfil de Match nao cadastrado }
+        '503': { description: Configuracao tecnica indisponivel }
+  /perfil-match/configuracao:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao versionada do Perfil de Match (VJ-28)
+      description: >
+        Apenas administrador autenticado. Exige exatamente as 22 chaves tecnicas iniciais;
+        cada campo tem peso inteiro positivo e uma lista de opcoes canonicas. Repetir
+        configuracao identica retorna a mesma versao. IDs publicados nao podem ser removidos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchProfileConfigurationRequest'
+      responses:
+        '200':
+          description: Configuracao publicada ou repeticao idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    $ref: '#/components/schemas/MatchProfileConfiguration'
+        '400':
+          description: Campo, peso, opcao ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Alias em conflito, ID removido ou publicacao concorrente diferente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /vagas/{id}/status:
+    patch:
+      tags: [Vacancies]
+      summary: Altera o status da vaga com trilha de auditoria (VJ-44)
+      description: >
+        Requer JWT. Administradores podem publicar, rejeitar e controlar vagas de qualquer
+        origem. Recrutadores verificados podem pausar, retomar ou remover apenas vagas
+        COMPANY da sua empresa ativa. Reativar vaga expirada exige prorrogacao do prazo,
+        revalidacao do perfil e motivo expresso por administrador. O corpo nao aceita
+        origem, perfil tecnico ou dados cadastrais. Conflitos concorrentes retornam 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [active, paused, expired, removed, rejected] }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Status alterado e transicao auditada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400': { description: ID, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao para origem, empresa ou transicao }
+        '404': { description: Vaga inexistente }
+        '409': { description: Transicao invalida, perfil inapto ou alteracao concorrente }
+  /vagas/{id}/requisitos:
+    patch:
+      tags: [Vacancies]
+      summary: Classifica os requisitos tecnicos da vaga (VJ-46)
+      description: >
+        Admin pode classificar vagas de qualquer origem; recrutador ativo e vinculado
+        apenas vagas COMPANY da propria empresa ativa. A classificacao substitui o
+        conjunto completo de requisitos da vaga e incrementa a revisao auditada.
+        IDs devem existir nos valores canonicos ja registrados. Vagas importadas sem
+        evidencia de importancia permanecem pendentes de classificacao. eliminatory e
+        opcional e falso por padrao; somente required ou desirable podem recebe-lo.
+        Quando a politica MATCH_ELIMINATORY_ENABLED esta ativa, ausencia do requisito
+        torna o candidato inelegivel no ranking sem penalidade adicional no percentual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requirements, reason]
+              additionalProperties: false
+              properties:
+                requirements:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/VacancyRequirement' }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Requisitos classificados e revisao incrementada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy: { $ref: '#/components/schemas/Vacancy' }
+        '400': { description: Corpo, importancia ou ID invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao sobre a vaga }
+        '404': { description: Vaga inexistente }
+        '409': { description: Competencia duplicada, vaga encerrada ou revisao concorrente }
+        '503': { description: Configuracao tecnica indisponivel }
+  /empresas/{id}/vagas:
+    post:
+      tags: [Vacancies]
+      summary: Cadastra vaga propria pendente (VJ-42)
+      description: >
+        Exige conta company ativa e verificada, vinculo recruiter ativo e empresa active.
+        A origem COMPANY, o status pending, a empresa e o autor sao definidos pelo servidor.
+        Valores do Perfil de Match usam IDs canonicos da configuracao VJ-28 mais recente;
+        aliases publicados sao convertidos ao mesmo ID. Nao calcula pontuacao nem publica
+        a vaga no ranking. A referencia operacional e unica por empresa atual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa ativa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyVacancyRequest'
+      responses:
+        '201':
+          description: Vaga propria criada como pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vacancy]
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400':
+          description: Corpo, localizacao, modalidade ou competencia fora do catalogo invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Sem papel company, vinculo autorizado ou empresa ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Referencia de vaga duplicada nesta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas:
+    post:
+      tags: [Companies]
+      summary: Registra empresa pendente (VJ-37)
+      description: >
+        Exige conta ativa com papel admin. Registra entidade Empresa independente de User
+        e Candidate, sempre com status pending. Responsavel e contato, nao credencial.
+        Nao cria usuario de empresa. Papel company sozinho nao libera acesso a candidatos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+      responses:
+        '201':
+          description: Empresa criada com status pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+        '400':
+          description: Campos obrigatorios, email, URL ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo ja cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/usuarios:
+    post:
+      tags: [Companies]
+      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      description: >
+        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
+        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
+        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
+        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '201':
+          description: Vinculo ativo criado; sem credenciais ou prova de identidade
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [membership, user]
+                properties:
+                  membership:
+                    $ref: '#/components/schemas/CompanyUser'
+                  user:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/cadastro:
+    delete:
+      tags: [Companies]
+      summary: Encerra cadastro empresarial e revoga recrutadores (VJ-41)
+      description: >
+        Exige JWT de admin ativo ou recrutador ativo com permissao explicita de exclusao
+        para esta empresa. Define status inactive, registra deletedAt e inativa os vinculos
+        ativos na mesma transacao. Nao exclui User, candidatos ou outras empresas.
+        Acesso empresarial a candidatos cessa imediatamente, mesmo com JWT valido.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '204':
+          description: Cadastro encerrado sem corpo
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem permissao explicita para esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou ja excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags: [Companies]
+      summary: Apresenta cadastro empresarial e usuarios publicos permitidos (VJ-40)
+      description: >
+        Exige JWT de conta ativa. Admin pode consultar qualquer empresa atual; recrutador
+        pode consultar somente empresa com vinculo ativo e autorizado, inclusive se ela
+        estiver pending, inactive ou blocked. Esta consulta nao libera acesso a candidatos.
+        Retorna apenas campos publicos da empresa e lista de usuarios vinculados permitidos.
+        A operacao e somente leitura.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Dados empresariais e lista de usuarios publicos permitidos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, usuarios]
+                additionalProperties: false
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem vinculo ativo com esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      tags: [Companies]
+      summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
+      description: >
+        Exige JWT ativo. Recrutador verificado e vinculado pode editar empresa e seu nome;
+        admin pode editar empresa e transitar status. Ativacao exige referencia de verificacao
+        administrativa. Troca de email ou senha de login usa o fluxo User existente. A edicao
+        combinada e atomica e requer MongoDB com suporte a transacoes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationUpdateRequest'
+      responses:
+        '200':
+          description: Cadastro atualizado sem campos internos ou credenciais
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarioAtual:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Campos, email, URL, status ou referencia de verificacao invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Usuario sem vinculo, de outra empresa, ou tentativa de autoativacao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo duplicado ou transicao de status proibida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /candidatos:
     post:
       tags: [Candidates]
@@ -89,6 +705,67 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/me/perfil-match:
+    post:
+      tags: [Match Profile]
+      summary: Cadastra o Perfil de Match do proprio candidato (VJ-29)
+      description: >
+        Exige conta ativa com papel candidate e cadastro atual pendente, incompleto ou ativo.
+        Usa a ultima configuracao VJ-28 publicada; aceita IDs, rotulos e aliases de catalogo,
+        mas persiste apenas IDs canonicos. Campos omitidos permanecem pendentes. Nao altera
+        o status nem a visibilidade para empresas. So um perfil atual por candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateMatchProfileRequest'
+      responses:
+        '201':
+          description: Perfil criado com valores canonicos e campos pendentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '400':
+          description: Corpo, campo, catalogo ou anos de experiencia invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro atual de candidato nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Perfil atual ja existe ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -192,10 +869,9 @@ paths:
       tags: [Candidates]
       summary: Visualiza um candidato conforme a permissao (VJ-25)
       description: >
-        Exige JWT valido de candidato ou empresa. O candidato pode consultar somente o
-        proprio cadastro em qualquer status e recebe tambem o status atual. A empresa
-        consulta somente candidatos ativos; candidato inexistente ou com qualquer outro
-        status produz o mesmo 404. A resposta usa uma projecao explicita, converte campos
+        Exige JWT valido. O candidato pode consultar somente o proprio cadastro em qualquer
+        status. Papel company isolado recebe 403. Somente conta company ativa com vinculo
+        ativo a empresa active pode consultar candidatos ativos (VJ-38). A resposta usa uma projecao explicita, converte campos
         opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
         senha, token ou detalhes internos da validacao. A operacao e somente leitura.
       security:
@@ -234,13 +910,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Candidato tentou consultar outro perfil ou papel sem permissao
+          description: Candidato tentou consultar outro perfil, ou company sem empresa e vinculo ativos
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Candidato inexistente ou nao ativo para uma empresa
+          description: Candidato inexistente
           content:
             application/json:
               schema:
@@ -831,6 +1507,300 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchProfileOption:
+      type: object
+      required: [id, label, aliases]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_-]*$', example: cypress }
+        label: { type: string, example: Cypress }
+        aliases:
+          type: array
+          items: { type: string }
+    MatchProfileFieldInput:
+      type: object
+      required: [weight, options]
+      additionalProperties: false
+      properties:
+        weight: { type: integer, minimum: 1 }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchProfileOption'
+    MatchProfileConfigurationRequest:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields:
+          type: object
+          description: Exatamente as 22 chaves tecnicas definidas no contrato VJ-28
+          minProperties: 22
+          maxProperties: 22
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileFieldInput'
+    MatchProfileConfiguration:
+      type: object
+      required: [_id, version, fields, createdAt]
+      properties:
+        _id: { type: string }
+        version: { type: integer, minimum: 1 }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key, weight, options]
+            properties:
+              key: { type: string }
+              weight: { type: integer }
+              options:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchProfileOption'
+        createdAt: { type: string, format: date-time }
+    CompanyVacancyRequest:
+      type: object
+      required: [reference, title, description, matchProfile]
+      additionalProperties: false
+      properties:
+        reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 10000 }
+        expiresAt: { type: string, format: date-time, nullable: true, description: Prazo futuro em UTC }
+        location:
+          type: object
+          nullable: true
+          required: [city, state, country]
+          additionalProperties: false
+          properties:
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+        matchProfile:
+          type: object
+          required: [values]
+          additionalProperties: false
+          properties:
+            values:
+              type: object
+              minProperties: 1
+              required: [type]
+              description: >
+                Chaves tecnicas da VJ-28. type representa modalidade; demais campos de catalogo
+                aceitam ID, rotulo ou alias publicado, sempre persistido como ID canonico.
+                yearsOfExperience aceita numero de 0 a 100 com uma casa decimal.
+              additionalProperties: true
+            requirements:
+              type: array
+              maxItems: 200
+              description: Classificacao opcional na criacao; sem ela, vaga permanece pending e nao pode ser ativada.
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+    VacancyRequirement:
+      type: object
+      description: >
+        Para campos de catalogo, use field, id canonico e importance. Para
+        yearsOfExperience, use field, value numerico e importance.
+      required: [field, importance]
+      properties:
+        field: { type: string, description: Chave tecnica da configuracao VJ-28 }
+        id: { type: string, description: ID canonico; ausente em yearsOfExperience }
+        value: { type: number, description: Valor numerico apenas em yearsOfExperience }
+        importance: { type: string, enum: [required, desirable, indifferent] }
+        eliminatory:
+          type: boolean
+          default: false
+          description: Criterio eliminatorio explicito; invalido com importance indifferent
+    Vacancy:
+      type: object
+      required: [_id, reference, title, description, matchProfile, origin, status]
+      description: >
+        Vagas COMPANY, IMPORTED e ADMIN compartilham as mesmas chaves, tipos e versao
+        tecnica do Perfil de Match. A origem e procedencia sao atribuídas por fluxos
+        confiaveis do servidor e nao participam do calculo tecnico. Para COMPANY,
+        company e obrigatoria; para IMPORTED, importSource e importSourceId; para ADMIN,
+        o autor administrativo e armazenado internamente. Sem origem verificavel,
+        a vaga requer saneamento e nao fica apta ao Match. Na origem IMPORTED,
+        false significa requisito nao identificado e nao aparece nos valores
+        canonicos; a auditoria bruta permanece interna.
+      properties:
+        _id: { type: string }
+        company: { type: string, nullable: true }
+        importSource: { type: string, nullable: true }
+        importSourceId: { type: string, nullable: true }
+        reference: { type: string }
+        title: { type: string }
+        description: { type: string }
+        location: { type: object, nullable: true }
+        matchProfile:
+          type: object
+          properties:
+            configurationVersion: { type: integer, minimum: 1 }
+            values: { type: object }
+            requirements:
+              type: array
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+        origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
+        status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        requirementsRevision: { type: integer, minimum: 0 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CompanyRegistrationUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        empresa:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            legalName: { type: string, minLength: 1, maxLength: 200 }
+            tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+            website: { type: string, format: uri, maxLength: 2048, nullable: true }
+            description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+            responsibleName: { type: string, minLength: 1, maxLength: 200 }
+            email: { type: string, format: email, maxLength: 254 }
+            phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+            linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+            segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        usuarioAtual:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 1, maxLength: 200 }
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          description: Apenas admin; transicoes controladas
+        verificationReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+          description: Obrigatoria ao ativar ou reativar; referencia de verificacao feita pelo operador
+    CompanyUser:
+      type: object
+      required: [_id, company, user, role, status]
+      properties:
+        _id: { type: string }
+        company: { type: string }
+        user: { type: string }
+        role: { type: string, enum: [recruiter] }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PublicCompanyUser:
+      type: object
+      required: [_id, name, email]
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+    CompanyRegistrationRequest:
+      type: object
+      required: [legalName, responsibleName, email, city, state, country]
+      additionalProperties: false
+      properties:
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        website: { type: string, format: uri, maxLength: 2048, nullable: true }
+        description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+        city: { type: string, minLength: 1, maxLength: 200 }
+        state: { type: string, minLength: 1, maxLength: 200 }
+        country: { type: string, minLength: 1, maxLength: 200 }
+        responsibleName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+        linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+        segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+    Company:
+      type: object
+      required: [_id, legalName, responsibleName, email, city, state, country, status]
+      properties:
+        _id: { type: string }
+        legalName: { type: string }
+        tradeName: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        responsibleName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        linkedinUrl: { type: string, nullable: true }
+        segment: { type: string, nullable: true }
+        status: { type: string, enum: [pending, active, inactive, blocked] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MatchProfileChoices:
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 100
+        - type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+    CandidateMatchProfileRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values:
+          type: object
+          description: Catalogos aceitam somente valores publicados; chaves omitidas ficam pendentes.
+          additionalProperties: false
+          properties:
+            type: { $ref: '#/components/schemas/MatchProfileChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileChoices' }
+            english: { $ref: '#/components/schemas/MatchProfileChoices' }
+            spanish: { $ref: '#/components/schemas/MatchProfileChoices' }
+            yearsOfExperience:
+              type: number
+              minimum: 0
+              maximum: 100
+              multipleOf: 0.1
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
+            tecnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
+            programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }
+            genAITools: { $ref: '#/components/schemas/MatchProfileChoices' }
+            level: { $ref: '#/components/schemas/MatchProfileChoices' }
+            classification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            role: { $ref: '#/components/schemas/MatchProfileChoices' }
+            specialization: { $ref: '#/components/schemas/MatchProfileChoices' }
+    CandidateMatchProfile:
+      type: object
+      required: [_id, candidate, configurationVersion, values, pendingFields, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        _id: { type: string }
+        candidate: { type: string }
+        configurationVersion: { type: integer, minimum: 1 }
+        values:
+          type: object
+          description: Somente valores canonicos preenchidos
+        pendingFields:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
