@@ -187,6 +187,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
+| GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -393,6 +394,20 @@ inelegível ao Match imediatamente, mesmo antes da atualização materializada d
 Execute `npm run vacancies:expire` no servidor ou agendador para converter vagas `active`
 ou `paused` vencidas em `expired` com registro de auditoria; em deploy serverless, agende
 essa execução externamente, pois timers locais não são confiáveis.
+
+## Ranking de vagas elegíveis — VJ-45
+
+`GET /candidatos/me/vagas/ranking?page=1&limit=20` exige JWT de candidato com cadastro e
+Perfil de Match atual. `page` começa em 1 e `limit` aceita 1–50. A resposta contém `items`
+com `vacancy` e `percentage`, além de `total`, `page`, `limit` e `pages`. Apenas vagas `active`,
+não excluídas e com prazo vigente entram no cálculo; vagas `COMPANY` também exigem empresa
+`active`. Origem e status não acrescentam pontos. O percentual reutiliza a comparação de
+competências canônicas e pesos da configuração versionada, sem inventar uma fórmula para
+campos ainda não contemplados pelo motor. A ordenação é percentual decrescente, data de
+criação decrescente e ID como desempate. O total e as páginas contam apenas vagas elegíveis.
+Não há cache; a próxima consulta reflete pausas, bloqueios e vencimentos. Sem cadastro retorna
+**404**, sem Perfil de Match **409**, parâmetros inválidos **400**, sem autenticação **401**
+e papel diferente de candidato **403**.
 
 ## Cadastro de usuários — VJ-1
 
