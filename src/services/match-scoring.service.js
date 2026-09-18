@@ -65,7 +65,7 @@ function normalizeCompetency(value) {
     .toLowerCase().replace(/\s+/g, ' ');
 }
 
-function canonicalValues(values, field) {
+function canonicalValues(values, field, ignoreUnknown = false) {
   if (values == null) return new Set();
   const submitted = Array.isArray(values) ? values : [values];
   const aliases = new Map();
@@ -76,15 +76,19 @@ function canonicalValues(values, field) {
   }
   const ids = new Set();
   for (const value of submitted) {
+    if (ignoreUnknown && (typeof value !== 'string' || !value.trim())) continue;
     const id = aliases.get(normalizeCompetency(value));
-    if (!id) throw new TypeError('Competencia fora do catalogo publicado');
+    if (!id) {
+      if (ignoreUnknown) continue;
+      throw new TypeError('Competencia fora do catalogo publicado');
+    }
     ids.add(id);
   }
   return ids;
 }
 
 function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {},
-  requirements, desirableFactor = 0.5 }) {
+  requirements, desirableFactor = 0.5, eliminatoryPolicyEnabled = true }) {
   const weights = configuredWeights(configuration);
   if (!vacancyValues || typeof vacancyValues !== 'object' || Array.isArray(vacancyValues) ||
       !candidateValues || typeof candidateValues !== 'object' || Array.isArray(candidateValues)) {
@@ -94,17 +98,22 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   const details = [];
   if (requirements !== undefined) {
     if (!Array.isArray(requirements) || !Number.isFinite(desirableFactor) ||
-        desirableFactor <= 0 || desirableFactor >= 1) throw new TypeError('Importancia invalida');
+        desirableFactor <= 0 || desirableFactor >= 1 ||
+        typeof eliminatoryPolicyEnabled !== 'boolean') throw new TypeError('Importancia invalida');
     const seen = new Set();
+    let unmetEliminatory = null;
     for (const requirement of requirements) {
-      const { field, id, value, importance } = requirement;
+      const { field, id, value, importance, eliminatory = false } = requirement;
       if (!weights.has(field) || !['required', 'desirable', 'indifferent'].includes(importance)) {
         throw new TypeError('Requisito invalido');
       }
-      if (importance === 'indifferent') continue;
+      if (typeof eliminatory !== 'boolean' || (importance === 'indifferent' && eliminatory)) {
+        throw new TypeError('Sinalizador eliminatorio invalido');
+      }
       const key = field === 'yearsOfExperience' ? field : `${field}:${id}`;
       if (seen.has(key)) throw new TypeError('Requisito duplicado');
       seen.add(key);
+      if (importance === 'indifferent') continue;
       const weight = weights.get(field) * (importance === 'desirable' ? desirableFactor : 1);
       let matched;
       if (field === 'yearsOfExperience') {
@@ -115,12 +124,18 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         if (typeof id !== 'string' || !canonicalValues(vacancyValues[field], fields.get(field)).has(id)) {
           throw new TypeError('Competencia fora do perfil da vaga');
         }
-        matched = canonicalValues(candidateValues[field], fields.get(field)).has(id);
+        matched = canonicalValues(candidateValues[field], fields.get(field), true).has(id);
+      }
+      if (eliminatory && eliminatoryPolicyEnabled && !matched && !unmetEliminatory) {
+        unmetEliminatory = { code: 'ELIMINATORY_REQUIREMENT_UNMET', field,
+          ...(field === 'yearsOfExperience' ? { value } : { id }) };
       }
       details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
         weight, earnedPoints: matched ? weight : 0 });
     }
-    return buildScoreResult(details, vacancy);
+    const result = buildScoreResult(details, vacancy);
+    if (unmetEliminatory) result.eligibility = { eligible: false, reason: unmetEliminatory };
+    return result;
   }
   for (const key of TECHNICAL_FIELDS) {
     if (key === 'yearsOfExperience') continue;

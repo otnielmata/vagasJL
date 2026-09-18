@@ -12,6 +12,7 @@ const requirementSchema = new mongoose.Schema({
   id: { type: String, default: undefined },
   value: { type: Number, default: undefined },
   importance: { type: String, enum: ['required', 'desirable', 'indifferent'], required: true },
+  eliminatory: { type: Boolean, default: false, required: true },
 }, { _id: false });
 const matchProfileSchema = new mongoose.Schema({
   configurationVersion: { type: Number, required: true, min: 1 },
