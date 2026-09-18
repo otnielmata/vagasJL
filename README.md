@@ -188,6 +188,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
+| GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
@@ -414,6 +415,23 @@ criação decrescente e ID como desempate. O total e as páginas contam apenas v
 Não há cache; a próxima consulta reflete pausas, bloqueios e vencimentos. Sem cadastro retorna
 **404**, sem Perfil de Match **409**, parâmetros inválidos **400**, sem autenticação **401**
 e papel diferente de candidato **403**.
+
+## Ranking de candidatos por vaga — VJ-50
+
+`GET /vagas/{id}/candidatos/ranking?page=1&limit=20` usa o **mesmo cálculo** do
+ranking candidato→vagas. A vaga continua sendo a referência para requisitos, pesos,
+denominador e elegibilidade; muda apenas o conjunto listado. Recrutador verificado só
+pode consultar vaga `COMPANY` da própria empresa ativa; administrador pode consultar
+qualquer origem válida. A vaga precisa estar `active`, vigente e com requisitos
+pontuáveis. Apenas candidatos `active` com Perfil de Match atual entram no cálculo.
+Critério eliminatório não atendido remove o candidato do resultado, sem alterar o
+percentual dos demais. O ranking ordena por percentual decrescente e ID estável; a
+resposta paginada contém apenas ID e nome do candidato, nunca contato ou dados
+internos. O resultado sem pontos possíveis não é apresentado como 100%.
+
+ID ou paginação inválidos retornam **400**; falta de autenticação **401**; vínculo
+empresarial ausente, empresa inativa ou origem alheia **403**; vaga inexistente ou
+indisponível **404**; configuração técnica ausente **503**. Não há cache.
 
 ## Importância dos requisitos — VJ-46
 
