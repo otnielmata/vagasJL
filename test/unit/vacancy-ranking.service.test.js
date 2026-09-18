@@ -110,3 +110,22 @@ test('active legacy vacancy without classified requirements never enters ranking
   const result = await rankVacancies(actor, {}, now);
   assert.equal(result.total, 0);
 });
+
+test('eliminatory changes immediately remove unmatched vacancies of every origin from total and pages', async (context) => {
+  const rows = [vacancy('company', 'COMPANY'), vacancy('imported', 'IMPORTED'),
+    vacancy('admin', 'ADMIN')];
+  const { profileQuery } = setup(context, rows);
+  profileQuery.select = async () => ({ values: { type: [] }, configurationVersion: 1 });
+  const before = await rankVacancies(actor, { page: '1', limit: '2' }, now);
+  assert.equal(before.total, 3);
+  assert.equal(before.pages, 2);
+  assert.deepEqual(before.items.map((item) => item.percentage), [0, 0]);
+  rows.forEach((row) => { row.matchProfile.requirements[0].eliminatory = true; });
+  const after = await rankVacancies(actor, { page: '1', limit: '2' }, now);
+  assert.equal(after.total, 0);
+  assert.equal(after.pages, 0);
+  rows[0].matchProfile.requirements[0].eliminatory = false;
+  const restored = await rankVacancies(actor, { page: '1', limit: '2' }, now);
+  assert.equal(restored.total, 1);
+  assert.equal(restored.items[0].vacancy._id, 'company');
+});
