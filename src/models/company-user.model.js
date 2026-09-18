@@ -6,6 +6,8 @@ const companyUserSchema = new mongoose.Schema({
   role: { type: String, enum: ['recruiter'], default: 'recruiter', required: true },
   status: { type: String, enum: ['active', 'inactive'], default: 'active', required: true },
   authorizedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, select: false },
+  canDeleteCompany: { type: Boolean, default: false, select: false },
+  revokedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
 companyUserSchema.index({ company: 1 }, {
@@ -23,6 +25,8 @@ companyUserSchema.set('toJSON', {
   transform: (_document, result) => {
     delete result.__v;
     delete result.authorizedBy;
+    delete result.canDeleteCompany;
+    delete result.revokedAt;
     return result;
   },
 });

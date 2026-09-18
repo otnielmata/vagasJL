@@ -17,6 +17,7 @@ const companySchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'active', 'inactive', 'blocked'], default: 'pending', required: true },
   registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, select: false },
   deletedAt: { type: Date, default: null, select: false },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, select: false },
   statusVerifiedAt: { type: Date, default: null, select: false },
   statusVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, select: false },
   statusVerificationReference: { type: String, default: null, maxlength: 200, select: false },
@@ -33,6 +34,7 @@ companySchema.set('toJSON', {
     delete result.__v;
     delete result.registeredBy;
     delete result.deletedAt;
+    delete result.deletedBy;
     delete result.statusVerifiedAt;
     delete result.statusVerifiedBy;
     delete result.statusVerificationReference;
