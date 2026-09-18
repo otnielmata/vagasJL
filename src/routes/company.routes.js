@@ -6,5 +6,6 @@ const controller = require('../controllers/company.controller');
 const router = Router();
 
 router.post('/', authenticate, authorize('admin'), ensureDatabase, controller.register);
+router.post('/:id/usuarios', authenticate, authorize('admin'), ensureDatabase, controller.addUser);
 
 module.exports = router;
