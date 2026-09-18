@@ -34,6 +34,56 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /configuracoes/match/multiplicadores:
+    put:
+      tags: [Match Profile]
+      summary: Publica multiplicadores versionados do Match (VJ-52)
+      description: >
+        Apenas administrador autenticado. required=1 e indifferent=0 sao invariantes;
+        desirable deve ser estritamente maior que 0 e menor que 1. Repetir a
+        configuracao vigente nao incrementa a versao. Sem publicacao, rankings
+        com pares pontuaveis retornam 503 em vez de usar fator implicito.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [required, desirable, indifferent]
+              additionalProperties: false
+              properties:
+                required: { type: number, enum: [1] }
+                desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+                indifferent: { type: number, enum: [0] }
+      responses:
+        '200':
+          description: Configuracao publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, multipliers, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      multipliers:
+                        type: object
+                        required: [required, desirable, indifferent]
+                        properties:
+                          required: { type: number, enum: [1] }
+                          desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+                          indifferent: { type: number, enum: [0] }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Multiplicadores invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra configuracao }
   /configuracoes/importacao/importancia-padrao:
     put:
       tags: [Match Profile]
@@ -105,13 +155,14 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [vacancy, percentage, earnedPoints, possiblePoints, configurationVersion]
+                      required: [vacancy, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion]
                       properties:
                         vacancy: { $ref: '#/components/schemas/Vacancy' }
                         percentage: { type: number, minimum: 0, maximum: 100 }
                         earnedPoints: { type: number, minimum: 0 }
                         possiblePoints: { type: number, exclusiveMinimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
+                        multipliersVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
@@ -157,7 +208,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [candidate, percentage, earnedPoints, possiblePoints, configurationVersion]
+                      required: [candidate, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion]
                       properties:
                         candidate:
                           type: object
@@ -169,6 +220,7 @@ paths:
                         earnedPoints: { type: number, minimum: 0 }
                         possiblePoints: { type: number, exclusiveMinimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
+                        multipliersVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }

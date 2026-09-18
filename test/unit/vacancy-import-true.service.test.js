@@ -14,6 +14,7 @@ const configuration = { version: 1, fields: Object.keys(INITIAL_MATCH_WEIGHTS).m
     ? [{ id: 'cypress', label: 'Cypress', aliases: [] }] : [],
 })) };
 const provenance = { source: 'board', sourceId: 'job-49' };
+const multipliers = { required: 1, desirable: 0.5, indifferent: 0 };
 const input = { reference: 'job-49', title: 'QA', description: 'Cypress', matchProfile: {
   values: { automation: [{ id: 'cypress', identified: true },
     { id: 'cypress', identified: true }], webTesting: false },
@@ -41,7 +42,7 @@ test('true canonical IDs receive one configurable non-eliminatory requirement wi
   assert.equal(vacancy.matchProfile.requirements[0].eliminatory, false);
   assert.equal(vacancy.matchProfile.values.webTesting, undefined);
   const score = calculateCompetencyMatch({ vacancyValues: vacancy.matchProfile.values.toObject(),
-    candidateValues: { automation: ['cypress'] }, configuration,
+    candidateValues: { automation: ['cypress'] }, configuration, multipliers,
     requirements: vacancy.matchProfile.requirements, vacancy: { origin: 'IMPORTED' } });
   assert.equal(score.possiblePoints, INITIAL_MATCH_WEIGHTS.automation * 0.5);
   assert.equal(score.earnedPoints, score.possiblePoints);
@@ -71,7 +72,7 @@ test('indifferent true requirement remains non-scoring', async (context) => {
   setup(context, 'indifferent');
   const vacancy = await registerImportedVacancy(provenance, input);
   const score = calculateCompetencyMatch({ vacancyValues: vacancy.matchProfile.values.toObject(),
-    candidateValues: { automation: ['cypress'] }, configuration,
+    candidateValues: { automation: ['cypress'] }, configuration, multipliers,
     requirements: vacancy.matchProfile.requirements, vacancy: { origin: 'IMPORTED' } });
   assert.equal(score.possiblePoints, 0);
   assert.equal(score.percentage, null);
