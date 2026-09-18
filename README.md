@@ -59,6 +59,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── company.service.js
 │   │   ├── company-user.service.js # Vínculo verificado de recrutadores
 │   │   ├── company-registration.service.js # Edição atômica de empresa e recrutador
+│   │   ├── company-read.service.js # Consulta pública autorizada do cadastro empresarial
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -166,6 +167,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
 | POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
 | PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
+| GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -264,6 +266,21 @@ verificação empresarial. Inativar ou bloquear revoga imediatamente o acesso à
 candidatos, mesmo com JWT ainda válido. E-mail corporativo é normalizado e único; duplicidade
 retorna **409**, URL inválida **400**, sem atualização parcial. A edição conjunta usa transação
 MongoDB e, portanto, requer replica set; sem suporte retorna **503**.
+
+## Consulta do cadastro empresarial — VJ-40
+
+`GET /empresas/{id}/cadastro` exige JWT de conta ativa. Administradores consultam a empresa
+para revisão; recrutadores consultam apenas a empresa com a qual mantêm vínculo ativo. A
+resposta **200** contém `{ "company": { ... }, "usuarios": [ ... ] }`. `company` expõe os
+campos cadastrais e o status; `usuarios` é uma lista para futura expansão além do primeiro
+recrutador. Cada usuário inclui somente `_id`, `name` e `email`. O recrutador vê apenas seus
+próprios dados públicos; o administrador vê os usuários com vínculo ativo da empresa.
+
+Empresas `pending`, `inactive` ou `blocked` continuam visíveis ao próprio recrutador vinculado
+e ao administrador, **sem conceder acesso aos candidatos**. Senhas, hashes, tokens, convites,
+dados de candidato e auditoria interna não aparecem. A consulta não grava nem altera status.
+JWT ausente/inválido retorna **401**, ID malformado **400**, outra empresa **403** e empresa
+inexistente **404**.
 
 ## Cadastro de usuários — VJ-1
 
