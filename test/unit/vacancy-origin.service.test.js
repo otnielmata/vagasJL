@@ -75,6 +75,17 @@ test('active admin persists ADMIN with author and the same canonical profile', a
   assert.equal(vacancy.toJSON().createdBy, undefined);
 });
 
+test('initial admin classifications are audited without changing origin', async (context) => {
+  setup(context);
+  const vacancy = await registerAdminVacancy({ id: authorId, role: 'admin' }, {
+    ...input, matchProfile: { ...input.matchProfile,
+      requirements: [{ field: 'type', id: 'remote', importance: 'required' }] },
+  });
+  assert.equal(vacancy.origin, 'ADMIN');
+  assert.equal(vacancy.requirementsRevision, 1);
+  assert.equal(vacancy.requirementsHistory[0].actor.toString(), authorId);
+});
+
 test('common client input cannot forge origin or provenance in internal flows', async (context) => {
   const { createVacancy } = setup(context);
   for (const extra of [{ origin: 'COMPANY' }, { company: companyId }, { importSource: 'fake' },

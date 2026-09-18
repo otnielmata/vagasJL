@@ -97,6 +97,19 @@ test('location and numeric experience are accepted without Match score', async (
   assert.equal(vacancy.toJSON().score, undefined);
 });
 
+test('initial company classifications start at revision one with audit', async (context) => {
+  setup(context);
+  const vacancy = await registerCompanyVacancy(actor, companyId, {
+    ...minimum,
+    matchProfile: { ...minimum.matchProfile,
+      requirements: [{ field: 'type', id: 'remote', importance: 'required' }] },
+  });
+  assert.equal(vacancy.requirementsRevision, 1);
+  assert.equal(vacancy.requirementsHistory.length, 1);
+  assert.equal(vacancy.requirementsHistory[0].actor.toString(), userId);
+  assert.equal(vacancy.toJSON().requirementsHistory, undefined);
+});
+
 test('origin, company, status and author cannot be supplied by client', async (context) => {
   const { findUser, createVacancy } = setup(context);
   for (const extra of [

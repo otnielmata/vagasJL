@@ -188,6 +188,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
+| PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -342,7 +343,12 @@ informada, exige `city`, `state` e `country`. Outros campos técnicos da VJ-28 s
       "type": "Remoto",
       "testAutomationTechnologies": ["Cypress.io"],
       "yearsOfExperience": 2.5
-    }
+    },
+    "requirements": [
+      { "field": "type", "id": "remote", "importance": "required" },
+      { "field": "testAutomationTechnologies", "id": "cypress", "importance": "desirable" },
+      { "field": "yearsOfExperience", "value": 2.5, "importance": "indifferent" }
+    ]
   }
 }
 ```
@@ -408,6 +414,28 @@ criação decrescente e ID como desempate. O total e as páginas contam apenas v
 Não há cache; a próxima consulta reflete pausas, bloqueios e vencimentos. Sem cadastro retorna
 **404**, sem Perfil de Match **409**, parâmetros inválidos **400**, sem autenticação **401**
 e papel diferente de candidato **403**.
+
+## Importância dos requisitos — VJ-46
+
+O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave
+técnica da VJ-28 a um ID canônico já presente em `matchProfile.values` (ou a `value`
+numérico para `yearsOfExperience`) e a `importance`: `required`, `desirable` ou
+`indifferent`. O PATCH `/vagas/{id}/requisitos` recebe apenas o conjunto completo
+`requirements` e `reason`; substitui-o atomicamente, incrementa `requirementsRevision` e
+registra ator, data, motivo e snapshot na trilha de auditoria. Duplicatas retornam **409**;
+classificações informadas no cadastro inicial também começam na revisão 1 com auditoria.
+IDs, campos ou importâncias inválidos retornam **400**, sem gravação parcial. Recrutador
+verificado só edita vaga `COMPANY` da própria empresa ativa; administrador pode editar as
+demais origens. Vagas `removed`/`rejected` não são editáveis.
+
+Para publicar, todos os valores técnicos da vaga devem estar classificados e ao menos um
+requisito deve pontuar. Importações sem evidência confiável não recebem classificação
+automática e permanecem pendentes de revisão. `required` usa peso integral, sem eliminar
+automaticamente o candidato; `desirable` usa o fator `MATCH_DESIRABLE_FACTOR` (padrão
+`0.5`, configurável entre 0 e 1); `indifferent` pesa zero no numerador e denominador.
+Descrição livre, campos derivados e `testingRelatedKeywords` não viram requisitos.
+O ranking considera somente vagas ativas com requisitos classificados; a mudança aparece
+na próxima consulta, sem cache.
 
 ## Cadastro de usuários — VJ-1
 
