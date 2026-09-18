@@ -69,6 +69,8 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(result.pages, 2);
   assert.equal(result.items[0].candidate.name, 'Bia');
   assert.equal(result.items[0].percentage, 100);
+  assert.deepEqual([result.items[0].earnedPoints, result.items[0].possiblePoints,
+    result.items[0].configurationVersion], [16, 16, 1]);
   assert.equal(result.items[0].candidate.email, undefined);
   assert.equal(findCandidates.mock.calls[0].arguments[0].status, 'active');
   const second = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId,

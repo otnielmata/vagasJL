@@ -89,7 +89,8 @@ test('false is not silently accepted for company or admin content and unknown fa
   await assert.rejects(prepareVacancyContent(input), { statusCode: 400 });
   const unchanged = calculateCompetencyMatch({ vacancyValues: {}, candidateValues: {},
     configuration, requirements: [], vacancy: { origin: 'COMPANY' } });
-  assert.equal(unchanged.percentage, 0);
+  assert.equal(unchanged.percentage, null);
+  assert.equal(unchanged.calculationStatus, 'not_calculable');
   assert.equal(unchanged.technicalCompatibility, undefined);
   await assert.rejects(registerImportedVacancy(provenance, { ...input,
     matchProfile: { values: { type: 'Remoto', madeUpSkill: false } },
