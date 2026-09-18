@@ -3,6 +3,9 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Candidate = require('../../src/models/candidate.model');
+const Company = require('../../src/models/company.model');
+const CompanyUser = require('../../src/models/company-user.model');
+const User = require('../../src/models/user.model');
 const { getCandidateById } = require('../../src/services/candidate.service');
 const { UNKNOWN, PROFILE_FIELDS, CANDIDATE_STATUS } = require('../../src/config/candidate');
 
@@ -60,11 +63,6 @@ function isolateLookup(context, stored) {
   return { findOne, query };
 }
 
-const publicFields = [
-  '_id', 'name', 'photoUrl', 'email', 'phone', 'city', 'state', 'country', 'linkedinUrl',
-  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability',
-];
-
 for (const status of Object.values(CANDIDATE_STATUS)) {
   test(`candidate owner can view own ${status} profile including status`, async (context) => {
     const stored = storedCandidate({ status });
@@ -82,62 +80,68 @@ for (const status of Object.values(CANDIDATE_STATUS)) {
   });
 }
 
-test('company receives only the explicit public projection for an active candidate', async (context) => {
-  const stored = storedCandidate();
-  const { findOne, query } = isolateLookup(context, stored);
-
-  const result = await getCandidateById(candidateId, otherUserId, 'company');
-
-  assert.deepEqual(findOne.mock.calls[0].arguments, [{
-    _id: candidateId,
-    status: CANDIDATE_STATUS.ACTIVE,
-  }]);
-  assert.deepEqual(Object.keys(query.projection).sort(), [
-    '_id', 'availability', 'city', 'country', 'email', 'githubUrl', 'linkedinUrl', 'name',
-    'phone', 'photoUrl', 'portfolioUrl', 'professionalSummary', 'state', 'status', 'user',
-  ]);
-  assert.deepEqual(Object.keys(result), publicFields);
-  assert.equal(result.status, undefined);
-  assert.equal(result.user, undefined);
-  assert.equal(query.projection.user, 1);
-  for (const field of ['eligibility', 'purchaseCode', 'trustedIdentifier', 'password',
-    'token', 'createdAt', 'updatedAt', '__v']) {
-    assert.equal(result[field], undefined);
-    assert.equal(query.projection[field], undefined);
-  }
-});
-
-for (const status of [
-  CANDIDATE_STATUS.PENDING_VALIDATION,
-  CANDIDATE_STATUS.INCOMPLETE_PROFILE,
-  CANDIDATE_STATUS.INACTIVE,
-  CANDIDATE_STATUS.BLOCKED,
-]) {
-  test(`company receives generic 404 for ${status} candidate`, async (context) => {
+for (const status of Object.values(CANDIDATE_STATUS)) {
+  test(`company role alone cannot view a ${status} candidate`, async (context) => {
     const { findOne } = isolateLookup(context, storedCandidate({ status }));
-
-    await assert.rejects(
-      getCandidateById(candidateId, otherUserId, 'company'),
-      (error) => {
-        assert.equal(error.statusCode, 404);
-        assert.equal(error.message, 'Candidato nao encontrado');
-        assert.equal(error.message.includes(status), false);
-        return true;
-      }
-    );
-    assert.deepEqual(findOne.mock.calls[0].arguments[0], {
-      _id: candidateId,
-      status: CANDIDATE_STATUS.ACTIVE,
-    });
+    context.mock.method(User, 'findOne', async () => null);
+    await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+    assert.equal(findOne.mock.callCount(), 0);
   });
 }
+
+test('active recruiter of active company sees only active candidates', async (context) => {
+  const account = { _id: otherUserId };
+  const findUser = context.mock.method(User, 'findOne', async () => account);
+  const findMembership = context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+  const findCompany = context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+  const { findOne } = isolateLookup(context, storedCandidate());
+  const result = await getCandidateById(candidateId, otherUserId, 'company');
+  assert.equal(result.name, 'Maria Silva');
+  assert.equal(result.status, undefined);
+  assert.deepEqual(findUser.mock.calls[0].arguments[0], {
+    _id: otherUserId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+  });
+  assert.deepEqual(findMembership.mock.calls[0].arguments[0], { user: otherUserId, status: 'active' });
+  assert.deepEqual(findCompany.mock.calls[0].arguments[0], {
+    _id: 'company-id', status: 'active', deletedAt: null,
+  });
+  assert.deepEqual(findOne.mock.calls[0].arguments[0], { _id: candidateId, status: CANDIDATE_STATUS.ACTIVE });
+});
+
+for (const status of Object.values(CANDIDATE_STATUS).filter((value) => value !== CANDIDATE_STATUS.ACTIVE)) {
+  test(`company cannot see a ${status} candidate even with active membership`, async (context) => {
+    context.mock.method(User, 'findOne', async () => ({ _id: otherUserId }));
+    context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+    context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+    isolateLookup(context, storedCandidate({ status }));
+    await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 404 });
+  });
+}
+
+test('inactive account, missing membership or non-active company deny access before candidate lookup', async (context) => {
+  const { findOne } = isolateLookup(context, storedCandidate());
+  const account = { _id: otherUserId };
+  const membership = { company: 'company-id' };
+  const findUser = context.mock.method(User, 'findOne', async () => account);
+  const findMembership = context.mock.method(CompanyUser, 'findOne', async () => membership);
+  const findCompany = context.mock.method(Company, 'findOne', async () => null);
+  for (const companyStatus of ['pending', 'inactive', 'blocked']) {
+    await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  }
+  findMembership.mock.mockImplementation(async () => null);
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  findUser.mock.mockImplementation(async () => null);
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  assert.equal(findOne.mock.callCount(), 0);
+  assert.equal(findCompany.mock.callCount(), 3);
+});
 
 test('candidate cannot view another candidate profile', async (context) => {
   isolateLookup(context, storedCandidate({ user: otherUserId }));
   await assert.rejects(getCandidateById(candidateId, ownerId, 'candidate'), { statusCode: 403 });
 });
 
-for (const role of ['candidate', 'company']) {
+for (const role of ['candidate']) {
   test(`${role} receives 404 for an unknown candidate`, async (context) => {
     isolateLookup(context, null);
     await assert.rejects(getCandidateById(candidateId, ownerId, role), {

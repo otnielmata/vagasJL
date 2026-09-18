@@ -7,12 +7,15 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27).
+    logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
+    de recrutador verificado (VJ-38) e edicao controlada do cadastro empresarial (VJ-39).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Companies
+    description: Cadastro administrativo de empresas
   - name: Candidates
     description: Cadastro, validacao, visualizacao, alteracao e exclusao logica de candidatos
   - name: Auth
@@ -23,6 +26,208 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /empresas:
+    post:
+      tags: [Companies]
+      summary: Registra empresa pendente (VJ-37)
+      description: >
+        Exige conta ativa com papel admin. Registra entidade Empresa independente de User
+        e Candidate, sempre com status pending. Responsavel e contato, nao credencial.
+        Nao cria usuario de empresa. Papel company sozinho nao libera acesso a candidatos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+      responses:
+        '201':
+          description: Empresa criada com status pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+        '400':
+          description: Campos obrigatorios, email, URL ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo ja cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/usuarios:
+    post:
+      tags: [Companies]
+      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      description: >
+        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
+        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
+        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
+        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '201':
+          description: Vinculo ativo criado; sem credenciais ou prova de identidade
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [membership, user]
+                properties:
+                  membership:
+                    $ref: '#/components/schemas/CompanyUser'
+                  user:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/cadastro:
+    patch:
+      tags: [Companies]
+      summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
+      description: >
+        Exige JWT ativo. Recrutador verificado e vinculado pode editar empresa e seu nome;
+        admin pode editar empresa e transitar status. Ativacao exige referencia de verificacao
+        administrativa. Troca de email ou senha de login usa o fluxo User existente. A edicao
+        combinada e atomica e requer MongoDB com suporte a transacoes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationUpdateRequest'
+      responses:
+        '200':
+          description: Cadastro atualizado sem campos internos ou credenciais
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarioAtual:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Campos, email, URL, status ou referencia de verificacao invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Usuario sem vinculo, de outra empresa, ou tentativa de autoativacao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo duplicado ou transicao de status proibida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /candidatos:
     post:
       tags: [Candidates]
@@ -192,10 +397,9 @@ paths:
       tags: [Candidates]
       summary: Visualiza um candidato conforme a permissao (VJ-25)
       description: >
-        Exige JWT valido de candidato ou empresa. O candidato pode consultar somente o
-        proprio cadastro em qualquer status e recebe tambem o status atual. A empresa
-        consulta somente candidatos ativos; candidato inexistente ou com qualquer outro
-        status produz o mesmo 404. A resposta usa uma projecao explicita, converte campos
+        Exige JWT valido. O candidato pode consultar somente o proprio cadastro em qualquer
+        status. Papel company isolado recebe 403. Somente conta company ativa com vinculo
+        ativo a empresa active pode consultar candidatos ativos (VJ-38). A resposta usa uma projecao explicita, converte campos
         opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
         senha, token ou detalhes internos da validacao. A operacao e somente leitura.
       security:
@@ -234,13 +438,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Candidato tentou consultar outro perfil ou papel sem permissao
+          description: Candidato tentou consultar outro perfil, ou company sem empresa e vinculo ativos
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Candidato inexistente ou nao ativo para uma empresa
+          description: Candidato inexistente
           content:
             application/json:
               schema:
@@ -831,6 +1035,99 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CompanyRegistrationUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        empresa:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            legalName: { type: string, minLength: 1, maxLength: 200 }
+            tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+            website: { type: string, format: uri, maxLength: 2048, nullable: true }
+            description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+            responsibleName: { type: string, minLength: 1, maxLength: 200 }
+            email: { type: string, format: email, maxLength: 254 }
+            phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+            linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+            segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        usuarioAtual:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 1, maxLength: 200 }
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          description: Apenas admin; transicoes controladas
+        verificationReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+          description: Obrigatoria ao ativar ou reativar; referencia de verificacao feita pelo operador
+    CompanyUser:
+      type: object
+      required: [_id, company, user, role, status]
+      properties:
+        _id: { type: string }
+        company: { type: string }
+        user: { type: string }
+        role: { type: string, enum: [recruiter] }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PublicCompanyUser:
+      type: object
+      required: [_id, name, email]
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+    CompanyRegistrationRequest:
+      type: object
+      required: [legalName, responsibleName, email, city, state, country]
+      additionalProperties: false
+      properties:
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        website: { type: string, format: uri, maxLength: 2048, nullable: true }
+        description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+        city: { type: string, minLength: 1, maxLength: 200 }
+        state: { type: string, minLength: 1, maxLength: 200 }
+        country: { type: string, minLength: 1, maxLength: 200 }
+        responsibleName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+        linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+        segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+    Company:
+      type: object
+      required: [_id, legalName, responsibleName, email, city, state, country, status]
+      properties:
+        _id: { type: string }
+        legalName: { type: string }
+        tradeName: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        responsibleName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        linkedinUrl: { type: string, nullable: true }
+        segment: { type: string, nullable: true }
+        status: { type: string, enum: [pending, active, inactive, blocked] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
