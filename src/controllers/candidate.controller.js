@@ -1,4 +1,5 @@
 const candidateService = require('../services/candidate.service');
+const vacancyRankingService = require('../services/vacancy-ranking.service');
 
 async function register(req, res, next) {
   try {
@@ -54,4 +55,13 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { register, validateEligibility, show, update, remove };
+async function rankVacancies(req, res, next) {
+  try {
+    const ranking = await vacancyRankingService.rankVacancies(req.user, req.query);
+    return res.status(200).json(ranking);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, validateEligibility, show, update, remove, rankVacancies };
