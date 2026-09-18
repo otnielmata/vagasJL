@@ -370,6 +370,25 @@ ou pontuação. O motor de cálculo percentual não faz parte deste endpoint/his
 integrado, deve consumir apenas esse perfil técnico. Para localizar registros legados sem
 modificar o banco, execute `npm run vacancies:audit-origins` com `MONGODB_URI` configurada.
 
+## Status e prazo das vagas — VJ-44
+
+`PATCH /vagas/{id}/status` recebe apenas `{ "status": "active", "reason": "Revisão aprovada" }`.
+Vagas novas começam `pending`. O administrador pode publicar, rejeitar, pausar, expirar ou
+remover; a publicação valida dados essenciais, catálogo versionado e empresa ativa quando a
+origem é `COMPANY`. O recrutador ativo e vinculado pode apenas pausar, retomar ou remover
+vagas próprias. A reativação de `expired` é reservada ao administrador, requer prazo futuro
+previamente atualizado por fluxo confiável e motivo de revalidação expresso. `removed` e
+`rejected` são terminais. A transição registra origem, destino, data, ator/processo e motivo,
+com atualização atômica condicionada ao status e à versão da vaga. Origem e competências
+não são alteradas. ID/corpo inválido retorna **400**, sem JWT **401**, sem permissão **403**,
+vaga ausente **404**, e transição inválida ou corrida **409**.
+
+O cadastro aceita `expiresAt` opcional em ISO UTC futuro. Uma vaga cujo prazo terminou fica
+inelegível ao Match imediatamente, mesmo antes da atualização materializada do status.
+Execute `npm run vacancies:expire` no servidor ou agendador para converter vagas `active`
+ou `paused` vencidas em `expired` com registro de auditoria; em deploy serverless, agende
+essa execução externamente, pois timers locais não são confiáveis.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:
