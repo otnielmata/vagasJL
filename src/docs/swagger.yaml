@@ -8,7 +8,8 @@ info:
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
-    de recrutador verificado (VJ-38) e edicao controlada do cadastro empresarial (VJ-39).
+    de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
+    protegida do cadastro empresarial (VJ-40).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -158,6 +159,67 @@ paths:
           $ref: '#/components/responses/Unavailable'
 
   /empresas/{id}/cadastro:
+    get:
+      tags: [Companies]
+      summary: Apresenta cadastro empresarial e usuarios publicos permitidos (VJ-40)
+      description: >
+        Exige JWT de conta ativa. Admin pode consultar qualquer empresa atual; recrutador
+        pode consultar somente empresa com vinculo ativo e autorizado, inclusive se ela
+        estiver pending, inactive ou blocked. Esta consulta nao libera acesso a candidatos.
+        Retorna apenas campos publicos da empresa e lista de usuarios vinculados permitidos.
+        A operacao e somente leitura.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Dados empresariais e lista de usuarios publicos permitidos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, usuarios]
+                additionalProperties: false
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem vinculo ativo com esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     patch:
       tags: [Companies]
       summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
