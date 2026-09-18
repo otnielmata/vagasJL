@@ -12,6 +12,9 @@ const matchProfileController = require('../controllers/candidate-match-profile.c
 
 const router = Router();
 
+router.get('/me/vagas/ranking', authenticate, authorize('candidate'), ensureDatabase,
+  candidateController.rankVacancies);
+
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 
 router.post('/', authenticate, authorize('candidate'), candidateRules(),
