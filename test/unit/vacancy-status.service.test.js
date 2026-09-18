@@ -29,7 +29,8 @@ function setup(context, overrides = {}) {
     ({ ...vacancy, status: operation.$set.status, toJSON() { return this; } }));
   context.mock.method(Configuration, 'findOne', async () => ({ version: 1,
     fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({ key,
-      options: key === 'type' ? [{ id: 'remote' }] : [] })) }));
+      options: key === 'type' ? [{ id: 'remote' }]
+        : key === 'automation' ? [{ id: 'automation' }] : [] })) }));
   const companyQuery = { select: async () => ({ _id: companyId }) };
   context.mock.method(Company, 'findOne', () => companyQuery);
   const memberQuery = { select: async () => ({ _id: 'membership' }) };
@@ -49,6 +50,27 @@ test('admin publishes validated pending vacancy atomically without changing tech
   assert.deepEqual(update.mock.calls[0].arguments[0], { _id: vacancyId, status: 'pending',
     updatedAt: vacancy.updatedAt, deletedAt: null });
   assert.equal(update.mock.calls[0].arguments[1].$push.statusHistory.process, 'api');
+});
+
+test('imported vacancy can activate with classified identified field after false modality is omitted', async (context) => {
+  const { update } = setup(context, { origin: 'IMPORTED', company: null, createdBy: null,
+    importSource: 'board', importSourceId: 'job-1',
+    matchProfile: { configurationVersion: 1, values: { automation: ['automation'] },
+      requirements: [{ field: 'automation', id: 'automation', importance: 'required' }] } });
+  const result = await updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+    { status: 'active', reason: 'Revisao da importacao' }, now);
+  assert.equal(result.status, 'active');
+  assert.equal(result.origin, 'IMPORTED');
+  assert.equal(update.mock.callCount(), 1);
+});
+
+test('imported vacancy with only unidentified false fields cannot activate', async (context) => {
+  const { update } = setup(context, { origin: 'IMPORTED', company: null, createdBy: null,
+    importSource: 'board', importSourceId: 'job-2',
+    matchProfile: { configurationVersion: 1, values: {}, requirements: [] } });
+  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+    { status: 'active', reason: 'Tentar publicar' }, now), { statusCode: 409 });
+  assert.equal(update.mock.callCount(), 0);
 });
 
 test('company pauses own active vacancy and ranking excludes it', async (context) => {

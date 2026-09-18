@@ -24,6 +24,12 @@ const locationSchema = new mongoose.Schema({
   state: { type: String, required: true, trim: true, maxlength: 200 },
   country: { type: String, required: true, trim: true, maxlength: 200 },
 }, { _id: false });
+const importMappingAuditSchema = new mongoose.Schema({
+  rawFalseValues: { type: [{
+    field: { type: String, required: true, enum: Object.keys(INITIAL_MATCH_WEIGHTS) },
+    value: { type: Boolean, required: true, enum: [false] },
+  }], default: [] },
+}, { _id: false });
 
 const vacancySchema = new mongoose.Schema({
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, immutable: true },
@@ -31,6 +37,7 @@ const vacancySchema = new mongoose.Schema({
     select: false, immutable: true },
   importSource: { type: String, trim: true, maxlength: 100, default: null, immutable: true },
   importSourceId: { type: String, trim: true, maxlength: 200, default: null, immutable: true },
+  importMappingAudit: { type: importMappingAuditSchema, default: null, select: false },
   reference: { type: String, trim: true, lowercase: true, maxlength: 100, default: null },
   title: { type: String, required: true, trim: true, maxlength: 200 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },
@@ -98,6 +105,7 @@ vacancySchema.set('toJSON', {
     delete result.__v;
     delete result.createdBy;
     delete result.deletedAt;
+    delete result.importMappingAudit;
     delete result.statusHistory;
     delete result.requirementsHistory;
     return result;
