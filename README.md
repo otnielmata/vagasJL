@@ -437,6 +437,22 @@ Descrição livre, campos derivados e `testingRelatedKeywords` não viram requis
 O ranking considera somente vagas ativas com requisitos classificados; a mudança aparece
 na próxima consulta, sem cache.
 
+## Critério eliminatório — VJ-47
+
+Cada requisito estruturado aceita `eliminatory: true|false` no cadastro ou no mesmo
+`PATCH /vagas/{id}/requisitos`; o padrão é `false`. Apenas requisitos `required` ou
+`desirable` podem ser eliminatórios. `indifferent`, texto livre e
+`testingRelatedKeywords` são recusados para essa finalidade. O sinalizador segue a mesma
+autorização, revisão e auditoria da VJ-46. `required` sem o sinalizador **não elimina**.
+
+Com `MATCH_ELIMINATORY_ENABLED=true` (padrão), requisito eliminatório não comprovado,
+ausente ou desconhecido torna a avaliação `ineligible` com motivo estruturado no serviço
+de Match, separado do percentual. A vaga não aparece no ranking personalizado desse
+candidato e sai de `total`/paginação, mas não recebe penalidade extra na pontuação.
+Valores numéricos exigem atingir ao menos o nível da vaga. `false` desativa a política
+global sem alterar requisitos, pesos ou percentuais. Não há cache; a próxima consulta
+reflete imediatamente a alteração, sem expor o motivo interno a outros usuários.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:
