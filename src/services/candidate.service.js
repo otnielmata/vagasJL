@@ -1,5 +1,7 @@
 const User = require('../models/user.model');
 const Candidate = require('../models/candidate.model');
+const Company = require('../models/company.model');
+const CompanyUser = require('../models/company-user.model');
 const ApiError = require('../errors/api.error');
 const studentValidation = require('./student-validation.service');
 const {
@@ -322,10 +324,20 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
   }
 
   if (requesterRole === 'company') {
-    throw new ApiError(403, 'Acesso empresarial exige empresa ativa e vinculo de usuario autorizado');
+    const account = await User.findOne({
+      _id: requesterId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+    });
+    const membership = account && await CompanyUser.findOne({ user: account._id, status: 'active' });
+    const company = membership && await Company.findOne({
+      _id: membership.company, status: 'active', deletedAt: null,
+    });
+    if (!company) {
+      throw new ApiError(403, 'Acesso empresarial exige empresa ativa e vinculo de usuario autorizado');
+    }
   }
 
   const filter = { _id: candidateId };
+  if (requesterRole === 'company') filter.status = CANDIDATE_STATUS.ACTIVE;
 
   const candidate = await Candidate.findOne(filter).select(CANDIDATE_READ_PROJECTION).lean();
   if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
