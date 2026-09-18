@@ -57,7 +57,8 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
     const score = calculateCompetencyMatch({ vacancyValues: technicalProfile.values,
       candidateValues, configuration, requirements: vacancy.matchProfile.requirements,
       desirableFactor: config.match.desirableFactor,
-      eliminatoryPolicyEnabled: config.match.eliminatoryEnabled });
+      eliminatoryPolicyEnabled: config.match.eliminatoryEnabled,
+      vacancy: { origin: vacancy.origin } });
     return { vacancy: vacancy.toJSON(), percentage: score.percentage,
       eligible: score.eligibility.eligible };
   }).filter((item) => item.eligible).map(({ vacancy, percentage }) => ({ vacancy, percentage }));
