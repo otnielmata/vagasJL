@@ -8,7 +8,7 @@ info:
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
-    de recrutador verificado (VJ-38).
+    de recrutador verificado (VJ-38) e edicao controlada do cadastro empresarial (VJ-39).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -150,6 +150,77 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/cadastro:
+    patch:
+      tags: [Companies]
+      summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
+      description: >
+        Exige JWT ativo. Recrutador verificado e vinculado pode editar empresa e seu nome;
+        admin pode editar empresa e transitar status. Ativacao exige referencia de verificacao
+        administrativa. Troca de email ou senha de login usa o fluxo User existente. A edicao
+        combinada e atomica e requer MongoDB com suporte a transacoes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationUpdateRequest'
+      responses:
+        '200':
+          description: Cadastro atualizado sem campos internos ou credenciais
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarioAtual:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Campos, email, URL, status ou referencia de verificacao invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Usuario sem vinculo, de outra empresa, ou tentativa de autoativacao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo duplicado ou transicao de status proibida
           content:
             application/json:
               schema:
@@ -964,6 +1035,44 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CompanyRegistrationUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        empresa:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            legalName: { type: string, minLength: 1, maxLength: 200 }
+            tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+            website: { type: string, format: uri, maxLength: 2048, nullable: true }
+            description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+            responsibleName: { type: string, minLength: 1, maxLength: 200 }
+            email: { type: string, format: email, maxLength: 254 }
+            phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+            linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+            segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        usuarioAtual:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 1, maxLength: 200 }
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          description: Apenas admin; transicoes controladas
+        verificationReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+          description: Obrigatoria ao ativar ou reativar; referencia de verificacao feita pelo operador
     CompanyUser:
       type: object
       required: [_id, company, user, role, status]
