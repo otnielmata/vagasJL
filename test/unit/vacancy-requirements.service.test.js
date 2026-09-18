@@ -76,12 +76,13 @@ test('unknown importance, uncatalogued ID and duplicate competence reject withou
 
 test('unauthorized company or forged body cannot change requirements', async (context) => {
   const { vacancy, update, membershipQuery } = setup(context);
+  const flagged = [{ field: 'type', id: 'remote', importance: 'required', eliminatory: true }];
   membershipQuery.select = async () => null;
   await assert.rejects(updateRequirements({ id: actorId, role: 'company' }, vacancyId,
-    { requirements, reason: 'Teste' }), { statusCode: 403 });
+    { requirements: flagged, reason: 'Teste' }), { statusCode: 403 });
   vacancy.origin = 'IMPORTED';
   await assert.rejects(updateRequirements({ id: actorId, role: 'company' }, vacancyId,
-    { requirements, reason: 'Teste' }), { statusCode: 403 });
+    { requirements: flagged, reason: 'Teste' }), { statusCode: 403 });
   await assert.rejects(updateRequirements({ id: actorId, role: 'admin' }, vacancyId,
     { requirements, reason: 'Teste', origin: 'COMPANY' }), { statusCode: 400 });
   assert.equal(update.mock.callCount(), 0);
@@ -142,4 +143,28 @@ test('incomplete classification cannot activate a vacancy', () => {
   assert.throws(() => validateRequirements(requirements.slice(0, 1), values,
     configuration, true), { statusCode: 409 });
   assert.throws(() => validateRequirements([], values, configuration, true), { statusCode: 409 });
+});
+
+test('PATCH audits explicit eliminatory flag without touching weights or origin', async (context) => {
+  const { update } = setup(context);
+  const flagged = [{ field: 'type', id: 'remote', importance: 'required', eliminatory: true }];
+  await updateRequirements({ id: actorId, role: 'admin' }, vacancyId,
+    { requirements: flagged, reason: 'Criterio validado' });
+  const operation = update.mock.calls[0].arguments[1];
+  assert.deepEqual(operation.$set['matchProfile.requirements'], flagged);
+  assert.deepEqual(operation.$push.requirementsHistory.requirements, flagged);
+  assert.equal(Object.hasOwn(operation.$set, 'origin'), false);
+  assert.equal(Object.hasOwn(operation.$set, 'matchProfile.values'), false);
+});
+
+test('PATCH refuses contradictory or free-text eliminatory input without a write', async (context) => {
+  const { update } = setup(context);
+  for (const item of [
+    { field: 'type', id: 'remote', importance: 'indifferent', eliminatory: true },
+    { field: 'type', id: 'Cypress mentioned in description', importance: 'required', eliminatory: true },
+  ]) {
+    await assert.rejects(updateRequirements({ id: actorId, role: 'admin' }, vacancyId,
+      { requirements: [item], reason: 'Teste' }), { statusCode: 400 });
+  }
+  assert.equal(update.mock.callCount(), 0);
 });
