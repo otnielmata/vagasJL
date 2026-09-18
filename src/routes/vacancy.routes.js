@@ -5,6 +5,8 @@ const controller = require('../controllers/vacancy.controller');
 
 const router = Router();
 
+router.get('/:id/candidatos/ranking', authenticate, authorize('admin', 'company'), ensureDatabase,
+  controller.rankCandidates);
 router.patch('/:id/status', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.updateStatus);
 router.patch('/:id/requisitos', authenticate, authorize('admin', 'company'), ensureDatabase,
