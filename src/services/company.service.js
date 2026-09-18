@@ -52,6 +52,27 @@ function normalizeCompany(input) {
   return data;
 }
 
+function normalizeCompanyUpdates(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      !Object.keys(input).length || Object.keys(input).some((key) => !ALLOWED_FIELDS.has(key))) invalid();
+  const data = {};
+  for (const [field, value] of Object.entries(input)) {
+    if (field === 'email') {
+      data.email = text(value, 254, true).toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) invalid();
+    } else if (OPTIONAL_URL_FIELDS.includes(field)) {
+      data[field] = normalizeUrl(value);
+    } else if (field === 'phone') {
+      data.phone = text(value, 40);
+      if (data.phone !== null && (data.phone.length < 6 || !/^[+\d\s().-]+$/.test(data.phone))) invalid();
+    } else {
+      data[field] = text(value, field === 'description' ? 5000 : 200,
+        REQUIRED_FIELDS.includes(field));
+    }
+  }
+  return data;
+}
+
 async function registerCompany(user, input) {
   if (user?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem cadastrar empresas');
   const data = normalizeCompany(input);
@@ -67,4 +88,4 @@ async function registerCompany(user, input) {
   }
 }
 
-module.exports = { registerCompany };
+module.exports = { registerCompany, normalizeCompanyUpdates };
