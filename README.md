@@ -15,7 +15,8 @@ documentação e scripts de execução), o cadastro de usuários da
 [VJ-24](https://jl-mentoria.atlassian.net/browse/VJ-24) e da visualização individual da
 [VJ-25](https://jl-mentoria.atlassian.net/browse/VJ-25), com alteração de candidatos na
 [VJ-26](https://jl-mentoria.atlassian.net/browse/VJ-26) e exclusão lógica na
-[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27).
+[VJ-27](https://jl-mentoria.atlassian.net/browse/VJ-27) e cadastro empresarial separado na
+[VJ-37](https://jl-mentoria.atlassian.net/browse/VJ-37).
 Vagas, competências e motor de match serão implementados nas próximas histórias.
 
 ## Stack
@@ -43,22 +44,26 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── index.js
 │   │   ├── auth.routes.js
 │   │   ├── candidate.routes.js # Operações de candidatos
+│   │   ├── company.routes.js   # Cadastro administrativo de empresas
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
 │   ├── controllers/           # Recebem a requisição, chamam os services e formatam a resposta
 │   │   ├── auth.controller.js
 │   │   ├── candidate.controller.js
+│   │   ├── company.controller.js
 │   │   └── user.controller.js
 │   ├── services/               # Regra de negócio, isolada do Express (req/res)
 │   │   ├── auth.service.js
 │   │   ├── candidate.service.js
+│   │   ├── company.service.js
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
 │   │   └── api.error.js        # Erro de negócio com status HTTP
 │   ├── models/                # Schemas do Mongoose
 │   │   ├── candidate.model.js
+│   │   ├── company.model.js
 │   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
@@ -155,6 +160,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
+| POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -172,6 +178,37 @@ Para rotas autenticadas, envie o token retornado no login/registro no header:
 ```
 Authorization: Bearer <token>
 ```
+
+## Cadastro de empresa — VJ-37
+
+`POST /empresas` exige JWT de uma conta ativa com papel `admin` (operador autorizado).
+Recebe `legalName` (razão/nome), `responsibleName` (contato responsável), `email` corporativo,
+`city`, `state` e `country` como campos obrigatórios. Aceita opcionalmente `tradeName`, `website`,
+`description`, `phone`, `linkedinUrl` e `segment`. URLs devem ser HTTP/HTTPS. Não aceita
+`password`, `user`, `status`, auditoria ou outros campos controlados pelo servidor.
+
+```json
+{
+  "legalName": "Empresa de Testes Ltda",
+  "responsibleName": "Ana Souza",
+  "email": "contato@empresa.com.br",
+  "city": "São Paulo",
+  "state": "SP",
+  "country": "Brasil"
+}
+```
+
+A resposta **201** contém `{ "company": { "_id", ... } }` com status inicial sempre
+`pending`. A empresa é independente das coleções `users` e `candidates`; o responsável é
+contato comercial, não uma credencial. E-mail é normalizado e único entre empresas atuais,
+inclusive em cadastros concorrentes (**409**); dados inválidos retornam **400**, sem gravação.
+`registeredBy` e `deletedAt` ficam somente na auditoria interna. Nenhuma conta de recrutador é
+criada implicitamente.
+
+Até existir a entidade de vínculo do usuário da empresa e validação de empresa `active`, uma
+conta com papel `company` **não obtém acesso a dados de candidatos** apenas por possuir esse
+papel (**403** em `GET /candidatos/{id}`). A integração com recrutadores e a liberação
+condicionada a vínculo e status ativo pertencem a uma história futura.
 
 ## Cadastro de usuários — VJ-1
 
@@ -425,26 +462,25 @@ os metadados legados uma única vez, sem promoção para `active`.
 
 ### Visualização de candidato — VJ-25
 
-`GET /candidatos/{id}` exige JWT válido de uma conta ativa com papel `candidate` ou `company`.
-O candidato pode consultar somente o próprio cadastro, independentemente de estar pendente,
-incompleto, ativo, inativo ou bloqueado. A empresa recebe dados somente quando o candidato está
-`active`; cadastro inexistente ou em qualquer outro status retorna a mesma resposta **404**, sem
-revelar o estado real.
+`GET /candidatos/{id}` exige JWT válido de uma conta ativa. O candidato pode consultar somente
+o próprio cadastro, independentemente de estar pendente, incompleto, ativo, inativo ou
+bloqueado. Por segurança, o papel `company` isolado recebe **403** até haver vínculo verificável
+com uma empresa ativa (VJ-37), mesmo quando o candidato consultado está `active`.
 
 A resposta contém apenas `_id`, nome, foto, e-mail de contato, telefone, localização, LinkedIn,
-GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`;
-a empresa não. Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
+GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`.
+Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
 como `UNKNOWN`, nunca como `false`. Conta vinculada, senha, hashes, tokens, comprovantes, datas e
 detalhes internos de elegibilidade não fazem parte da projeção nem do objeto retornado.
 
 | Condição | HTTP |
 | --- | --- |
 | Titular consulta o próprio cadastro em qualquer status | 200 |
-| Empresa consulta candidato ativo | 200 |
+| Papel `company` sem vínculo empresarial autorizado | 403 |
 | Identificador malformado | 400 |
 | JWT ausente/inválido ou conta inexistente/inativa | 401 |
 | Candidato consulta outro candidato ou papel sem permissão | 403 |
-| Candidato inexistente ou não ativo para empresa | 404 |
+| Candidato inexistente para o titular | 404 |
 
 A consulta não executa gravações e não altera os dados nem o status do candidato. Listagem,
 filtros, busca textual e cálculo de match continuam fora do escopo desta história.
@@ -722,8 +758,8 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Critério da VJ-25 | Cobertura unitária |
 | --- | --- |
 | Titular consulta o próprio perfil em qualquer status | Service com todos os status controlados e controller HTTP 200 |
-| Empresa consulta somente candidato ativo | Filtro atômico por `_id` e `status: active` no banco |
-| Status não ativo permanece oculto para empresa | Mesmo erro 404 para pendente, incompleto, inativo e bloqueado |
+| Papel `company` não obtém acesso antes de vínculo autorizado (VJ-37) | Service bloqueia com 403 antes da busca; liberação futura exige empresa ativa |
+| Status não ativo permanece oculto para empresa | Nenhum candidato é consultado por `company` nesta etapa |
 | Candidato não consulta outro candidato | Verificação de titularidade e erro 403 |
 | Campos opcionais desconhecidos usam `UNKNOWN` | Normalização explícita, inclusive contra valores legados `false` |
 | Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |
@@ -797,7 +833,7 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
 
 ## Próximos passos
 
-- Implementar vagas, empresas, competências e complementar o perfil de candidato a partir das
+- Implementar vagas, usuários vinculados a empresas, competências e complementar o perfil de candidato a partir das
   user stories do Jira.
 - Implementar o motor de match entre vagas e candidatos.
 - Configurar CI via GitHub Actions e deploy via Vercel.
