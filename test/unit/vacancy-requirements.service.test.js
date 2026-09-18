@@ -109,21 +109,22 @@ test('creation accepts same structured requirements and import without evidence 
 
 test('configured desirable factor reduces both contribution and denominator; indifferent adds nothing', () => {
   const result = calculateCompetencyMatch({ vacancyValues: values,
-    candidateValues: { type: ['remote'] }, configuration, requirements, desirableFactor: 0.25 });
+    candidateValues: { type: ['remote'] }, configuration, requirements,
+    multipliers: { required: 1, desirable: 0.25, indifferent: 0 } });
   assert.equal(result.earnedPoints, 8);
   assert.equal(result.possiblePoints, 10.5);
   assert.equal(result.percentage, 76.19);
   assert.equal(result.details.length, 2);
   const matched = calculateCompetencyMatch({ vacancyValues: values,
     candidateValues: { type: ['remote'], testAutomationTechnologies: ['cypress'] },
-    configuration, requirements, desirableFactor: 0.25 });
+    configuration, requirements, multipliers: { required: 1, desirable: 0.25, indifferent: 0 } });
   assert.equal(matched.percentage, 100);
 });
 
 test('free text and derived fields never create requirements or points', () => {
   const score = calculateCompetencyMatch({ vacancyValues: { type: ['remote'] },
     candidateValues: { type: ['remote'], hasGenAI: true }, configuration,
-    requirements: [], desirableFactor: 0.5 });
+    requirements: [], multipliers: { required: 1, desirable: 0.5, indifferent: 0 } });
   assert.equal(score.possiblePoints, 0);
   assert.equal(score.earnedPoints, 0);
 });

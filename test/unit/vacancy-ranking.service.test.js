@@ -6,6 +6,7 @@ const Candidate = require('../../src/models/candidate.model');
 const CandidateMatchProfile = require('../../src/models/candidate-match-profile.model');
 const Company = require('../../src/models/company.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
+const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { rankVacancies } = require('../../src/services/vacancy-ranking.service');
@@ -29,6 +30,9 @@ function vacancy(id, origin, status = 'active', overrides = {}) {
 }
 
 function setup(context, vacancies) {
+  context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => ({
+    version: 1, multipliers: { required: 1, desirable: 0.5, indifferent: 0 },
+  }) }));
   const candidateQuery = { select: async () => ({ _id: actor.id }) };
   context.mock.method(Candidate, 'findOne', () => candidateQuery);
   const profileQuery = { select: async () => ({ values: { type: ['remote'] },
@@ -68,6 +72,7 @@ test('equivalent technical requirements score identically across all three origi
   assert.deepEqual(result.items.map((item) => item.percentage), [100, 100, 100]);
   assert.deepEqual(result.items.map((item) => [item.earnedPoints, item.possiblePoints,
     item.configurationVersion]), [[8, 8, 1], [8, 8, 1], [8, 8, 1]]);
+  assert.deepEqual(result.items.map((item) => item.multipliersVersion), [1, 1, 1]);
 });
 
 test('company vacancy disappears when owner is inactive or blocked', async (context) => {

@@ -2,6 +2,7 @@ const Candidate = require('../models/candidate.model');
 const CandidateMatchProfile = require('../models/candidate-match-profile.model');
 const Company = require('../models/company.model');
 const Configuration = require('../models/match-profile-configuration.model');
+const { getPublishedMultipliers } = require('./match-multipliers-configuration.service');
 const Vacancy = require('../models/vacancy.model');
 const { CANDIDATE_STATUS } = require('../config/candidate');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
@@ -33,6 +34,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
   }
   const configuration = await Configuration.findOne({ version: vacancy.matchProfile.configurationVersion });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
+  const matchConfiguration = await getPublishedMultipliers();
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
     deletedAt: null }).select('_id name');
@@ -45,11 +47,13 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
     if (!profile?.values) return [];
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
-    const score = scorePair(vacancy, candidateValues, configuration, now);
+    const score = scorePair(vacancy, candidateValues, configuration,
+      matchConfiguration.multipliers, now);
     if (!score.eligibility.eligible || score.possiblePoints === 0) return [];
     return [{ candidate: { _id: candidate._id, name: candidate.name }, percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
-      configurationVersion: vacancy.matchProfile.configurationVersion }];
+      configurationVersion: vacancy.matchProfile.configurationVersion,
+      multipliersVersion: matchConfiguration.version }];
   });
   ranked.sort((left, right) => right.percentage - left.percentage ||
     String(left.candidate._id).localeCompare(String(right.candidate._id)));

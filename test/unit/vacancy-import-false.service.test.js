@@ -16,6 +16,7 @@ const configuration = { version: 1, fields: Object.keys(INITIAL_MATCH_WEIGHTS).m
       ? [{ id: 'automation', label: 'Automacao', aliases: [] }] : [],
 })) };
 const provenance = { source: 'board', sourceId: 'job-1' };
+const multipliers = { required: 1, desirable: 0.5, indifferent: 0 };
 
 function setup(context) {
   context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
@@ -55,7 +56,7 @@ test('all false imported values are non-calculable and never reward matching abs
   for (const candidateValues of [{ automation: ['automation'] }, { automation: false },
     { automation: 'UNKNOWN' }, { automation: null }, {}]) {
     const score = calculateCompetencyMatch({ vacancyValues: {}, candidateValues,
-      configuration, requirements: [], vacancy: { origin: 'IMPORTED' } });
+      configuration, requirements: [], multipliers, vacancy: { origin: 'IMPORTED' } });
     assert.equal(score.possiblePoints, 0);
     assert.equal(score.earnedPoints, 0);
     assert.equal(score.percentage, null);
@@ -75,6 +76,7 @@ test('identified imported requirement scores normally without counting false fie
   const requirements = [{ field: 'automation', id: 'automation', importance: 'required' }];
   const score = calculateCompetencyMatch({ vacancyValues: vacancy.matchProfile.values.toObject(),
     candidateValues: { automation: ['automation'], type: false }, configuration, requirements,
+    multipliers,
     vacancy: { origin: 'IMPORTED' } });
   assert.equal(score.possiblePoints, INITIAL_MATCH_WEIGHTS.automation);
   assert.equal(score.percentage, 100);
@@ -88,7 +90,7 @@ test('false is not silently accepted for company or admin content and unknown fa
     matchProfile: { values: { type: false } } };
   await assert.rejects(prepareVacancyContent(input), { statusCode: 400 });
   const unchanged = calculateCompetencyMatch({ vacancyValues: {}, candidateValues: {},
-    configuration, requirements: [], vacancy: { origin: 'COMPANY' } });
+    configuration, requirements: [], multipliers, vacancy: { origin: 'COMPANY' } });
   assert.equal(unchanged.percentage, null);
   assert.equal(unchanged.calculationStatus, 'not_calculable');
   assert.equal(unchanged.technicalCompatibility, undefined);
