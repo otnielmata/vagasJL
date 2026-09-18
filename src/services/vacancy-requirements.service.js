@@ -26,7 +26,13 @@ function validateRequirements(input, values, configuration, requireComplete = fa
         !Object.hasOwn(INITIAL_MATCH_WEIGHTS, item.field) || !catalog.has(item.field) ||
         !IMPORTANCE.has(item.importance)) throw new ApiError(400, 'Classificacao invalida');
     const numeric = item.field === 'yearsOfExperience';
-    const keys = Object.keys(item).sort().join(',');
+    if (Object.hasOwn(item, 'eliminatory') && typeof item.eliminatory !== 'boolean') {
+      throw new ApiError(400, 'Sinalizador eliminatorio invalido');
+    }
+    if (item.eliminatory === true && item.importance === 'indifferent') {
+      throw new ApiError(400, 'Requisito indiferente nao pode ser eliminatorio');
+    }
+    const keys = Object.keys(item).filter((key) => key !== 'eliminatory').sort().join(',');
     if (keys !== (numeric ? 'field,importance,value' : 'field,id,importance')) {
       throw new ApiError(400, 'Estrutura do requisito invalida');
     }
@@ -38,8 +44,11 @@ function validateRequirements(input, values, configuration, requireComplete = fa
     }
     if (seen.has(key)) throw new ApiError(409, 'Competencia duplicada');
     seen.add(key);
-    return numeric ? { field: item.field, value: item.value, importance: item.importance }
-      : { field: item.field, id: item.id, importance: item.importance };
+    const classification = numeric ? { field: item.field, value: item.value,
+      importance: item.importance } : { field: item.field, id: item.id,
+      importance: item.importance };
+    if (item.eliminatory === true) classification.eliminatory = true;
+    return classification;
   });
   if (requireComplete && (!requirements.length || expected.size !== seen.size ||
       !requirements.some((item) => item.importance !== 'indifferent'))) {
