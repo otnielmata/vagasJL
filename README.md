@@ -453,6 +453,24 @@ Valores numéricos exigem atingir ao menos o nível da vaga. `false` desativa a 
 global sem alterar requisitos, pesos ou percentuais. Não há cache; a próxima consulta
 reflete imediatamente a alteração, sem expor o motivo interno a outros usuários.
 
+## `false` em vagas importadas — VJ-48
+
+O serviço interno `registerImportedVacancy` interpreta `false` em campos técnicos da fonte
+como **requisito não identificado**, removendo-o dos valores canônicos antes de gravar o
+Perfil de Match. Os campos e valores brutos `false` ficam em auditoria interna,
+junto da procedência `importSource`/`importSourceId`; não aparecem na resposta pública.
+Nenhuma competência nova é criada e nenhum requisito é promovido automaticamente a
+`required` ou eliminatório. Uma vaga com outros valores identificados pode ser classificada
+por operador e ativada, mesmo se a modalidade importada não tiver sido identificada.
+
+No cálculo técnico, campo importado não identificado não entra no numerador nem no
+denominador: vaga `false` e candidato `false`, `unknown`, `null`, ausente ou com a
+habilidade presente não produzem bônus, penalidade ou eliminação. Se não houver nenhum
+requisito pontuável, o serviço de Match retorna `percentage: null` e
+`technicalCompatibility: "not_calculable"`, nunca 100%; a vaga não entra no ranking
+personalizado sem requisitos classificados. Vagas `COMPANY` e `ADMIN` continuam exigindo
+valores declarados e rejeitam `false` como competência.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:
