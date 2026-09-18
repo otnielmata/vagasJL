@@ -3,6 +3,7 @@ const CompanyUser = require('../models/company-user.model');
 const User = require('../models/user.model');
 const Vacancy = require('../models/vacancy.model');
 const { normalizeVacancyInput, prepareVacancyContent } = require('./vacancy-content.service');
+const { initialRequirementsAudit } = require('./vacancy-requirements.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -34,6 +35,7 @@ async function registerCompanyVacancy(actor, companyId, input) {
     return await Vacancy.create({
       company: company._id, createdBy: account._id,
       ...content,
+      ...initialRequirementsAudit(content, account._id),
       origin: 'COMPANY', status: 'pending',
     });
   } catch (error) {
