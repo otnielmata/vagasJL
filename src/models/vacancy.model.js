@@ -38,6 +38,11 @@ const vacancySchema = new mongoose.Schema({
   importSource: { type: String, trim: true, maxlength: 100, default: null, immutable: true },
   importSourceId: { type: String, trim: true, maxlength: 200, default: null, immutable: true },
   importMappingAudit: { type: importMappingAuditSchema, default: null, select: false },
+  importImportance: { type: new mongoose.Schema({
+    version: { type: Number, required: true, min: 1 },
+    importance: { type: String, required: true, enum: ['required', 'desirable', 'indifferent'] },
+    appliedAt: { type: Date, required: true },
+  }, { _id: false }), default: null, immutable: true },
   reference: { type: String, trim: true, lowercase: true, maxlength: 100, default: null },
   title: { type: String, required: true, trim: true, maxlength: 200 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },

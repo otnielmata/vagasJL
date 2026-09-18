@@ -471,6 +471,32 @@ requisito pontuável, o serviço de Match retorna `percentage: null` e
 personalizado sem requisitos classificados. Vagas `COMPANY` e `ADMIN` continuam exigindo
 valores declarados e rejeitam `false` como competência.
 
+## Importância padrão de requisitos importados — VJ-49
+
+Um administrador publica a importância padrão em
+`PUT /configuracoes/importacao/importancia-padrao` com o corpo
+`{"importance":"desirable"}`. Os valores aceitos são `required`, `desirable` e
+`indifferent`. A resposta contém versão, autor e data de vigência. Repetir o mesmo
+valor mantém a versão; uma alteração cria nova versão. Requisições sem JWT, sem
+permissão ou com corpo inválido retornam 401, 403 ou 400, respectivamente.
+
+O serviço interno `registerImportedVacancy` recebe uma competência identificada
+como `{ "id": "cypress", "identified": true }` no campo técnico do Perfil de Match;
+para `yearsOfExperience`, usa `{ "value": 3, "identified": true }`. Listas aceitam
+mais de um ID. O ID deve ser **canônico e já publicado** no catálogo compartilhado;
+`true` sem ID é ambíguo e rejeitado. Um `false` continua significando não identificado.
+Cada `true` canônico recebe a importância publicada, sem tornar-se eliminatório;
+IDs repetidos geram um único requisito. Sem configuração publicada, a importação
+de requisitos `true` é bloqueada, sem gravar a vaga. A vaga fica pendente até cumprir
+as demais regras de ativação.
+
+A vaga armazena a versão, a importância e a data aplicadas, além da revisão e do
+histórico interno de classificação. Alterar a configuração afeta apenas novas
+importações; o mesmo `source`/`sourceId` não pode ser reimportado silenciosamente.
+Um futuro reprocessamento deverá ser explícito e auditado. `desirable` usa o fator
+reduzido do Match; `indifferent` não pontua. Ausências e campos derivados nunca
+geram pontos adicionais.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:
