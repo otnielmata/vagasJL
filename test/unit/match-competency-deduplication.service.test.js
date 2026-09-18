@@ -116,6 +116,6 @@ test('missing competencies and derived-only data create no implicit points', () 
     vacancyValues: { hasGenAI: true, amountOfGenAITools: 5 },
     candidateValues: { hasGenAI: true, amountOfGenAITools: 5 }, configuration: configuration(),
   });
-  assert.equal(result.percentage, 0);
+  assert.equal(result.percentage, null);
   assert.deepEqual(result.details, []);
 });

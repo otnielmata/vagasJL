@@ -47,7 +47,9 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, configuration, now);
     if (!score.eligibility.eligible || score.possiblePoints === 0) return [];
-    return [{ candidate: { _id: candidate._id, name: candidate.name }, percentage: score.percentage }];
+    return [{ candidate: { _id: candidate._id, name: candidate.name }, percentage: score.percentage,
+      earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
+      configurationVersion: vacancy.matchProfile.configurationVersion }];
   });
   ranked.sort((left, right) => right.percentage - left.percentage ||
     String(left.candidate._id).localeCompare(String(right.candidate._id)));
