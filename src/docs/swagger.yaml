@@ -34,6 +34,45 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /configuracoes/importacao/importancia-padrao:
+    put:
+      tags: [Match Profile]
+      summary: Publica importancia padrao versionada para vagas importadas (VJ-49)
+      description: >
+        Apenas administrador autenticado. Aceita somente importance. Retorna a
+        versao, autor e data de vigencia. A mesma importancia mantem a versao;
+        alteracoes afetam apenas novas importacoes, sem recalcular vagas existentes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [importance]
+              additionalProperties: false
+              properties:
+                importance: { type: string, enum: [required, desirable, indifferent] }
+      responses:
+        '200':
+          description: Configuracao publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configuration:
+                    type: object
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      importance: { type: string, enum: [required, desirable, indifferent] }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Corpo ou importancia invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra importancia }
   /candidatos/me/vagas/ranking:
     get:
       tags: [Vacancies]
