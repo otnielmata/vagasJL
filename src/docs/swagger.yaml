@@ -7,7 +7,8 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27) e cadastro empresarial separado (VJ-37).
+    logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
+    de recrutador verificado (VJ-38).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -72,6 +73,83 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Email corporativo ja cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/usuarios:
+    post:
+      tags: [Companies]
+      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      description: >
+        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
+        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
+        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
+        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '201':
+          description: Vinculo ativo criado; sem credenciais ou prova de identidade
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [membership, user]
+                properties:
+                  membership:
+                    $ref: '#/components/schemas/CompanyUser'
+                  user:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
           content:
             application/json:
               schema:
@@ -249,8 +327,8 @@ paths:
       summary: Visualiza um candidato conforme a permissao (VJ-25)
       description: >
         Exige JWT valido. O candidato pode consultar somente o proprio cadastro em qualquer
-        status. Papel company isolado recebe 403 ate existir vinculo de usuario com empresa
-        ativa (VJ-37). A resposta usa uma projecao explicita, converte campos
+        status. Papel company isolado recebe 403. Somente conta company ativa com vinculo
+        ativo a empresa active pode consultar candidatos ativos (VJ-38). A resposta usa uma projecao explicita, converte campos
         opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
         senha, token ou detalhes internos da validacao. A operacao e somente leitura.
       security:
@@ -289,7 +367,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Candidato tentou consultar outro perfil, ou company sem vinculo autorizado
+          description: Candidato tentou consultar outro perfil, ou company sem empresa e vinculo ativos
           content:
             application/json:
               schema:
@@ -886,6 +964,24 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CompanyUser:
+      type: object
+      required: [_id, company, user, role, status]
+      properties:
+        _id: { type: string }
+        company: { type: string }
+        user: { type: string }
+        role: { type: string, enum: [recruiter] }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PublicCompanyUser:
+      type: object
+      required: [_id, name, email]
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
     CompanyRegistrationRequest:
       type: object
       required: [legalName, responsibleName, email, city, state, country]
