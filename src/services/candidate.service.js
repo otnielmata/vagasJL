@@ -321,8 +321,11 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
     throw new ApiError(403, 'Acesso negado para este perfil de usuario');
   }
 
+  if (requesterRole === 'company') {
+    throw new ApiError(403, 'Acesso empresarial exige empresa ativa e vinculo de usuario autorizado');
+  }
+
   const filter = { _id: candidateId };
-  if (requesterRole === 'company') filter.status = CANDIDATE_STATUS.ACTIVE;
 
   const candidate = await Candidate.findOne(filter).select(CANDIDATE_READ_PROJECTION).lean();
   if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
