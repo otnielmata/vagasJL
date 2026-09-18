@@ -68,7 +68,8 @@ async function ensurePublishable(vacancy, now) {
   const fields = new Map(configuration.fields.map((field) => [field.key, field]));
   const knownKeys = Object.keys(INITIAL_MATCH_WEIGHTS);
   if (fields.size !== knownKeys.length || knownKeys.some((key) => !fields.has(key)) ||
-      !Array.isArray(values.type) || !values.type.length ||
+      (vacancy.origin === 'IMPORTED' ? !Object.keys(values).length
+        : !Array.isArray(values.type) || !values.type.length) ||
       Object.keys(values).some((key) => !fields.has(key))) {
     throw new ApiError(409, 'Perfil de Match incompleto ou invalido');
   }

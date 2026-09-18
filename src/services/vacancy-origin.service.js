@@ -2,6 +2,7 @@ const User = require('../models/user.model');
 const Vacancy = require('../models/vacancy.model');
 const { prepareVacancyContent } = require('./vacancy-content.service');
 const { initialRequirementsAudit } = require('./vacancy-requirements.service');
+const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -22,7 +23,16 @@ async function registerImportedVacancy(provenance, input) {
       provenance.sourceId.trim().length > 200) invalid();
   const importSource = provenance.source.trim().toLowerCase();
   const importSourceId = provenance.sourceId.trim();
-  const content = await prepareVacancyContent(input);
+  const rawValues = input?.matchProfile?.values;
+  const rawFalseFields = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
+    ? Object.entries(rawValues).filter(([field, value]) =>
+      Object.hasOwn(INITIAL_MATCH_WEIGHTS, field) && value === false).map(([field]) => field)
+    : [];
+  const mappedInput = rawFalseFields.length ? { ...input, matchProfile: {
+    ...input.matchProfile, values: Object.fromEntries(Object.entries(rawValues)
+      .filter(([field]) => !rawFalseFields.includes(field))),
+  } } : input;
+  const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
   await Vacancy.init();
   if (await Vacancy.findOne({ origin: 'IMPORTED', importSource, importSourceId })) {
     throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');
@@ -30,6 +40,7 @@ async function registerImportedVacancy(provenance, input) {
   try {
     return await Vacancy.create({
       ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
+      importMappingAudit: { rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
     });
   } catch (error) {
     if (error.code === 11000) throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');

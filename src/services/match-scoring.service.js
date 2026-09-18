@@ -33,12 +33,16 @@ function buildScoreResult(details, vacancy) {
   const earnedPoints = details.reduce((total, detail) => total + detail.earnedPoints, 0);
   const possiblePoints = details.reduce((total, detail) => total + detail.weight, 0);
   const reason = vacancy?.reasonToBeRemoved || null;
+  const nonCalculableImport = vacancy?.origin === 'IMPORTED' && possiblePoints === 0;
   return {
-    percentage: possiblePoints ? Number((earnedPoints / possiblePoints * 100).toFixed(2)) : 0,
+    percentage: nonCalculableImport ? null : possiblePoints
+      ? Number((earnedPoints / possiblePoints * 100).toFixed(2)) : 0,
     earnedPoints,
     possiblePoints,
     details,
     eligibility: { eligible: !reason, reason },
+    ...(vacancy?.origin === 'IMPORTED'
+      ? { technicalCompatibility: nonCalculableImport ? 'not_calculable' : 'calculable' } : {}),
   };
 }
 
