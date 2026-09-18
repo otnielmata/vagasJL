@@ -11,5 +11,7 @@ router.patch('/:id/cadastro', authenticate, authorize('admin', 'company'), ensur
   controller.updateRegistration);
 router.get('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.showRegistration);
+router.delete('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureDatabase,
+  controller.removeRegistration);
 
 module.exports = router;

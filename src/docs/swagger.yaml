@@ -9,7 +9,7 @@ info:
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
-    protegida do cadastro empresarial (VJ-40).
+    protegida do cadastro empresarial (VJ-40) e exclusao logica com revogacao (VJ-41).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -159,6 +159,53 @@ paths:
           $ref: '#/components/responses/Unavailable'
 
   /empresas/{id}/cadastro:
+    delete:
+      tags: [Companies]
+      summary: Encerra cadastro empresarial e revoga recrutadores (VJ-41)
+      description: >
+        Exige JWT de admin ativo ou recrutador ativo com permissao explicita de exclusao
+        para esta empresa. Define status inactive, registra deletedAt e inativa os vinculos
+        ativos na mesma transacao. Nao exclui User, candidatos ou outras empresas.
+        Acesso empresarial a candidatos cessa imediatamente, mesmo com JWT valido.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '204':
+          description: Cadastro encerrado sem corpo
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem permissao explicita para esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou ja excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     get:
       tags: [Companies]
       summary: Apresenta cadastro empresarial e usuarios publicos permitidos (VJ-40)
