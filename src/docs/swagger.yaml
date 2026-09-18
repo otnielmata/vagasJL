@@ -175,6 +175,52 @@ paths:
         '403': { description: Sem permissao para origem, empresa ou transicao }
         '404': { description: Vaga inexistente }
         '409': { description: Transicao invalida, perfil inapto ou alteracao concorrente }
+  /vagas/{id}/requisitos:
+    patch:
+      tags: [Vacancies]
+      summary: Classifica os requisitos tecnicos da vaga (VJ-46)
+      description: >
+        Admin pode classificar vagas de qualquer origem; recrutador ativo e vinculado
+        apenas vagas COMPANY da propria empresa ativa. A classificacao substitui o
+        conjunto completo de requisitos da vaga e incrementa a revisao auditada.
+        IDs devem existir nos valores canonicos ja registrados. Vagas importadas sem
+        evidencia de importancia permanecem pendentes de classificacao.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requirements, reason]
+              additionalProperties: false
+              properties:
+                requirements:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/VacancyRequirement' }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Requisitos classificados e revisao incrementada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy: { $ref: '#/components/schemas/Vacancy' }
+        '400': { description: Corpo, importancia ou ID invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao sobre a vaga }
+        '404': { description: Vaga inexistente }
+        '409': { description: Competencia duplicada, vaga encerrada ou revisao concorrente }
+        '503': { description: Configuracao tecnica indisponivel }
   /empresas/{id}/vagas:
     post:
       tags: [Vacancies]
@@ -1500,6 +1546,22 @@ components:
                 aceitam ID, rotulo ou alias publicado, sempre persistido como ID canonico.
                 yearsOfExperience aceita numero de 0 a 100 com uma casa decimal.
               additionalProperties: true
+            requirements:
+              type: array
+              maxItems: 200
+              description: Classificacao opcional na criacao; sem ela, vaga permanece pending e nao pode ser ativada.
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+    VacancyRequirement:
+      type: object
+      description: >
+        Para campos de catalogo, use field, id canonico e importance. Para
+        yearsOfExperience, use field, value numerico e importance.
+      required: [field, importance]
+      properties:
+        field: { type: string, description: Chave tecnica da configuracao VJ-28 }
+        id: { type: string, description: ID canonico; ausente em yearsOfExperience }
+        value: { type: number, description: Valor numerico apenas em yearsOfExperience }
+        importance: { type: string, enum: [required, desirable, indifferent] }
     Vacancy:
       type: object
       required: [_id, reference, title, description, matchProfile, origin, status]
@@ -1524,8 +1586,12 @@ components:
           properties:
             configurationVersion: { type: integer, minimum: 1 }
             values: { type: object }
+            requirements:
+              type: array
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
         origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
         status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        requirementsRevision: { type: integer, minimum: 0 }
         expiresAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

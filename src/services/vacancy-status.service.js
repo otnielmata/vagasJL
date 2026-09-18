@@ -43,6 +43,7 @@ async function ensureCompanyAuthorized(actor, vacancy) {
 }
 
 async function ensurePublishable(vacancy, now) {
+  const { validateRequirements } = require('./vacancy-requirements.service');
   const identifiable = vacancy.origin === 'COMPANY'
     ? Boolean(vacancy.company && vacancy.createdBy && !vacancy.importSource && !vacancy.importSourceId)
     : vacancy.origin === 'IMPORTED'
@@ -80,6 +81,14 @@ async function ensurePublishable(vacancy, now) {
         selected.some((id) => !fields.get(key).options.some((option) => option.id === id))) {
       throw new ApiError(409, 'Perfil de Match fora do catalogo');
     }
+  }
+  try {
+    validateRequirements(profile.requirements || [], values, configuration, true);
+  } catch (error) {
+    if (error.statusCode === 400 || error.statusCode === 409) {
+      throw new ApiError(409, 'Classificacao de requisitos incompleta ou invalida');
+    }
+    throw error;
   }
   if (vacancy.origin === 'COMPANY') {
     const company = await Company.findOne({ _id: vacancy.company, status: 'active',
@@ -135,4 +144,4 @@ async function expireOverdueVacancies(now = new Date()) {
   return expired;
 }
 
-module.exports = { updateStatus, expireOverdueVacancies };
+module.exports = { updateStatus, expireOverdueVacancies, ensureCompanyAuthorized };
