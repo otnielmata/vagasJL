@@ -66,6 +66,8 @@ test('equivalent technical requirements score identically across all three origi
   setup(context, [vacancy('a', 'COMPANY'), vacancy('b', 'IMPORTED'), vacancy('c', 'ADMIN')]);
   const result = await rankVacancies(actor, {}, now);
   assert.deepEqual(result.items.map((item) => item.percentage), [100, 100, 100]);
+  assert.deepEqual(result.items.map((item) => [item.earnedPoints, item.possiblePoints,
+    item.configurationVersion]), [[8, 8, 1], [8, 8, 1], [8, 8, 1]]);
 });
 
 test('company vacancy disappears when owner is inactive or blocked', async (context) => {

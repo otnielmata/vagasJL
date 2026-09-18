@@ -61,7 +61,7 @@ test('legacy Testes de API text is not silently promoted into apiTesting ID', ()
   const result = calculateCompetencyMatch({
     vacancyValues: legacyVacancy, candidateValues: legacyCandidate, configuration: configuration(),
   });
-  assert.equal(result.percentage, 0);
+  assert.equal(result.percentage, null);
   assert.equal(result.earnedPoints, 0);
   assert.equal(result.possiblePoints, 0);
   assert.deepEqual(result.details, []);
@@ -76,7 +76,7 @@ test('a separate controlled keyword catalog does not enable scoring in v1', () =
     vacancyValues: { testingRelatedKeywords: ['Testes de API'] },
     candidateValues: { testingRelatedKeywords: ['api-tests'] }, configuration: config,
   });
-  assert.equal(result.percentage, 0);
+  assert.equal(result.percentage, null);
   assert.deepEqual(result.details, []);
 });
 

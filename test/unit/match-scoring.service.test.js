@@ -67,7 +67,8 @@ test('absent, null and legacy derived fields never create implicit points', () =
   for (const resultFields of [undefined, {}, { hasGenAI: null, skillsRequiredCounter: undefined },
     { hasGenAI: true, amountOfGenAITools: 3 }]) {
     const result = calculateMatchScore({ technicalResults: resultFields, configuration: configuration() });
-    assert.equal(result.percentage, 0);
+    assert.equal(result.percentage, null);
+    assert.equal(result.calculationStatus, 'not_calculable');
     assert.equal(result.earnedPoints, 0);
     assert.equal(result.possiblePoints, 0);
     assert.deepEqual(result.details, []);
