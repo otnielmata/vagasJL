@@ -41,7 +41,9 @@ paths:
       description: >
         Requer JWT de candidato com cadastro e Perfil de Match. Aplica status active,
         prazo vigente e empresa active para vagas COMPANY antes de pontuar, ordenar e
-        paginar. Nao usa cache. Origem nao modifica o percentual tecnico.
+        paginar. Nao usa cache. Origem nao modifica o percentual tecnico. Campos false
+        de vagas IMPORTED nao pontuam nem eliminam; sem requisito pontuavel, a
+        compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking.
       security:
         - bearerAuth: []
       parameters:
@@ -1578,7 +1580,9 @@ components:
         confiaveis do servidor e nao participam do calculo tecnico. Para COMPANY,
         company e obrigatoria; para IMPORTED, importSource e importSourceId; para ADMIN,
         o autor administrativo e armazenado internamente. Sem origem verificavel,
-        a vaga requer saneamento e nao fica apta ao Match.
+        a vaga requer saneamento e nao fica apta ao Match. Na origem IMPORTED,
+        false significa requisito nao identificado e nao aparece nos valores
+        canonicos; a auditoria bruta permanece interna.
       properties:
         _id: { type: string }
         company: { type: string, nullable: true }
