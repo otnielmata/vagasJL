@@ -406,7 +406,8 @@ essa execução externamente, pois timers locais não são confiáveis.
 
 `GET /candidatos/me/vagas/ranking?page=1&limit=20` exige JWT de candidato com cadastro e
 Perfil de Match atual. `page` começa em 1 e `limit` aceita 1–50. A resposta contém `items`
-com `vacancy` e `percentage`, além de `total`, `page`, `limit` e `pages`. Apenas vagas `active`,
+com `vacancy`, `percentage`, `earnedPoints`, `possiblePoints` e `configurationVersion`,
+além de `total`, `page`, `limit` e `pages`. Apenas vagas `active`,
 não excluídas e com prazo vigente entram no cálculo; vagas `COMPANY` também exigem empresa
 `active`. Origem e status não acrescentam pontos. O percentual reutiliza a comparação de
 competências canônicas e pesos da configuração versionada, sem inventar uma fórmula para
@@ -428,10 +429,28 @@ Critério eliminatório não atendido remove o candidato do resultado, sem alter
 percentual dos demais. O ranking ordena por percentual decrescente e ID estável; a
 resposta paginada contém apenas ID e nome do candidato, nunca contato ou dados
 internos. O resultado sem pontos possíveis não é apresentado como 100%.
+Cada item também informa `earnedPoints`, `possiblePoints` e `configurationVersion`.
 
 ID ou paginação inválidos retornam **400**; falta de autenticação **401**; vínculo
 empresarial ausente, empresa inativa ou origem alheia **403**; vaga inexistente ou
 indisponível **404**; configuração técnica ausente **503**. Não há cache.
+
+## Critérios aplicáveis no Match — VJ-51
+
+O percentual é `earnedPoints / possiblePoints × 100`. Somente requisitos canônicos
+classificados como `required` ou `desirable` entram no denominador; seu peso efetivo
+é o peso-base publicado multiplicado pelo fator da importância. `indifferent`,
+valores não identificados (`false` em importações), texto livre e campos derivados
+não somam pontos. Candidato sem competência comprovada recebe zero naquele critério,
+mas o requisito aplicável continua no denominador. IDs canônicos repetidos com a
+mesma classificação contribuem uma vez; duplicatas conflitantes são rejeitadas.
+Experiência numérica exige atingir o limiar da vaga nesta versão; eliminatórios
+afetam elegibilidade separadamente, sem penalidade numérica extra.
+
+Sem pontos possíveis, o serviço de cálculo devolve `percentage: null` e
+`calculationStatus: "not_calculable"` para qualquer origem, nunca 0% ou 100%.
+Rankings não incluem pares não calculáveis; resultados autorizados incluem pontos
+obtidos, pontos possíveis e a versão da configuração técnica aplicada.
 
 ## Importância dos requisitos — VJ-46
 

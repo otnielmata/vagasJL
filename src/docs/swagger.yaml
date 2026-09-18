@@ -105,10 +105,13 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [vacancy, percentage]
+                      required: [vacancy, percentage, earnedPoints, possiblePoints, configurationVersion]
                       properties:
                         vacancy: { $ref: '#/components/schemas/Vacancy' }
                         percentage: { type: number, minimum: 0, maximum: 100 }
+                        earnedPoints: { type: number, minimum: 0 }
+                        possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        configurationVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
@@ -154,7 +157,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [candidate, percentage]
+                      required: [candidate, percentage, earnedPoints, possiblePoints, configurationVersion]
                       properties:
                         candidate:
                           type: object
@@ -163,6 +166,9 @@ paths:
                             _id: { type: string }
                             name: { type: string }
                         percentage: { type: number, minimum: 0, maximum: 100 }
+                        earnedPoints: { type: number, minimum: 0 }
+                        possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        configurationVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
