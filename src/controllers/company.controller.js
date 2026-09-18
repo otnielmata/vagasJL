@@ -1,4 +1,5 @@
 const service = require('../services/company.service');
+const companyUserService = require('../services/company-user.service');
 
 async function register(req, res, next) {
   try {
@@ -9,4 +10,13 @@ async function register(req, res, next) {
   }
 }
 
-module.exports = { register };
+async function addUser(req, res, next) {
+  try {
+    const { membership, user } = await companyUserService.linkRecruiter(req.user, req.params.id, req.body);
+    return res.status(201).json({ membership: membership.toJSON(), user });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { register, addUser };
