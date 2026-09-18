@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const Vacancy = require('../models/vacancy.model');
 const { prepareVacancyContent } = require('./vacancy-content.service');
+const { initialRequirementsAudit } = require('./vacancy-requirements.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -10,6 +11,7 @@ function invalid() {
 }
 
 async function registerImportedVacancy(provenance, input) {
+  if (input?.matchProfile?.requirements !== undefined) invalid();
   if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance) ||
       Object.keys(provenance).length !== 2 ||
       !Object.hasOwn(provenance, 'source') || !Object.hasOwn(provenance, 'sourceId') ||
@@ -46,7 +48,8 @@ async function registerAdminVacancy(actor, input) {
   if (!account) throw new ApiError(403, 'Conta administrativa inativa ou inexistente');
   const content = await prepareVacancyContent(input);
   try {
-    return await Vacancy.create({ ...content, createdBy: account._id,
+    return await Vacancy.create({ ...content, ...initialRequirementsAudit(content, account._id),
+      createdBy: account._id,
       origin: 'ADMIN', status: 'pending' });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError' || error.name === 'StrictModeError') {

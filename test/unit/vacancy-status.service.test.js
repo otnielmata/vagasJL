@@ -15,7 +15,8 @@ const vacancyId = '6512f1e2b3a1c2d3e4f5a6b7';
 const companyId = '6512f1e2b3a1c2d3e4f5a6b8';
 const actorId = '6512f1e2b3a1c2d3e4f5a6b9';
 const now = new Date('2026-09-17T12:00:00Z');
-const profile = { configurationVersion: 1, values: { type: ['remote'] } };
+const profile = { configurationVersion: 1, values: { type: ['remote'] },
+  requirements: [{ field: 'type', id: 'remote', importance: 'required' }] };
 
 function setup(context, overrides = {}) {
   const vacancy = { _id: vacancyId, origin: 'COMPANY', company: companyId,
