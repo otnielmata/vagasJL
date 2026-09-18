@@ -1,6 +1,7 @@
 const Configuration = require('../models/match-profile-configuration.model');
 const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
+const { validateRequirements } = require('./vacancy-requirements.service');
 
 const FIELD_KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location', 'matchProfile', 'expiresAt']);
@@ -39,12 +40,14 @@ function normalizeVacancyInput(input) {
   }
   const matchProfile = input.matchProfile;
   if (!matchProfile || typeof matchProfile !== 'object' || Array.isArray(matchProfile) ||
-      Object.keys(matchProfile).length !== 1 || !Object.hasOwn(matchProfile, 'values') ||
+      Object.keys(matchProfile).some((key) => !['values', 'requirements'].includes(key)) ||
+      !Object.hasOwn(matchProfile, 'values') ||
       !matchProfile.values || typeof matchProfile.values !== 'object' ||
       Array.isArray(matchProfile.values) || !Object.keys(matchProfile.values).length ||
       !Object.hasOwn(matchProfile.values, 'type') ||
       Object.keys(matchProfile.values).some((key) => !FIELD_KEYS.includes(key))) invalid();
-  return { reference, title, description, location, expiresAt, values: matchProfile.values };
+  return { reference, title, description, location, expiresAt, values: matchProfile.values,
+    requirements: matchProfile.requirements };
 }
 
 function normalizeValues(input, configuration) {
@@ -88,6 +91,7 @@ async function prepareVacancyContent(input) {
   const data = normalizeVacancyInput(input);
   const configuration = await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
+  const values = normalizeValues(data.values, configuration);
   return {
     reference: data.reference,
     title: data.title,
@@ -96,7 +100,8 @@ async function prepareVacancyContent(input) {
     expiresAt: data.expiresAt,
     matchProfile: {
       configurationVersion: configuration.version,
-      values: normalizeValues(data.values, configuration),
+      values,
+      requirements: validateRequirements(data.requirements || [], values, configuration),
     },
   };
 }

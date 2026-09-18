@@ -20,7 +20,8 @@ function vacancy(id, origin, status = 'active', overrides = {}) {
     createdBy: origin === 'IMPORTED' ? null : createdBy,
     importSource: origin === 'IMPORTED' ? 'board' : null,
     importSourceId: origin === 'IMPORTED' ? id : null,
-    matchProfile: { configurationVersion: 1, values: { type: ['remote'] } },
+    matchProfile: { configurationVersion: 1, values: { type: ['remote'] },
+      requirements: [{ field: 'type', id: 'remote', importance: 'required' }] },
     expiresAt: null, deletedAt: null, createdAt: new Date('2026-09-16T00:00:00Z'),
     ...overrides };
   base.toJSON = () => ({ ...base, toJSON: undefined, createdBy: undefined });
@@ -100,4 +101,12 @@ test('candidate must have current profile before ranking', async (context) => {
   profileQuery.select = async () => null;
   await assert.rejects(rankVacancies(actor, {}, now), { statusCode: 409 });
   assert.equal(findVacancies.mock.callCount(), 0);
+});
+
+test('active legacy vacancy without classified requirements never enters ranking', async (context) => {
+  setup(context, [vacancy('legacy', 'IMPORTED', 'active', {
+    matchProfile: { configurationVersion: 1, values: { type: ['remote'] }, requirements: [] },
+  })]);
+  const result = await rankVacancies(actor, {}, now);
+  assert.equal(result.total, 0);
 });
