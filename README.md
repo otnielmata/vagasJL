@@ -57,6 +57,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── auth.service.js
 │   │   ├── candidate.service.js
 │   │   ├── company.service.js
+│   │   ├── company-user.service.js # Vínculo verificado de recrutadores
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -64,6 +65,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   ├── models/                # Schemas do Mongoose
 │   │   ├── candidate.model.js
 │   │   ├── company.model.js
+│   │   ├── company-user.model.js # Associação empresa/usuário
 │   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
@@ -161,6 +163,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
+| POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -205,10 +208,32 @@ inclusive em cadastros concorrentes (**409**); dados inválidos retornam **400**
 `registeredBy` e `deletedAt` ficam somente na auditoria interna. Nenhuma conta de recrutador é
 criada implicitamente.
 
-Até existir a entidade de vínculo do usuário da empresa e validação de empresa `active`, uma
-conta com papel `company` **não obtém acesso a dados de candidatos** apenas por possuir esse
-papel (**403** em `GET /candidatos/{id}`). A integração com recrutadores e a liberação
-condicionada a vínculo e status ativo pertencem a uma história futura.
+Uma conta com papel `company` não obtém acesso a candidatos apenas por possuir esse papel.
+O acesso exige as condições descritas na VJ-38 abaixo.
+
+## Usuário da empresa — VJ-38
+
+`POST /empresas/{id}/usuarios` exige JWT de administrador ativo e corpo `{ "userId": "<ObjectId>" }`.
+O usuário já deve existir com papel `company`, status `active` e identidade previamente verificada
+(`emailVerifiedAt` gravado por um processo confiável de verificação de titularidade). O registro
+público de usuários **não verifica e-mail** e não pode marcar essa data. Sem verificação confiável,
+o vínculo retorna **403**; não basta conhecer um e-mail ou informar que ele é seu. Esta história
+não implementa envio de convites nem fluxo de verificação de e-mail: até que esse processo seja
+disponibilizado, a identidade deve ser provisionada/verificada administrativamente de forma segura.
+
+A empresa deve existir e estar `pending` ou `active`. O endpoint cria somente um documento
+`companyusers` com papel `recruiter` e status `active`; nunca cria outra credencial. A resposta
+**201** contém `{ "membership": { ... }, "user": { "_id", "name", "email" } }`, sem senha,
+hash, token, convite ou dados internos de auditoria. Dados inválidos retornam **400**, empresa
+inexistente **404**, e empresa inativa/bloqueada ou vínculo ativo duplicado **409**. Índices únicos
+impedem mais de um vínculo ativo por empresa e que o mesmo usuário represente duas empresas.
+A troca do e-mail da conta invalida sua verificação; a exclusão da conta remove a associação na
+mesma transação.
+
+Em `GET /candidatos/{id}`, apenas conta `company` ativa com associação ativa e empresa `active`
+pode consultar candidato `active`. Empresas `pending`, `inactive`, `blocked` ou sem vínculo recebem
+**403**; candidatos em outros status não são expostos (**404**). O status e a associação podem ser
+administrados em histórias futuras, sem embutir recrutadores no documento Empresa.
 
 ## Cadastro de usuários — VJ-1
 
@@ -758,8 +783,8 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Critério da VJ-25 | Cobertura unitária |
 | --- | --- |
 | Titular consulta o próprio perfil em qualquer status | Service com todos os status controlados e controller HTTP 200 |
-| Papel `company` não obtém acesso antes de vínculo autorizado (VJ-37) | Service bloqueia com 403 antes da busca; liberação futura exige empresa ativa |
-| Status não ativo permanece oculto para empresa | Nenhum candidato é consultado por `company` nesta etapa |
+| Papel `company` não obtém acesso sem vínculo autorizado (VJ-38) | Service exige conta, associação e empresa ativas antes da busca |
+| Status não ativo permanece oculto para empresa | Busca empresarial filtra somente candidatos `active` |
 | Candidato não consulta outro candidato | Verificação de titularidade e erro 403 |
 | Campos opcionais desconhecidos usam `UNKNOWN` | Normalização explícita, inclusive contra valores legados `false` |
 | Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |
