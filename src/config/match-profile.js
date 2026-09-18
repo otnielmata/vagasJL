@@ -23,4 +23,9 @@ const INITIAL_MATCH_WEIGHTS = Object.freeze({
   specialization: 7,
 });
 
-module.exports = { INITIAL_MATCH_WEIGHTS };
+function normalizeMatchAlias(value) {
+  return value.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ');
+}
+
+module.exports = { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias };
