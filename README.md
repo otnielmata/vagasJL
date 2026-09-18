@@ -45,6 +45,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── auth.routes.js
 │   │   ├── candidate.routes.js # Operações de candidatos
 │   │   ├── company.routes.js   # Cadastro administrativo de empresas
+│   │   ├── match-profile-configuration.routes.js # Configuração do Perfil de Match
 │   │   ├── registration.routes.js # POST /usuarios; GET, PUT e DELETE /usuarios/:id
 │   │   ├── login.routes.js     # POST /login
 │   │   └── user.routes.js
@@ -52,6 +53,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── auth.controller.js
 │   │   ├── candidate.controller.js
 │   │   ├── company.controller.js
+│   │   ├── vacancy.controller.js
+│   │   ├── match-profile-configuration.controller.js
 │   │   └── user.controller.js
 │   ├── services/               # Regra de negócio, isolada do Express (req/res)
 │   │   ├── auth.service.js
@@ -61,6 +64,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── company-registration.service.js # Edição atômica de empresa e recrutador
 │   │   ├── company-read.service.js # Consulta pública autorizada do cadastro empresarial
 │   │   ├── company-delete.service.js # Exclusão lógica e revogação transacional
+│   │   ├── vacancy.service.js # Cadastro de vagas próprias com catálogo canônico
+│   │   ├── match-profile-configuration.service.js
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -69,6 +74,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── candidate.model.js
 │   │   ├── company.model.js
 │   │   ├── company-user.model.js # Associação empresa/usuário
+│   │   ├── vacancy.model.js # Entidade compartilhada de vagas
+│   │   ├── match-profile-configuration.model.js
 │   │   ├── student-authorization.model.js
 │   │   └── user.model.js
 │   └── middleware/            # Autenticação JWT, validação, 404 e tratamento de erros
@@ -170,6 +177,8 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
 | GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
+| PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
+| POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -303,6 +312,42 @@ As leituras empresariais de candidatos verificam vínculo ativo, empresa `active
 `deletedAt=null` no banco a cada requisição; assim o acesso cessa após a exclusão mesmo com
 JWT ainda válido. Um cadastro posterior com o mesmo e-mail, se permitido, cria **nova empresa
 `pending` com novo identificador**, sem reativar a excluída.
+
+## Cadastro de vaga própria — VJ-42
+
+`POST /empresas/{id}/vagas` exige JWT de conta `company` ativa e verificada, vínculo
+`recruiter` ativo com a empresa do caminho e empresa `active` não excluída. O corpo requer
+`reference` (chave operacional única por empresa), `title`, `description` e
+`matchProfile.values.type` (modalidade do catálogo publicado). `location` é opcional e, quando
+informada, exige `city`, `state` e `country`. Outros campos técnicos da VJ-28 são opcionais;
+`yearsOfExperience` aceita 0–100 com uma casa decimal. Exemplo:
+
+```json
+{
+  "reference": "QA-2026-01",
+  "title": "Pessoa QA",
+  "description": "Testes automatizados de aplicações web",
+  "location": { "city": "São Paulo", "state": "SP", "country": "Brasil" },
+  "matchProfile": {
+    "values": {
+      "type": "Remoto",
+      "testAutomationTechnologies": ["Cypress.io"],
+      "yearsOfExperience": 2.5
+    }
+  }
+}
+```
+
+O catálogo da VJ-28 deve ser publicado antes do cadastro, incluindo opções para `type` e
+demais campos usados; ausência de configuração retorna **503**. IDs, rótulos e aliases
+publicados são convertidos aos mesmos **IDs canônicos** usados nos perfis de candidatos;
+valores fora do catálogo retornam **400**, sem nova competência ou vaga parcial. A resposta
+**201** contém `{ "vacancy": { ... } }` com `origin: "COMPANY"`, `status: "pending"` e a
+versão do catálogo. `origin`, `status`, `company` e `createdBy` são definidos pelo servidor;
+tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa retorna **409**.
+O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
+com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
+ativação válida em história posterior.
 
 ## Cadastro de usuários — VJ-1
 

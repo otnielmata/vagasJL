@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const controller = require('../controllers/company.controller');
+const vacancyController = require('../controllers/vacancy.controller');
 
 const router = Router();
 
@@ -13,5 +14,7 @@ router.get('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureD
   controller.showRegistration);
 router.delete('/:id/cadastro', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.removeRegistration);
+router.post('/:id/vagas', authenticate, authorize('company'), ensureDatabase,
+  vacancyController.registerCompany);
 
 module.exports = router;
