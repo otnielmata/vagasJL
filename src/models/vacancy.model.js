@@ -1,0 +1,49 @@
+const mongoose = require('mongoose');
+const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+
+const matchFields = Object.fromEntries(Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => [key,
+  key === 'yearsOfExperience'
+    ? { type: Number, min: 0, max: 100, default: undefined }
+    : { type: [String], default: undefined },
+]));
+const matchValuesSchema = new mongoose.Schema(matchFields, { _id: false, strict: 'throw' });
+const matchProfileSchema = new mongoose.Schema({
+  configurationVersion: { type: Number, required: true, min: 1 },
+  values: { type: matchValuesSchema, required: true },
+}, { _id: false });
+const locationSchema = new mongoose.Schema({
+  city: { type: String, required: true, trim: true, maxlength: 200 },
+  state: { type: String, required: true, trim: true, maxlength: 200 },
+  country: { type: String, required: true, trim: true, maxlength: 200 },
+}, { _id: false });
+
+const vacancySchema = new mongoose.Schema({
+  company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, select: false },
+  reference: { type: String, trim: true, lowercase: true, maxlength: 100, default: null },
+  title: { type: String, required: true, trim: true, maxlength: 200 },
+  description: { type: String, required: true, trim: true, maxlength: 10000 },
+  location: { type: locationSchema, default: null },
+  matchProfile: { type: matchProfileSchema, required: true },
+  origin: { type: String, enum: ['IMPORTED', 'COMPANY', 'ADMIN'], required: true },
+  status: { type: String, enum: ['pending', 'active', 'paused', 'expired', 'removed', 'rejected'],
+    default: 'pending', required: true },
+  deletedAt: { type: Date, default: null, select: false },
+}, { timestamps: true });
+
+vacancySchema.index({ company: 1, reference: 1 }, {
+  unique: true,
+  name: 'unique_current_company_vacancy_reference',
+  partialFilterExpression: { origin: 'COMPANY', deletedAt: null },
+});
+
+vacancySchema.set('toJSON', {
+  transform: (_document, result) => {
+    delete result.__v;
+    delete result.createdBy;
+    delete result.deletedAt;
+    return result;
+  },
+});
+
+module.exports = mongoose.model('Vacancy', vacancySchema);
