@@ -3,7 +3,7 @@ const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-
 const ApiError = require('../errors/api.error');
 
 const FIELD_KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
-const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location', 'matchProfile']);
+const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location', 'matchProfile', 'expiresAt']);
 
 function invalid(message = 'Dados da vaga invalidos') {
   throw new ApiError(400, message);
@@ -30,6 +30,13 @@ function normalizeVacancyInput(input) {
   const title = text(input.title, 200);
   const description = text(input.description, 10000);
   const location = normalizeLocation(input.location);
+  let expiresAt = null;
+  if (input.expiresAt !== undefined && input.expiresAt !== null) {
+    if (typeof input.expiresAt !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(input.expiresAt)) invalid();
+    expiresAt = new Date(input.expiresAt);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) invalid();
+  }
   const matchProfile = input.matchProfile;
   if (!matchProfile || typeof matchProfile !== 'object' || Array.isArray(matchProfile) ||
       Object.keys(matchProfile).length !== 1 || !Object.hasOwn(matchProfile, 'values') ||
@@ -37,7 +44,7 @@ function normalizeVacancyInput(input) {
       Array.isArray(matchProfile.values) || !Object.keys(matchProfile.values).length ||
       !Object.hasOwn(matchProfile.values, 'type') ||
       Object.keys(matchProfile.values).some((key) => !FIELD_KEYS.includes(key))) invalid();
-  return { reference, title, description, location, values: matchProfile.values };
+  return { reference, title, description, location, expiresAt, values: matchProfile.values };
 }
 
 function normalizeValues(input, configuration) {
@@ -86,6 +93,7 @@ async function prepareVacancyContent(input) {
     title: data.title,
     description: data.description,
     location: data.location,
+    expiresAt: data.expiresAt,
     matchProfile: {
       configurationVersion: configuration.version,
       values: normalizeValues(data.values, configuration),

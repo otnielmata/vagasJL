@@ -87,6 +87,49 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /vagas/{id}/status:
+    patch:
+      tags: [Vacancies]
+      summary: Altera o status da vaga com trilha de auditoria (VJ-44)
+      description: >
+        Requer JWT. Administradores podem publicar, rejeitar e controlar vagas de qualquer
+        origem. Recrutadores verificados podem pausar, retomar ou remover apenas vagas
+        COMPANY da sua empresa ativa. Reativar vaga expirada exige prorrogacao do prazo,
+        revalidacao do perfil e motivo expresso por administrador. O corpo nao aceita
+        origem, perfil tecnico ou dados cadastrais. Conflitos concorrentes retornam 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [active, paused, expired, removed, rejected] }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Status alterado e transicao auditada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400': { description: ID, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao para origem, empresa ou transicao }
+        '404': { description: Vaga inexistente }
+        '409': { description: Transicao invalida, perfil inapto ou alteracao concorrente }
   /empresas/{id}/vagas:
     post:
       tags: [Vacancies]
@@ -1327,6 +1370,7 @@ components:
         reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
         title: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, minLength: 1, maxLength: 10000 }
+        expiresAt: { type: string, format: date-time, nullable: true, description: Prazo futuro em UTC }
         location:
           type: object
           nullable: true
@@ -1376,6 +1420,7 @@ components:
             values: { type: object }
         origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
         status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        expiresAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CompanyRegistrationUpdateRequest:
