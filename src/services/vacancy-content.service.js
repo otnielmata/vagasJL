@@ -23,7 +23,7 @@ function normalizeLocation(value) {
   return Object.fromEntries(['city', 'state', 'country'].map((key) => [key, text(value[key], 200)]));
 }
 
-function normalizeVacancyInput(input) {
+function normalizeVacancyInput(input, { allowUnidentified = false } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).length < 4 || Object.keys(input).some((key) => !BODY_FIELDS.has(key))) invalid();
   const reference = text(input.reference, 100).toLowerCase();
@@ -43,8 +43,9 @@ function normalizeVacancyInput(input) {
       Object.keys(matchProfile).some((key) => !['values', 'requirements'].includes(key)) ||
       !Object.hasOwn(matchProfile, 'values') ||
       !matchProfile.values || typeof matchProfile.values !== 'object' ||
-      Array.isArray(matchProfile.values) || !Object.keys(matchProfile.values).length ||
-      !Object.hasOwn(matchProfile.values, 'type') ||
+      Array.isArray(matchProfile.values) ||
+      (!allowUnidentified && (!Object.keys(matchProfile.values).length ||
+        !Object.hasOwn(matchProfile.values, 'type'))) ||
       Object.keys(matchProfile.values).some((key) => !FIELD_KEYS.includes(key))) invalid();
   return { reference, title, description, location, expiresAt, values: matchProfile.values,
     requirements: matchProfile.requirements };
@@ -87,8 +88,8 @@ function normalizeValues(input, configuration) {
   return values;
 }
 
-async function prepareVacancyContent(input) {
-  const data = normalizeVacancyInput(input);
+async function prepareVacancyContent(input, options) {
+  const data = normalizeVacancyInput(input, options);
   const configuration = await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
   const values = normalizeValues(data.values, configuration);
