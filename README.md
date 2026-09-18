@@ -65,6 +65,8 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── company-read.service.js # Consulta pública autorizada do cadastro empresarial
 │   │   ├── company-delete.service.js # Exclusão lógica e revogação transacional
 │   │   ├── vacancy.service.js # Cadastro de vagas próprias com catálogo canônico
+│   │   ├── vacancy-content.service.js # Validação técnica compartilhada entre origens
+│   │   ├── vacancy-origin.service.js # Procedência e preparação para Match
 │   │   ├── match-profile-configuration.service.js
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
@@ -155,6 +157,7 @@ O `.env` e suas variantes ficam fora do Git; somente `.env.example` é versionad
 | Testes de unidade | `npm test` | Executa os testes com o runner nativo do Node.js |
 | Revalidação de aluno | `npm run candidates:revalidate -- <id>` | Revalida um candidato pendente pela base confiável |
 | Índices de candidatos | `npm run candidates:sync-indexes` | Migra os índices de e-mail ativo e cadastro atual por usuário |
+| Auditoria de origem de vagas | `npm run vacancies:audit-origins` | Lista vagas legadas sem procedência verificável; não altera o banco |
 
 ## Documentação da API (Swagger)
 
@@ -348,6 +351,24 @@ tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa
 O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
 com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
 ativação válida em história posterior.
+
+## Origem e Perfil de Match das vagas — VJ-43
+
+Todas as vagas usam o mesmo `Vacancy.matchProfile` e a mesma configuração versionada da VJ-28,
+independentemente da origem. O cadastro público existente atribui `COMPANY` no servidor. Os
+serviços internos `registerImportedVacancy` e `registerAdminVacancy` preparam, respectivamente,
+`IMPORTED` com `importSource`/`importSourceId` e `ADMIN` com autor administrativo. **Não há
+endpoint de importação nem fonte externa inventada nesta história.** O integrador futuro deve
+fornecer uma origem externa real e seu ID confiável. IDs, rótulos e aliases publicados são
+normalizados pelo mesmo validador; nenhuma origem cria texto técnico livre pontuável.
+
+O modelo exige origem e procedência compatíveis, sem origem presumida, e mantém esses campos
+imutáveis. O serviço de preparação `assessVacancyForMatch` devolve apenas o perfil técnico e
+sinaliza `needsOriginReview=true` para vagas legadas sem origem/procedência verificável, que
+ficam inelegíveis até saneamento. Ele não utiliza a origem para modificar competências, pesos
+ou pontuação. O motor de cálculo percentual não faz parte deste endpoint/história; quando
+integrado, deve consumir apenas esse perfil técnico. Para localizar registros legados sem
+modificar o banco, execute `npm run vacancies:audit-origins` com `MONGODB_URI` configurada.
 
 ## Cadastro de usuários — VJ-1
 
