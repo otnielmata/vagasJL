@@ -60,6 +60,7 @@ Vagas, competências e motor de match serão implementados nas próximas histór
 │   │   ├── company-user.service.js # Vínculo verificado de recrutadores
 │   │   ├── company-registration.service.js # Edição atômica de empresa e recrutador
 │   │   ├── company-read.service.js # Consulta pública autorizada do cadastro empresarial
+│   │   ├── company-delete.service.js # Exclusão lógica e revogação transacional
 │   │   ├── student-validation.service.js
 │   │   └── user.service.js
 │   ├── errors/
@@ -168,6 +169,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
 | PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
 | GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
+| DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
 | PATCH  | `/candidatos/{id}` | Sim (Bearer) | Altera o próprio candidato e recalcula o status (VJ-26) |
 | DELETE | `/candidatos/{id}` | Sim (Bearer) | Exclui logicamente o próprio candidato (VJ-27) |
@@ -281,6 +283,26 @@ e ao administrador, **sem conceder acesso aos candidatos**. Senhas, hashes, toke
 dados de candidato e auditoria interna não aparecem. A consulta não grava nem altera status.
 JWT ausente/inválido retorna **401**, ID malformado **400**, outra empresa **403** e empresa
 inexistente **404**.
+
+## Exclusão do cadastro empresarial — VJ-41
+
+`DELETE /empresas/{id}/cadastro` exige JWT de administrador ativo ou de recrutador ativo,
+vinculado à empresa indicada e com `canDeleteCompany=true` no vínculo. Essa permissão é
+**falsa por padrão** e não pode ser atribuída pelo próprio recrutador nos endpoints do MVP;
+seu provisionamento exige processo administrativo confiável. Outros perfis e recrutadores
+sem essa permissão recebem **403**.
+
+A operação retorna **204 sem corpo** após definir o status da empresa como `inactive`, registrar
+`deletedAt`/`deletedBy` internamente e revogar os vínculos ativos (`status=inactive`,
+`revokedAt`) na **mesma transação MongoDB**. Falha na revogação aborta toda a exclusão; sem
+suporte a transações, retorna **503**. Contas `User`, credenciais, candidatos, vagas e outras
+empresas não são removidos. Empresas já excluídas ou inexistentes retornam **404**, inclusive
+em chamadas repetidas. Uma empresa `blocked` pode ser encerrada, mas não é reativada por DELETE.
+
+As leituras empresariais de candidatos verificam vínculo ativo, empresa `active` e
+`deletedAt=null` no banco a cada requisição; assim o acesso cessa após a exclusão mesmo com
+JWT ainda válido. Um cadastro posterior com o mesmo e-mail, se permitido, cria **nova empresa
+`pending` com novo identificador**, sem reativar a excluída.
 
 ## Cadastro de usuários — VJ-1
 
