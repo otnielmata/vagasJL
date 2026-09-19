@@ -105,6 +105,11 @@ function canonicalValues(values, field, ignoreUnknown = false) {
   return ids;
 }
 
+function validExperience(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 &&
+    Number.isInteger(value * 10);
+}
+
 function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {},
   requirements, multipliers, eliminatoryPolicyEnabled = true }) {
   const weights = configuredWeights(configuration);
@@ -138,22 +143,32 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
       if (importance === 'indifferent') continue;
       const weight = weights.get(field) * multipliers[importance];
       let matched;
+      let earnedPoints;
       if (field === 'yearsOfExperience') {
-        if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
-            vacancyValues[field] !== value) throw new TypeError('Experiencia invalida');
-        matched = typeof candidateValues[field] === 'number' && candidateValues[field] >= value;
+        if (!validExperience(value) || vacancyValues[field] !== value) {
+          throw new TypeError('Experiencia invalida');
+        }
+        if (vacancy.origin === 'IMPORTED' && value === 0) continue;
+        const candidateExperience = candidateValues[field];
+        if (candidateExperience != null && !validExperience(candidateExperience)) {
+          throw new TypeError('Experiencia do candidato invalida');
+        }
+        matched = candidateExperience != null && candidateExperience >= value;
+        earnedPoints = candidateExperience == null ? 0 : weight *
+          (value === 0 ? 1 : Math.min(candidateExperience / value, 1));
       } else {
         if (typeof id !== 'string' || !canonicalValues(vacancyValues[field], fields.get(field)).has(id)) {
           throw new TypeError('Competencia fora do perfil da vaga');
         }
         matched = canonicalValues(candidateValues[field], fields.get(field), true).has(id);
+        earnedPoints = matched ? weight : 0;
       }
       if (eliminatory && eliminatoryPolicyEnabled && !matched && !unmetEliminatory) {
         unmetEliminatory = { code: 'ELIMINATORY_REQUIREMENT_UNMET', field,
           ...(field === 'yearsOfExperience' ? { value } : { id }) };
       }
       details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
-        weight, earnedPoints: matched ? weight : 0 });
+        weight, earnedPoints });
     }
     const result = buildScoreResult(details, vacancy);
     if (unmetEliminatory) result.eligibility = { eligible: false, reason: unmetEliminatory };

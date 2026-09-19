@@ -37,7 +37,9 @@ async function registerImportedVacancy(provenance, input) {
         const expected = numeric ? 'identified,value' : 'id,identified';
         if (Object.keys(choice).sort().join(',') !== expected || choice.identified !== true ||
             (numeric ? typeof choice.value !== 'number' : typeof choice.id !== 'string')) invalid();
-        identified.push(numeric ? { field, value: choice.value } : { field, id: choice.id });
+        if (!numeric || choice.value !== 0) {
+          identified.push(numeric ? { field, value: choice.value } : { field, id: choice.id });
+        }
         return numeric ? choice.value : choice.id;
       });
       return [field, Array.isArray(submitted) ? mapped : mapped[0]];
@@ -49,7 +51,8 @@ async function registerImportedVacancy(provenance, input) {
   const mappedInput = { ...input, matchProfile: { ...input?.matchProfile,
     values: preparedValues && typeof preparedValues === 'object' && !Array.isArray(preparedValues)
       ? Object.fromEntries(Object.entries(preparedValues)
-        .filter(([field]) => !rawFalseFields.includes(field))) : preparedValues } };
+        .filter(([field, value]) => !rawFalseFields.includes(field) &&
+          !(field === 'yearsOfExperience' && value === 0))) : preparedValues } };
   const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
   let importImportance = null;
   if (identified.length) {

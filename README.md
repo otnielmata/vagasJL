@@ -445,8 +445,8 @@ valores não identificados (`false` em importações), texto livre e campos deri
 não somam pontos. Candidato sem competência comprovada recebe zero naquele critério,
 mas o requisito aplicável continua no denominador. IDs canônicos repetidos com a
 mesma classificação contribuem uma vez; duplicatas conflitantes são rejeitadas.
-Experiência numérica exige atingir o limiar da vaga nesta versão; eliminatórios
-afetam elegibilidade separadamente, sem penalidade numérica extra.
+Experiência numérica recebe crédito proporcional até o limiar da vaga (VJ-55);
+eliminatórios afetam elegibilidade separadamente, sem penalidade numérica extra.
 
 Sem pontos possíveis, o serviço de cálculo devolve `percentage: null` e
 `calculationStatus: "not_calculable"` para qualquer origem, nunca 0% ou 100%.
@@ -507,6 +507,23 @@ IDs repetidos são consolidados; termos livres, campos derivados e itens
 `groups` fica vazio e o cálculo permanece `not_calculable` (`percentage: null`).
 Os rankings nos dois sentidos reutilizam a mesma regra e mantêm suas respostas
 atuais; nenhum endpoint novo é adicionado.
+
+## Experiência proporcional no Match — VJ-55
+
+Para uma exigência positiva `R` e experiência do candidato `C`, os pontos de
+`yearsOfExperience` são `peso efetivo × min(C/R, 1)`. Assim, 2 anos diante de
+3 anos exigidos rendem **2/3 dos pontos**; 4 anos rendem 100%, sem bônus.
+Experiência não informada rende zero. O campo aceita números finitos de 0 a
+100, com uma casa decimal. Um requisito eliminatório insuficiente mantém o
+candidato **inelegível**, mesmo que haja crédito parcial; desativar a política
+eliminatória não altera os pontos.
+
+Na importação, `yearsOfExperience: 0`, inclusive quando marcado
+`identified: true`, significa **não identificado** e é removido antes de criar
+requisitos. Registros importados antigos com requisito zero também não pontuam.
+Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
+experiência informada recebe o peso integral, enquanto ausência continua sem
+pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
 ## Importância dos requisitos — VJ-46
 
