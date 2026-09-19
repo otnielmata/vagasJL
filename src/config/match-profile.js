@@ -23,9 +23,14 @@ const INITIAL_MATCH_WEIGHTS = Object.freeze({
   specialization: 7,
 });
 
+const BOOLEAN_MATCH_FIELDS = Object.freeze([
+  'agile', 'programming', 'automation', 'webTesting', 'apiTesting', 'mobileTesting',
+  'desktopTesting', 'higherEducationDegree', 'continuousIntegration', 'certification',
+]);
+
 function normalizeMatchAlias(value) {
   return value.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/\s+/g, ' ');
 }
 
-module.exports = { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias };
+module.exports = { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias };

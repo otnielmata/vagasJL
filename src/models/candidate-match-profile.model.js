@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS } = require('../config/match-profile');
 
 const keys = Object.keys(INITIAL_MATCH_WEIGHTS);
 const valueFields = Object.fromEntries(keys.map((key) => [key, key === 'yearsOfExperience'
@@ -28,7 +28,7 @@ profileSchema.set('toJSON', {
     delete result.deletedAt;
     const values = result.values || {};
     result.pendingFields = keys.filter((key) => values[key] === undefined ||
-      (Array.isArray(values[key]) && values[key].length === 0));
+      (Array.isArray(values[key]) && values[key].length === 0 && !BOOLEAN_MATCH_FIELDS.includes(key)));
     return result;
   },
 });
