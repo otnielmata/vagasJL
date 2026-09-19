@@ -1860,6 +1860,11 @@ components:
             type: string
             minLength: 1
             maxLength: 100
+    MatchProfileBooleanChoices:
+      oneOf:
+        - { $ref: '#/components/schemas/MatchProfileChoices' }
+        - type: boolean
+          description: true exige uma unica opcao publicada; false registra ausencia explicita.
     CandidateMatchProfileRequest:
       type: object
       required: [values]
@@ -1871,14 +1876,14 @@ components:
           additionalProperties: false
           properties:
             type: { $ref: '#/components/schemas/MatchProfileChoices' }
-            agile: { $ref: '#/components/schemas/MatchProfileChoices' }
-            programming: { $ref: '#/components/schemas/MatchProfileChoices' }
-            automation: { $ref: '#/components/schemas/MatchProfileChoices' }
-            webTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
-            apiTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
-            mobileTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
-            desktopTesting: { $ref: '#/components/schemas/MatchProfileChoices' }
-            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
             english: { $ref: '#/components/schemas/MatchProfileChoices' }
             spanish: { $ref: '#/components/schemas/MatchProfileChoices' }
             yearsOfExperience:
@@ -1886,8 +1891,8 @@ components:
               minimum: 0
               maximum: 100
               multipleOf: 0.1
-            continuousIntegration: { $ref: '#/components/schemas/MatchProfileChoices' }
-            certification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
             testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
             tecnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
             programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }

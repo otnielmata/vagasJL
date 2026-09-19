@@ -472,6 +472,25 @@ continuam registradas; o histórico de resultados calculados é escopo da VJ-71.
 Corpo inválido retorna **400**, falta de autenticação **401** e ausência de permissão
 **403**.
 
+## Critérios booleanos do Match — VJ-53
+
+Nos campos de competência booleana (`agile`, `programming`, `automation`,
+`webTesting`, `apiTesting`, `mobileTesting`, `desktopTesting`,
+`higherEducationDegree`, `continuousIntegration` e `certification`), o candidato
+pode enviar `true` ou `false` no cadastro do Perfil de Match. `true` só é aceito
+quando o catálogo publicado tem **uma única opção**; é armazenado como seu ID
+canônico. Se houver várias opções, informe o ID específico em vez de `true`.
+`false` é armazenado como lista vazia, distinta de campo omitido (`UNKNOWN`), e
+não aparece em `pendingFields`. Demais campos continuam exigindo IDs de catálogo.
+
+Um requisito booleano identificado e classificado na vaga pontua integralmente
+quando o candidato o possui. `false`, `UNKNOWN` ou ausência do candidato rendem
+zero, mantendo o peso efetivo no denominador. `false` da vaga importada continua
+significando **não identificado**: sem requisito, não entra no cálculo e jamais
+premia a combinação `false`/`false`. Repetições e campos derivados não dão bônus.
+Eliminatórios alteram apenas a elegibilidade. A regra usa o mesmo serviço nos
+dois sentidos do ranking e não acrescenta endpoint.
+
 ## Importância dos requisitos — VJ-46
 
 O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave

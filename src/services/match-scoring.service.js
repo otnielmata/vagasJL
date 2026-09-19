@@ -1,4 +1,4 @@
-const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
 
 const MATCH_SCORING_VERSION = 1;
@@ -81,6 +81,10 @@ function canonicalValues(values, field, ignoreUnknown = false) {
   }
   const ids = new Set();
   for (const value of submitted) {
+    if (ignoreUnknown && value === true && BOOLEAN_MATCH_FIELDS.includes(field.key) && field.options?.length === 1) {
+      ids.add(field.options[0].id);
+      continue;
+    }
     if (ignoreUnknown && (typeof value !== 'string' || !value.trim())) continue;
     const id = aliases.get(normalizeCompetency(value));
     if (!id) {
