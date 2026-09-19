@@ -38,4 +38,11 @@ function isUnknownSeniority(value) {
     ['unknown', 'desconhecido', 'desconhecida'].includes(normalizeMatchAlias(value));
 }
 
-module.exports = { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias, isUnknownSeniority };
+function isUnidentifiedModality(value) {
+  return value === false || value == null ||
+    typeof value === 'string' && ['unknown', 'desconhecido', 'desconhecida']
+      .includes(normalizeMatchAlias(value));
+}
+
+module.exports = { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias,
+  isUnknownSeniority, isUnidentifiedModality };

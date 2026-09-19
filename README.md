@@ -527,6 +527,25 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Modalidade de trabalho — VJ-57
+
+O candidato informa uma ou mais modalidades aceitas em `values.type` no cadastro
+ou na edição do Perfil de Match. A vaga `COMPANY` ou `ADMIN` informa **uma**
+modalidade principal no mesmo campo. Ambos usam o catálogo publicado da VJ-28:
+IDs, rótulos e aliases são convertidos para o mesmo identificador canônico;
+texto livre, modalidades repetidas (inclusive por alias) no candidato e
+múltiplas modalidades na vaga retornam **400**. Os exemplos do catálogo são
+`remote` (Remoto), `hybrid` (Híbrido) e `onsite` (Presencial); publique os IDs
+antes de utilizá-los. `unknown` não pode ser publicado como modalidade válida.
+
+No Match compartilhado pelos rankings, se a modalidade principal da vaga
+estiver entre as aceitas pelo candidato, recebe todo o peso aplicável. Caso
+contrário, recebe zero, mantendo o peso no denominador; não há compatibilidade
+parcial entre modalidades distintas. Peso e importância seguem a configuração
+da vaga. Na importação, modalidade não identificada (`false` ou `unknown`)
+não cria requisito nem participa da pontuação, mesmo com candidato sem
+modalidade. Nenhum endpoint novo é necessário.
+
 ## Senioridade desconhecida — VJ-56
 
 O campo técnico `level` utiliza os IDs do catálogo compartilhado. No cadastro

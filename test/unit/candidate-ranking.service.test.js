@@ -20,18 +20,19 @@ const recruiterId = '6512f1e2b3a1c2d3e4f5a6b9';
 const candidateId = '6512f1e2b3a1c2d3e4f5a6ba';
 const now = new Date('2026-09-18T12:00:00Z');
 const configuration = { version: 1, fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
-  key, weight: INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
+  key, weight: key === 'agile' ? 8 : INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
     ? [{ id: 'remote', label: 'Remoto', aliases: [] },
-      { id: 'hybrid', label: 'Hibrido', aliases: [] }] : [],
+      { id: 'hybrid', label: 'Hibrido', aliases: [] }] : key === 'agile'
+      ? [{ id: 'scrum', label: 'Scrum', aliases: [] }] : [],
 })) };
 
 function vacancy(overrides = {}) {
   const result = { _id: vacancyId, origin: 'COMPANY', status: 'active', company: companyId,
     createdBy: recruiterId, importSource: null, importSourceId: null, deletedAt: null,
     expiresAt: null, matchProfile: { configurationVersion: 1,
-      values: { type: ['remote', 'hybrid'] }, requirements: [
+      values: { type: ['remote'], agile: ['scrum'] }, requirements: [
         { field: 'type', id: 'remote', importance: 'required' },
-        { field: 'type', id: 'hybrid', importance: 'required' },
+        { field: 'agile', id: 'scrum', importance: 'required' },
       ] }, ...overrides };
   result.toJSON = () => ({ _id: result._id, origin: result.origin,
     matchProfile: result.matchProfile });
@@ -60,7 +61,7 @@ function setup(context, currentVacancy = vacancy()) {
   const profiles = [
     { candidate: candidateId, configurationVersion: 1, values: { type: ['remote'] } },
     { candidate: '6512f1e2b3a1c2d3e4f5a6bb', configurationVersion: 1,
-      values: { type: ['remote', 'hybrid'] } },
+      values: { type: ['remote', 'hybrid'], agile: ['scrum'] } },
   ];
   const profileQuery = { select: async () => profiles };
   context.mock.method(CandidateMatchProfile, 'find', () => profileQuery);

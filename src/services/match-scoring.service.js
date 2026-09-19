@@ -1,4 +1,5 @@
-const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, isUnknownSeniority } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, isUnknownSeniority,
+  isUnidentifiedModality } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
 
 const MATCH_SCORING_VERSION = 1;
@@ -118,6 +119,10 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
     throw new TypeError('Perfis de competencias invalidos');
   }
   const fields = new Map(configuration.fields.map((field) => [field.key, field]));
+  const rawType = Array.isArray(vacancyValues.type) ? vacancyValues.type : [vacancyValues.type];
+  const vacancyType = canonicalValues(vacancy.origin === 'IMPORTED'
+    ? rawType.filter((value) => !isUnidentifiedModality(value)) : vacancyValues.type, fields.get('type'));
+  if (vacancyType.size > 1) throw new TypeError('Modalidade principal da vaga invalida');
   const details = [];
   if (requirements !== undefined) {
     if (!Array.isArray(requirements) || !validMultipliers(multipliers) ||
@@ -136,6 +141,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
           (isUnknownSeniority(id) ||
             (Array.isArray(vacancyValues.level) ? vacancyValues.level : [vacancyValues.level])
               .some(isUnknownSeniority))) continue;
+      if (vacancy.origin === 'IMPORTED' && field === 'type' && !vacancyType.size) continue;
       const key = field === 'yearsOfExperience' ? field : `${field}:${id}`;
       if (seen.has(key)) {
         const previous = seen.get(key);
@@ -145,6 +151,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
       }
       seen.set(key, { importance, eliminatory, value });
       if (importance === 'indifferent') continue;
+      if (field === 'type' && !vacancyType.has(id)) throw new TypeError('Modalidade principal da vaga invalida');
       const weight = weights.get(field) * multipliers[importance];
       let matched;
       let earnedPoints;

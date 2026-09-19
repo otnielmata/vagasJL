@@ -1,5 +1,6 @@
 const Configuration = require('../models/match-profile-configuration.model');
-const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority,
+  isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 const { validateRequirements } = require('./vacancy-requirements.service');
 
@@ -70,6 +71,7 @@ function normalizeValues(input, configuration) {
     }
     const choices = Array.isArray(submitted) ? submitted : [submitted];
     if (!choices.length || choices.length > 50 || !fields.get(key).options.length) invalid();
+    if (key === 'type' && choices.length !== 1) invalid('Informe uma modalidade principal da vaga');
     const catalog = new Map();
     for (const option of fields.get(key).options) {
       for (const label of [option.id, option.label, ...option.aliases]) {
@@ -80,9 +82,11 @@ function normalizeValues(input, configuration) {
     for (const choice of choices) {
       if (typeof choice !== 'string' || !choice.trim() || choice.length > 100) invalid();
       if (key === 'level' && isUnknownSeniority(choice)) invalid('Senioridade desconhecida nao e opcao valida');
+      if (key === 'type' && isUnidentifiedModality(choice)) invalid('Modalidade nao identificada');
       const canonicalId = catalog.get(normalizeMatchAlias(choice));
       if (!canonicalId) invalid('Competencia fora do catalogo publicado');
       if (key === 'level' && isUnknownSeniority(canonicalId)) invalid('Senioridade desconhecida nao e opcao valida');
+      if (key === 'type' && isUnidentifiedModality(canonicalId)) invalid('Modalidade nao identificada');
       selected.add(canonicalId);
     }
     values[key] = [...selected].sort();

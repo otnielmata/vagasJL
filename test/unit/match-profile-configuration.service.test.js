@@ -104,6 +104,20 @@ test('unknown seniority cannot be published as an id, label or alias', async (co
   assert.equal(create.mock.callCount(), 0);
 });
 
+test('unidentified modality cannot be published as a match option', async (context) => {
+  const { create } = isolate(context);
+  for (const option of [
+    { id: 'unknown', label: 'Unknown', aliases: [] },
+    { id: 'remote', label: 'Desconhecido', aliases: [] },
+    { id: 'remote', label: 'Remoto', aliases: ['UNKNOWN'] },
+  ]) {
+    const input = initial();
+    input.fields.type.options = [option];
+    await assert.rejects(publishConfiguration(admin, input), { statusCode: 400 });
+  }
+  assert.equal(create.mock.callCount(), 0);
+});
+
 test('refuses removal of a published canonical id', async (context) => {
   const { create } = isolate(context);
   const input = initial();

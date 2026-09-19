@@ -25,7 +25,9 @@ function configuration() {
     version: 3,
     fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
       key, weight: INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
-        ? [{ id: 'remote', label: 'Remoto', aliases: ['Remote'] }]
+        ? [{ id: 'remote', label: 'Remoto', aliases: ['Remote'] },
+          { id: 'hybrid', label: 'Hibrido', aliases: [] },
+          { id: 'onsite', label: 'Presencial', aliases: [] }]
         : key === 'testAutomationTechnologies'
           ? [{ id: 'cypress', label: 'Cypress', aliases: ['Cypress.io', 'Cypress Framework'] }]
           : key === 'level' ? [{ id: 'junior', label: 'Júnior', aliases: [] }] : [],
@@ -176,7 +178,8 @@ test('inactive or unverified account receives 403 before Match catalog lookup', 
 test('catalog rejects unknown IDs, unsupported fields and invalid numeric years', async (context) => {
   const { createVacancy, findVacancy } = setup(context);
   const invalidValues = [
-    { type: 'not-published' }, { type: 'remote', agile: 'Scrum' },
+    { type: 'not-published' }, { type: ['remote', 'hybrid'] },
+    { type: ['remote', 'Remoto'] }, { type: 'remote', agile: 'Scrum' },
     { type: 'remote', unknown: 'anything' }, { type: [] },
     { type: 'remote', yearsOfExperience: 101 },
     { type: 'remote', yearsOfExperience: 1.25 },

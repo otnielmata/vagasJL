@@ -13,6 +13,10 @@ function validateRequirements(input, values, configuration, requireComplete = fa
   }
   const catalog = new Map(configuration.fields.map((field) => [field.key, field]));
   const canonicalValues = typeof values?.toObject === 'function' ? values.toObject() : values;
+  if (canonicalValues?.type !== undefined &&
+      (!Array.isArray(canonicalValues.type) || canonicalValues.type.length !== 1)) {
+    throw new ApiError(400, 'Informe uma modalidade principal da vaga');
+  }
   const expected = new Set();
   for (const [field, selected] of Object.entries(canonicalValues || {})) {
     if (!Object.hasOwn(INITIAL_MATCH_WEIGHTS, field)) continue;

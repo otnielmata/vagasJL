@@ -21,7 +21,9 @@ function isolate(context, status = 'active') {
     version: 3, createdBy: user.id,
     fields: Object.entries(INITIAL_MATCH_WEIGHTS).map(([key, weight]) => ({
       key, weight,
-      options: key === 'testAutomationTechnologies'
+      options: key === 'type' ? [{ id: 'remote', label: 'Remoto', aliases: [] },
+        { id: 'hybrid', label: 'Hibrido', aliases: [] }]
+        : key === 'testAutomationTechnologies'
         ? [{ id: 'cypress', label: 'Cypress', aliases: ['Cypress Framework'] }]
         : key === 'agile' ? [{ id: 'scrum', label: 'Scrum', aliases: [] }]
           : key === 'level' ? [{ id: 'junior', label: 'Júnior', aliases: [] }] : [],
@@ -72,6 +74,17 @@ test('explicit null removes only one value and returns it as pending', async (co
   assert.ok(result.profile.toJSON().pendingFields.includes('yearsOfExperience'));
   assert.deepEqual(result.profile.values.agile, ['scrum']);
   assert.deepEqual(update.mock.calls[0].arguments[1].$unset, { 'values.yearsOfExperience': 1 });
+});
+
+test('candidate edits accepted modalities without affecting other profile fields', async (context) => {
+  const { update } = isolate(context);
+  const result = await updateMatchProfile(user, { values: { type: ['Hibrido', 'Remoto'] } }, '"2"');
+  assert.deepEqual(result.profile.values.type, ['hybrid', 'remote']);
+  assert.deepEqual(result.profile.values.agile, ['scrum']);
+  for (const type of [['remote', 'Remoto'], ['remote', 'remote'], 'Desconhecido']) {
+    await assert.rejects(updateMatchProfile(user, { values: { type } }, '"2"'), { statusCode: 400 });
+  }
+  assert.equal(update.mock.callCount(), 1);
 });
 
 test('edits an older profile without revision using a conditional first revision', async (context) => {

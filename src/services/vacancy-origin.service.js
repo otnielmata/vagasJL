@@ -3,7 +3,7 @@ const Vacancy = require('../models/vacancy.model');
 const ImportImportanceConfiguration = require('../models/import-importance-configuration.model');
 const { prepareVacancyContent } = require('./vacancy-content.service');
 const { initialRequirementsAudit } = require('./vacancy-requirements.service');
-const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority, isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -32,6 +32,7 @@ async function registerImportedVacancy(provenance, input) {
       if (!Object.hasOwn(INITIAL_MATCH_WEIGHTS, field)) return [field, submitted];
       const choices = Array.isArray(submitted) ? submitted : [submitted];
       const mapped = choices.map((choice) => {
+        if (field === 'type' && isUnidentifiedModality(choice)) return undefined;
         if (field === 'level' && isUnknownSeniority(choice)) {
           unknownLevel = true;
           return undefined;
@@ -46,6 +47,7 @@ async function registerImportedVacancy(provenance, input) {
           unknownLevel = true;
           return undefined;
         }
+        if (field === 'type' && isUnidentifiedModality(choice.id)) return undefined;
         if (!numeric || choice.value !== 0) {
           identified.push(numeric ? { field, value: choice.value } : { field, id: choice.id });
         }
@@ -62,7 +64,8 @@ async function registerImportedVacancy(provenance, input) {
       ? Object.fromEntries(Object.entries(preparedValues)
         .filter(([field, value]) => !rawFalseFields.includes(field) &&
           !(field === 'yearsOfExperience' && value === 0) &&
-          !(field === 'level' && (value === undefined || Array.isArray(value) && !value.length))))
+          !(['level', 'type'].includes(field) &&
+            (value === undefined || Array.isArray(value) && !value.length))))
       : preparedValues } };
   const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
   let importImportance = null;

@@ -20,7 +20,11 @@ function isolate(context, status = 'pending_validation') {
     createdBy: user.id,
     fields: Object.entries(INITIAL_MATCH_WEIGHTS).map(([key, weight]) => ({
       key, weight,
-      options: key === 'apiTesting' ? [{
+      options: key === 'type' ? [
+        { id: 'remote', label: 'Remoto', aliases: ['Home office'] },
+        { id: 'hybrid', label: 'Hibrido', aliases: [] },
+        { id: 'onsite', label: 'Presencial', aliases: [] },
+      ] : key === 'apiTesting' ? [{
         id: 'api-testing', label: 'API Testing', aliases: [],
       }] : key === 'testAutomationTechnologies' ? [{
         id: 'cypress', label: 'Cypress', aliases: ['cypress.io', 'cypress framework'],
@@ -107,7 +111,7 @@ test('rejects unknown fields, free text and client-controlled metadata without s
   for (const input of [
     { values: { unknown: 'cypress' } },
     { values: { testAutomationTechnologies: 'Selenium' } },
-    { values: { type: 'remote' } },
+    { values: { type: 'teletransportado' } },
     { values: { testAutomationTechnologies: false } },
     { values: { testAutomationTechnologies: [12] } },
     { values: { testAutomationTechnologies: { id: 'cypress' } } },
@@ -116,6 +120,21 @@ test('rejects unknown fields, free text and client-controlled metadata without s
     { values: { testAutomationTechnologies: ['cypress'] }, candidate: candidateId },
   ]) {
     await assert.rejects(registerMatchProfile(user, input), { statusCode: 400 });
+  }
+  assert.equal(create.mock.callCount(), 0);
+});
+
+test('candidate declares distinct accepted modalities from shared catalog', async (context) => {
+  isolate(context);
+  const profile = await registerMatchProfile(user, { values: { type: ['Hibrido', 'Home office'] } });
+  assert.deepEqual(profile.values.type, ['hybrid', 'remote']);
+});
+
+test('candidate registration rejects duplicate modalities and free text before persistence', async (context) => {
+  const { create } = isolate(context);
+  for (const type of [['remote', 'Remoto'], ['Home office', 'remote'],
+    ['remote', 'remote'], 'unknown', 'teletransportado']) {
+    await assert.rejects(registerMatchProfile(user, { values: { type } }), { statusCode: 400 });
   }
   assert.equal(create.mock.callCount(), 0);
 });
