@@ -76,8 +76,8 @@ test('numeric threshold and eliminatory decision remain separate from score', ()
     }] };
   const result = calculateCompetencyMatch(input);
   assert.equal(result.possiblePoints, 9);
-  assert.equal(result.earnedPoints, 0);
-  assert.equal(result.percentage, 0);
+  assert.equal(result.earnedPoints, 6);
+  assert.equal(result.percentage, 66.67);
   assert.equal(result.eligibility.eligible, false);
   const disabled = calculateCompetencyMatch({ ...input, eliminatoryPolicyEnabled: false });
   assert.equal(disabled.percentage, result.percentage);
