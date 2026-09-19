@@ -10,6 +10,11 @@ const routes = require('./routes');
 const registrationRoutes = require('./routes/registration.routes');
 const loginRoutes = require('./routes/login.routes');
 const candidateRoutes = require('./routes/candidate.routes');
+const companyRoutes = require('./routes/company.routes');
+const vacancyRoutes = require('./routes/vacancy.routes');
+const matchProfileConfigurationRoutes = require('./routes/match-profile-configuration.routes');
+const importImportanceConfigurationRoutes = require('./routes/import-importance-configuration.routes');
+const matchMultipliersConfigurationRoutes = require('./routes/match-multipliers-configuration.routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
@@ -35,6 +40,11 @@ app.use('/api', routes);
 app.use('/usuarios', registrationRoutes);
 app.use('/login', loginRoutes);
 app.use('/candidatos', candidateRoutes);
+app.use('/empresas', companyRoutes);
+app.use('/vagas', vacancyRoutes);
+app.use('/perfil-match', matchProfileConfigurationRoutes);
+app.use('/configuracoes', importImportanceConfigurationRoutes);
+app.use('/configuracoes', matchMultipliersConfigurationRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({

@@ -39,6 +39,7 @@ const userSchema = new Schema(
       default: 'active',
       required: true,
     },
+    emailVerifiedAt: { type: Date, default: null, select: false },
   },
   {
     timestamps: true,
@@ -65,6 +66,7 @@ userSchema.methods.comparePassword = function comparePassword(candidatePassword)
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
     delete ret.password;
+    delete ret.emailVerifiedAt;
     delete ret.__v;
     return ret;
   },
