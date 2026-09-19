@@ -20,7 +20,9 @@ function isolate(context, status = 'pending_validation') {
     createdBy: user.id,
     fields: Object.entries(INITIAL_MATCH_WEIGHTS).map(([key, weight]) => ({
       key, weight,
-      options: key === 'testAutomationTechnologies' ? [{
+      options: key === 'apiTesting' ? [{
+        id: 'api-testing', label: 'API Testing', aliases: [],
+      }] : key === 'testAutomationTechnologies' ? [{
         id: 'cypress', label: 'Cypress', aliases: ['cypress.io', 'cypress framework'],
       }] : [],
     })),
@@ -65,6 +67,26 @@ test('allows an empty draft with every field pending and does not invent skills'
   const profile = await registerMatchProfile(user, { values: {} });
   assert.equal(profile.toJSON().pendingFields.length, 22);
   assert.deepEqual(profile.toJSON().values, {});
+});
+
+test('normalizes boolean skill answers without treating explicit false as unanswered', async (context) => {
+  isolate(context);
+  const affirmed = await registerMatchProfile(user, { values: { apiTesting: true } });
+  assert.deepEqual(affirmed.values.apiTesting, ['api-testing']);
+  const denied = await registerMatchProfile(user, { values: { apiTesting: false } });
+  assert.deepEqual(denied.values.apiTesting, []);
+  assert.equal(denied.toJSON().pendingFields.includes('apiTesting'), false);
+  const unknown = await registerMatchProfile(user, { values: {} });
+  assert.equal(unknown.toJSON().pendingFields.includes('apiTesting'), true);
+});
+
+test('rejects ambiguous boolean true when the published field has multiple options', async (context) => {
+  const { configuration, create } = isolate(context);
+  configuration.fields.find((field) => field.key === 'apiTesting').options.push({
+    id: 'contract-testing', label: 'Contract Testing', aliases: [],
+  });
+  await assert.rejects(registerMatchProfile(user, { values: { apiTesting: true } }), { statusCode: 400 });
+  assert.equal(create.mock.callCount(), 0);
 });
 
 test('rejects unknown fields, free text and client-controlled metadata without saving', async (context) => {
