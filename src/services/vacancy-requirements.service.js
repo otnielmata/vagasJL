@@ -1,6 +1,6 @@
 const Vacancy = require('../models/vacancy.model');
 const Configuration = require('../models/match-profile-configuration.model');
-const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority } = require('../config/match-profile');
 const { ensureCompanyAuthorized } = require('./vacancy-status.service');
 const ApiError = require('../errors/api.error');
 
@@ -35,6 +35,9 @@ function validateRequirements(input, values, configuration, requireComplete = fa
     const keys = Object.keys(item).filter((key) => key !== 'eliminatory').sort().join(',');
     if (keys !== (numeric ? 'field,importance,value' : 'field,id,importance')) {
       throw new ApiError(400, 'Estrutura do requisito invalida');
+    }
+    if (item.field === 'level' && isUnknownSeniority(item.id)) {
+      throw new ApiError(400, 'Senioridade desconhecida nao e requisito');
     }
     const key = numeric ? item.field : `${item.field}:${item.id}`;
     if (!expected.has(key)) throw new ApiError(400, 'Requisito fora do perfil tecnico canonico');

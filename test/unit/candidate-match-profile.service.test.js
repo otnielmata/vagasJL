@@ -24,7 +24,7 @@ function isolate(context, status = 'pending_validation') {
         id: 'api-testing', label: 'API Testing', aliases: [],
       }] : key === 'testAutomationTechnologies' ? [{
         id: 'cypress', label: 'Cypress', aliases: ['cypress.io', 'cypress framework'],
-      }] : [],
+      }] : key === 'level' ? [{ id: 'junior', label: 'Júnior', aliases: [] }] : [],
     })),
   });
   const findCandidate = context.mock.method(Candidate, 'findOne', (filter) => {
@@ -87,6 +87,19 @@ test('rejects ambiguous boolean true when the published field has multiple optio
   });
   await assert.rejects(registerMatchProfile(user, { values: { apiTesting: true } }), { statusCode: 400 });
   assert.equal(create.mock.callCount(), 0);
+});
+
+test('rejects unknown seniority at candidate registration even if a legacy catalog lists it', async (context) => {
+  const { configuration, create } = isolate(context);
+  configuration.fields.find((field) => field.key === 'level').options.push({
+    id: 'unknown', label: 'Not Specified', aliases: ['Desconhecido'],
+  });
+  for (const level of ['unknown', 'Desconhecido', 'Not Specified', ['junior', 'UNKNOWN']]) {
+    await assert.rejects(registerMatchProfile(user, { values: { level } }), { statusCode: 400 });
+  }
+  assert.equal(create.mock.callCount(), 0);
+  const profile = await registerMatchProfile(user, { values: { level: 'Júnior' } });
+  assert.deepEqual(profile.values.level, ['junior']);
 });
 
 test('rejects unknown fields, free text and client-controlled metadata without saving', async (context) => {

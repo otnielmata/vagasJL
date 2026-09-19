@@ -25,6 +25,7 @@ const locationSchema = new mongoose.Schema({
   country: { type: String, required: true, trim: true, maxlength: 200 },
 }, { _id: false });
 const importMappingAuditSchema = new mongoose.Schema({
+  unknownLevel: { type: Boolean, default: false },
   rawFalseValues: { type: [{
     field: { type: String, required: true, enum: Object.keys(INITIAL_MATCH_WEIGHTS) },
     value: { type: Boolean, required: true, enum: [false] },

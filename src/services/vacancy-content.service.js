@@ -1,5 +1,5 @@
 const Configuration = require('../models/match-profile-configuration.model');
-const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 const { validateRequirements } = require('./vacancy-requirements.service');
 
@@ -79,8 +79,10 @@ function normalizeValues(input, configuration) {
     const selected = new Set();
     for (const choice of choices) {
       if (typeof choice !== 'string' || !choice.trim() || choice.length > 100) invalid();
+      if (key === 'level' && isUnknownSeniority(choice)) invalid('Senioridade desconhecida nao e opcao valida');
       const canonicalId = catalog.get(normalizeMatchAlias(choice));
       if (!canonicalId) invalid('Competencia fora do catalogo publicado');
+      if (key === 'level' && isUnknownSeniority(canonicalId)) invalid('Senioridade desconhecida nao e opcao valida');
       selected.add(canonicalId);
     }
     values[key] = [...selected].sort();

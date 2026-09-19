@@ -1,6 +1,6 @@
 const Configuration = require('../models/match-profile-configuration.model');
 const ApiError = require('../errors/api.error');
-const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority } = require('../config/match-profile');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const OPTION_ID = /^[a-z][a-z0-9_-]*$/;
@@ -64,7 +64,10 @@ function normalizeFields(input) {
     const field = input.fields[key];
     if (!exactKeys(field, ['weight', 'options']) || !Number.isSafeInteger(field.weight) ||
         field.weight <= 0) invalid();
-    return { key, weight: field.weight, options: normalizeOptions(field.options) };
+    const options = normalizeOptions(field.options);
+    if (key === 'level' && options.some((option) =>
+      [option.id, option.label, ...option.aliases].some(isUnknownSeniority))) invalid();
+    return { key, weight: field.weight, options };
   });
 }
 

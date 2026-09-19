@@ -3,7 +3,7 @@ const Vacancy = require('../models/vacancy.model');
 const ImportImportanceConfiguration = require('../models/import-importance-configuration.model');
 const { prepareVacancyContent } = require('./vacancy-content.service');
 const { initialRequirementsAudit } = require('./vacancy-requirements.service');
-const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -26,23 +26,32 @@ async function registerImportedVacancy(provenance, input) {
   const importSourceId = provenance.sourceId.trim();
   const rawValues = input?.matchProfile?.values;
   const identified = [];
+  let unknownLevel = false;
   const preparedValues = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
     ? Object.fromEntries(Object.entries(rawValues).map(([field, submitted]) => {
       if (!Object.hasOwn(INITIAL_MATCH_WEIGHTS, field)) return [field, submitted];
       const choices = Array.isArray(submitted) ? submitted : [submitted];
       const mapped = choices.map((choice) => {
+        if (field === 'level' && isUnknownSeniority(choice)) {
+          unknownLevel = true;
+          return undefined;
+        }
         if (choice === true) invalid();
         if (!choice || typeof choice !== 'object' || Array.isArray(choice)) return choice;
         const numeric = field === 'yearsOfExperience';
         const expected = numeric ? 'identified,value' : 'id,identified';
         if (Object.keys(choice).sort().join(',') !== expected || choice.identified !== true ||
             (numeric ? typeof choice.value !== 'number' : typeof choice.id !== 'string')) invalid();
+        if (field === 'level' && isUnknownSeniority(choice.id)) {
+          unknownLevel = true;
+          return undefined;
+        }
         if (!numeric || choice.value !== 0) {
           identified.push(numeric ? { field, value: choice.value } : { field, id: choice.id });
         }
         return numeric ? choice.value : choice.id;
       });
-      return [field, Array.isArray(submitted) ? mapped : mapped[0]];
+      return [field, Array.isArray(submitted) ? mapped.filter((value) => value !== undefined) : mapped[0]];
     })) : rawValues;
   const rawFalseFields = rawValues && typeof rawValues === 'object' && !Array.isArray(rawValues)
     ? Object.entries(rawValues).filter(([field, value]) =>
@@ -52,7 +61,9 @@ async function registerImportedVacancy(provenance, input) {
     values: preparedValues && typeof preparedValues === 'object' && !Array.isArray(preparedValues)
       ? Object.fromEntries(Object.entries(preparedValues)
         .filter(([field, value]) => !rawFalseFields.includes(field) &&
-          !(field === 'yearsOfExperience' && value === 0))) : preparedValues } };
+          !(field === 'yearsOfExperience' && value === 0) &&
+          !(field === 'level' && (value === undefined || Array.isArray(value) && !value.length))))
+      : preparedValues } };
   const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
   let importImportance = null;
   if (identified.length) {
@@ -86,7 +97,8 @@ async function registerImportedVacancy(provenance, input) {
         reason: `Importancia padrao v${importImportance.version} aplicada na importacao`,
         revision: 1, requirements: content.matchProfile.requirements,
       }] } : {}),
-      importMappingAudit: { rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
+      importMappingAudit: { unknownLevel,
+        rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
     });
   } catch (error) {
     if (error.code === 11000) throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');

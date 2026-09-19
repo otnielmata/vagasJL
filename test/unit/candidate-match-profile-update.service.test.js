@@ -23,7 +23,8 @@ function isolate(context, status = 'active') {
       key, weight,
       options: key === 'testAutomationTechnologies'
         ? [{ id: 'cypress', label: 'Cypress', aliases: ['Cypress Framework'] }]
-        : key === 'agile' ? [{ id: 'scrum', label: 'Scrum', aliases: [] }] : [],
+        : key === 'agile' ? [{ id: 'scrum', label: 'Scrum', aliases: [] }]
+          : key === 'level' ? [{ id: 'junior', label: 'Júnior', aliases: [] }] : [],
     })),
   });
   const findCandidate = context.mock.method(Candidate, 'findOne', (filter) => {
@@ -45,7 +46,7 @@ function isolate(context, status = 'active') {
     if (operation.$inc) updated.revision += operation.$inc.revision;
     return updated;
   });
-  return { candidate, profile, findCandidate, findProfile, findConfiguration, update };
+  return { candidate, profile, configuration, findCandidate, findProfile, findConfiguration, update };
 }
 
 test('edits only submitted field with canonical alias and advances revision atomically', async (context) => {
@@ -98,6 +99,19 @@ test('rejects unknown keys, client metadata and invalid catalog without write', 
     { values: { yearsOfExperience: -1 } },
   ]) await assert.rejects(updateMatchProfile(user, body, '"2"'), { statusCode: 400 });
   assert.equal(update.mock.callCount(), 0);
+});
+
+test('rejects unknown seniority at candidate edit without changing the revision', async (context) => {
+  const { configuration, update } = isolate(context);
+  configuration.fields.find((field) => field.key === 'level').options.push({
+    id: 'unknown', label: 'Not Specified', aliases: ['Desconhecido'],
+  });
+  for (const level of ['unknown', 'Desconhecido', 'Not Specified', ['junior', 'UNKNOWN']]) {
+    await assert.rejects(updateMatchProfile(user, { values: { level } }, '"2"'), { statusCode: 400 });
+  }
+  assert.equal(update.mock.callCount(), 0);
+  const result = await updateMatchProfile(user, { values: { level: 'Júnior' } }, '"2"');
+  assert.deepEqual(result.profile.values.level, ['junior']);
 });
 
 test('requires a quoted current revision and prevents stale overwrite', async (context) => {

@@ -28,7 +28,7 @@ function configuration() {
         ? [{ id: 'remote', label: 'Remoto', aliases: ['Remote'] }]
         : key === 'testAutomationTechnologies'
           ? [{ id: 'cypress', label: 'Cypress', aliases: ['Cypress.io', 'Cypress Framework'] }]
-          : [],
+          : key === 'level' ? [{ id: 'junior', label: 'Júnior', aliases: [] }] : [],
     })),
   };
 }
@@ -95,6 +95,20 @@ test('location and numeric experience are accepted without Match score', async (
   assert.equal(vacancy.location.city, 'São Paulo');
   assert.equal(vacancy.matchProfile.values.yearsOfExperience, 2.5);
   assert.equal(vacancy.toJSON().score, undefined);
+});
+
+test('company vacancy registration rejects unknown seniority and accepts a canonical level', async (context) => {
+  const { createVacancy } = setup(context);
+  for (const level of ['unknown', 'Desconhecido', ['junior', 'UNKNOWN']]) {
+    await assert.rejects(registerCompanyVacancy(actor, companyId, {
+      ...minimum, matchProfile: { values: { type: 'remote', level } },
+    }), { statusCode: 400 });
+  }
+  assert.equal(createVacancy.mock.callCount(), 0);
+  const vacancy = await registerCompanyVacancy(actor, companyId, {
+    ...minimum, matchProfile: { values: { type: 'remote', level: 'Júnior' } },
+  });
+  assert.deepEqual(vacancy.matchProfile.values.level, ['junior']);
 });
 
 test('initial company classifications start at revision one with audit', async (context) => {

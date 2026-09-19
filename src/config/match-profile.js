@@ -33,4 +33,9 @@ function normalizeMatchAlias(value) {
     .toLowerCase().replace(/\s+/g, ' ');
 }
 
-module.exports = { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias };
+function isUnknownSeniority(value) {
+  return typeof value === 'string' &&
+    ['unknown', 'desconhecido', 'desconhecida'].includes(normalizeMatchAlias(value));
+}
+
+module.exports = { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias, isUnknownSeniority };

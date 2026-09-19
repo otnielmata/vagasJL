@@ -527,6 +527,24 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Senioridade desconhecida — VJ-56
+
+O campo técnico `level` utiliza os IDs do catálogo compartilhado. No cadastro
+e na edição do Perfil de Match do candidato e no cadastro de vaga `COMPANY`, os
+marcadores `unknown`, `desconhecido` e `desconhecida` retornam **400**, mesmo
+se existirem em uma configuração antiga. A publicação de catálogo também
+recusa esses marcadores como ID, rótulo ou alias de senioridade. Uma opção
+canônica válida, como `junior`, continua aceita.
+
+Na importação, um desses marcadores em `level` (inclusive no formato
+`{ "id": "unknown", "identified": true }`) é removido do Perfil de Match.
+A ocorrência fica sinalizada somente na auditoria interna `unknownLevel`,
+sem virar ID, requisito ou dado público. O texto livre da descrição não é
+usado para inferir senioridade. Registros importados antigos com `level`
+desconhecido também não recebem pontos, não aumentam o denominador e não
+eliminam candidatos. Senioridade identificada e classificada usa normalmente
+o peso e a importância publicados. A VJ-56 não adiciona endpoint.
+
 ## Importância dos requisitos — VJ-46
 
 O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave

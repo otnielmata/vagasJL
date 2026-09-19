@@ -1,4 +1,4 @@
-const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, isUnknownSeniority } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
 
 const MATCH_SCORING_VERSION = 1;
@@ -132,6 +132,10 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
       if (typeof eliminatory !== 'boolean' || (importance === 'indifferent' && eliminatory)) {
         throw new TypeError('Sinalizador eliminatorio invalido');
       }
+      if (vacancy.origin === 'IMPORTED' && field === 'level' &&
+          (isUnknownSeniority(id) ||
+            (Array.isArray(vacancyValues.level) ? vacancyValues.level : [vacancyValues.level])
+              .some(isUnknownSeniority))) continue;
       const key = field === 'yearsOfExperience' ? field : `${field}:${id}`;
       if (seen.has(key)) {
         const previous = seen.get(key);
@@ -176,6 +180,9 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   }
   for (const key of TECHNICAL_FIELDS) {
     if (key === 'yearsOfExperience') continue;
+    if (vacancy.origin === 'IMPORTED' && key === 'level' &&
+        (Array.isArray(vacancyValues.level) ? vacancyValues.level : [vacancyValues.level])
+          .some(isUnknownSeniority)) continue;
     const field = fields.get(key);
     const required = canonicalValues(vacancyValues[key], field);
     if (!required.size) continue;

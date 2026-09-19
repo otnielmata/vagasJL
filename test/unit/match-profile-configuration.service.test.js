@@ -90,6 +90,20 @@ test('rejects aliases claimed by two canonical ids without partial publish', asy
   assert.equal(create.mock.callCount(), 0);
 });
 
+test('unknown seniority cannot be published as an id, label or alias', async (context) => {
+  const { create } = isolate(context);
+  for (const option of [
+    { id: 'unknown', label: 'Unknown', aliases: [] },
+    { id: 'junior', label: 'Desconhecido', aliases: [] },
+    { id: 'junior', label: 'Júnior', aliases: ['UNKNOWN'] },
+  ]) {
+    const input = initial();
+    input.fields.level.options = [option];
+    await assert.rejects(publishConfiguration(admin, input), { statusCode: 400 });
+  }
+  assert.equal(create.mock.callCount(), 0);
+});
+
 test('refuses removal of a published canonical id', async (context) => {
   const { create } = isolate(context);
   const input = initial();

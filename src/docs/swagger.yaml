@@ -1969,7 +1969,9 @@ components:
             tecnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
             programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }
             genAITools: { $ref: '#/components/schemas/MatchProfileChoices' }
-            level: { $ref: '#/components/schemas/MatchProfileChoices' }
+            level:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: Senioridade canonica; unknown/desconhecido nao sao opcoes validas.
             classification: { $ref: '#/components/schemas/MatchProfileChoices' }
             role: { $ref: '#/components/schemas/MatchProfileChoices' }
             specialization: { $ref: '#/components/schemas/MatchProfileChoices' }
@@ -2007,7 +2009,9 @@ components:
             tecnologies: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             programmingLanguages: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             genAITools: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
-            level: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            level:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileUpdateChoices' }]
+              description: Senioridade canonica ou null para remover; unknown/desconhecido sao invalidos.
             classification: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             role: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             specialization: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
