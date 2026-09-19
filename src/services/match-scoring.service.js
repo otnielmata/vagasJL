@@ -33,6 +33,13 @@ function configuredWeights(configuration) {
 function buildScoreResult(details, vacancy) {
   const earnedPoints = details.reduce((total, detail) => total + detail.earnedPoints, 0);
   const possiblePoints = details.reduce((total, detail) => total + detail.weight, 0);
+  const groups = new Map();
+  for (const detail of details) {
+    const group = groups.get(detail.field) || { field: detail.field, earnedPoints: 0, possiblePoints: 0 };
+    group.earnedPoints += detail.earnedPoints;
+    group.possiblePoints += detail.weight;
+    groups.set(detail.field, group);
+  }
   const reason = vacancy?.reasonToBeRemoved || null;
   const notCalculable = possiblePoints === 0;
   return {
@@ -41,6 +48,8 @@ function buildScoreResult(details, vacancy) {
     possiblePoints,
     calculationStatus: notCalculable ? 'not_calculable' : 'calculable',
     details,
+    groups: [...groups.values()].map((group) => ({ ...group,
+      percentage: Number((group.earnedPoints / group.possiblePoints * 100).toFixed(2)) })),
     eligibility: { eligible: !reason, reason },
     ...(vacancy?.origin === 'IMPORTED'
       ? { technicalCompatibility: notCalculable ? 'not_calculable' : 'calculable' } : {}),

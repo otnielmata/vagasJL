@@ -491,6 +491,23 @@ premia a combinação `false`/`false`. Repetições e campos derivados não dão
 Eliminatórios alteram apenas a elegibilidade. A regra usa o mesmo serviço nos
 dois sentidos do ranking e não acrescenta endpoint.
 
+## Listas proporcionais no Match — VJ-54
+
+Ferramentas, frameworks e linguagens são comparados pelos IDs canônicos
+solicitados pela vaga. Cada requisito aplicável contribui uma vez com o
+`peso-base × multiplicador da importância`; somente os IDs atendidos entram
+nos pontos obtidos. Por exemplo, Cypress e Postman de três ferramentas de
+mesmo peso (Cypress, Playwright e Postman) resultam em **66,67%** do grupo.
+Selenium adicional no perfil do candidato não altera o resultado.
+
+O serviço de Match fornece `groups` com pontos obtidos, possíveis e percentual
+por campo, além de `details` por requisito e do percentual global. Aliases e
+IDs repetidos são consolidados; termos livres, campos derivados e itens
+`indifferent` ou não identificados não pontuam. Sem requisitos aplicáveis,
+`groups` fica vazio e o cálculo permanece `not_calculable` (`percentage: null`).
+Os rankings nos dois sentidos reutilizam a mesma regra e mantêm suas respostas
+atuais; nenhum endpoint novo é adicionado.
+
 ## Importância dos requisitos — VJ-46
 
 O cadastro de vaga aceita `matchProfile.requirements` opcional. Cada item liga uma chave
