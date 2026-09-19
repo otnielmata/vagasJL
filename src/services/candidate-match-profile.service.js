@@ -2,7 +2,7 @@ const Candidate = require('../models/candidate.model');
 const Configuration = require('../models/match-profile-configuration.model');
 const MatchProfile = require('../models/candidate-match-profile.model');
 const { CANDIDATE_STATUS } = require('../config/candidate');
-const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias } = require('../config/match-profile');
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
@@ -18,6 +18,12 @@ function normalizeYears(value) {
 }
 
 function normalizeChoices(value, field) {
+  if (typeof value === 'boolean') {
+    if (!BOOLEAN_MATCH_FIELDS.includes(field.key)) invalid();
+    if (!value) return [];
+    if (field.options.length !== 1) invalid('Booleano true exige uma unica opcao publicada no catalogo');
+    return [field.options[0].id];
+  }
   if (!Array.isArray(value) && typeof value !== 'string') invalid();
   const submitted = Array.isArray(value) ? value : [value];
   if (submitted.length > 50) invalid();
