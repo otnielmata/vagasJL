@@ -1,6 +1,7 @@
 const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, isUnknownSeniority,
   isUnidentifiedModality } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
+const { DIMENSIONS, normalizePlace, validGeographyWeights } = require('../config/geography');
 
 const MATCH_SCORING_VERSION = 1;
 const DERIVED_FIELDS = Object.freeze([
@@ -111,8 +112,34 @@ function validExperience(value) {
     Number.isInteger(value * 10);
 }
 
+function geographicDetails(restrictions, candidateLocation, configuration, multipliers) {
+  if (!restrictions) return [];
+  if (!validGeographyWeights(configuration.geographyWeights) || !validMultipliers(multipliers)) {
+    throw new TypeError('Configuracao geografica invalida');
+  }
+  const weights = configuration.geographyWeights?.toObject?.() || configuration.geographyWeights;
+  const declared = restrictions?.toObject?.() || restrictions;
+  if (typeof declared !== 'object' || Array.isArray(declared) ||
+      Object.keys(declared).some((key) => !DIMENSIONS.includes(key))) {
+    throw new TypeError('Restricoes geograficas invalidas');
+  }
+  return DIMENSIONS.flatMap((key) => {
+    const restriction = declared[key];
+    if (restriction == null) return [];
+    const value = normalizePlace(restriction.value);
+    if (!value || !['required', 'desirable', 'indifferent'].includes(restriction.importance)) {
+      throw new TypeError('Restricao geografica invalida');
+    }
+    if (restriction.importance === 'indifferent') return [];
+    const weight = weights[key] * multipliers[restriction.importance];
+    return [{ field: `geo.${key}`, weight,
+      earnedPoints: normalizePlace(candidateLocation?.[key]) === value ? weight : 0 }];
+  });
+}
+
 function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, configuration, vacancy = {},
-  requirements, multipliers, eliminatoryPolicyEnabled = true }) {
+  requirements, multipliers, eliminatoryPolicyEnabled = true, geographicRestrictions,
+  candidateLocation }) {
   const weights = configuredWeights(configuration);
   if (!vacancyValues || typeof vacancyValues !== 'object' || Array.isArray(vacancyValues) ||
       !candidateValues || typeof candidateValues !== 'object' || Array.isArray(candidateValues)) {
@@ -181,7 +208,8 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
       details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
         weight, earnedPoints });
     }
-    const result = buildScoreResult(details, vacancy);
+    const result = buildScoreResult([...details,
+      ...geographicDetails(geographicRestrictions, candidateLocation, configuration, multipliers)], vacancy);
     if (unmetEliminatory) result.eligibility = { eligible: false, reason: unmetEliminatory };
     return result;
   }

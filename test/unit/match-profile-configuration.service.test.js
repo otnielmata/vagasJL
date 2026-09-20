@@ -63,6 +63,31 @@ test('publishes changed weight as new immutable version', async (context) => {
   assert.equal(create.mock.callCount(), 2);
 });
 
+test('publishes geographic weights independently of technical weights', async (context) => {
+  const { create } = isolate(context);
+  const input = { ...initial(), geographyWeights: { country: 6, state: 4, city: 2 } };
+  const first = await publishConfiguration(admin, input);
+  assert.deepEqual(first.geographyWeights.toObject(), input.geographyWeights);
+  assert.equal((await publishConfiguration(admin, { ...initial(),
+    geographyWeights: { city: 2, state: 4, country: 6 } })).version, 1);
+  const second = await publishConfiguration(admin, { ...initial(),
+    geographyWeights: { country: 8, state: 4, city: 2 } });
+  assert.equal(second.version, 2);
+  assert.equal(first.geographyWeights.country, 6);
+  assert.equal(create.mock.callCount(), 2);
+});
+
+test('rejects incomplete or invalid geographic weights before publishing', async (context) => {
+  const { create } = isolate(context);
+  for (const geographyWeights of [
+    { country: 6, city: 2 }, { country: 6, state: 0, city: 2 },
+    { country: 6, state: 4, city: 1.5 },
+    { country: 6, state: 4, city: 2, extra: 1 },
+  ]) await assert.rejects(publishConfiguration(admin, { ...initial(), geographyWeights }),
+    { statusCode: 400 });
+  assert.equal(create.mock.callCount(), 0);
+});
+
 test('rejects unknown key, missing field, nonpositive weight and client metadata', async (context) => {
   const { create } = isolate(context);
   const cases = [

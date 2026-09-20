@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { DIMENSIONS } = require('../config/geography');
 
 const optionSchema = new mongoose.Schema({
   id: { type: String, required: true, match: /^[a-z][a-z0-9_-]*$/ },
@@ -16,6 +17,9 @@ const fieldSchema = new mongoose.Schema({
 const configurationSchema = new mongoose.Schema({
   version: { type: Number, required: true, min: 1, unique: true },
   fields: { type: [fieldSchema], required: true },
+  geographyWeights: { type: new mongoose.Schema(Object.fromEntries(DIMENSIONS.map((key) =>
+    [key, { type: Number, required: true, min: 1, validate: Number.isInteger }])),
+  { _id: false }), default: null },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, select: false },
 }, { timestamps: { createdAt: true, updatedAt: false } });
 

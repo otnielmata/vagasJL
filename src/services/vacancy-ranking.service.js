@@ -25,7 +25,8 @@ function pagination(query = {}) {
 async function rankVacancies(actor, query = {}, now = new Date()) {
   if (actor?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem consultar o ranking');
   const { page, limit } = pagination(query);
-  const candidate = await Candidate.findOne({ user: actor.id, deletedAt: null }).select('_id');
+  const candidate = await Candidate.findOne({ user: actor.id, deletedAt: null })
+    .select('_id city state country');
   if (!candidate) throw new ApiError(404, 'Cadastro de candidato nao encontrado');
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id,
     deletedAt: null }).select('values configurationVersion');
@@ -55,7 +56,7 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
     const configuration = byVersion.get(vacancy.matchProfile.configurationVersion);
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
     const score = scorePair(vacancy, candidateValues, configuration,
-      matchConfiguration.multipliers, now);
+      matchConfiguration.multipliers, now, candidate);
     return { vacancy: vacancy.toJSON(), percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
       configurationVersion: vacancy.matchProfile.configurationVersion,

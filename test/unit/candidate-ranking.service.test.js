@@ -19,7 +19,8 @@ const companyId = '6512f1e2b3a1c2d3e4f5a6b8';
 const recruiterId = '6512f1e2b3a1c2d3e4f5a6b9';
 const candidateId = '6512f1e2b3a1c2d3e4f5a6ba';
 const now = new Date('2026-09-18T12:00:00Z');
-const configuration = { version: 1, fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
+const configuration = { version: 1, geographyWeights: { country: 6, state: 4, city: 2 },
+  fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
   key, weight: key === 'agile' ? 8 : INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
     ? [{ id: 'remote', label: 'Remoto', aliases: [] },
       { id: 'hybrid', label: 'Hibrido', aliases: [] }] : key === 'agile'
@@ -102,6 +103,21 @@ test('both ranking directions use identical score and vacancy denominator for sa
   const fromCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(fromCandidate.items[0].percentage, 50);
   assert.equal(fromCandidate.items[0].percentage, fromCompany.items[0].percentage);
+});
+
+test('company ranking considers only explicitly restricted country, not vacancy address', async (context) => {
+  const row = vacancy({ location: { country: 'Brasil', city: 'Campinas', state: 'São Paulo' },
+    geographicRestrictions: { country: { value: 'brasil', importance: 'required' } } });
+  const { candidates, profiles } = setup(context, row);
+  candidates[0].country = 'Brasil';
+  candidates[0].city = 'Niterói';
+  candidates[1].country = 'Portugal';
+  const result = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  assert.deepEqual(result.items.map((item) => [item.candidate.name, item.earnedPoints,
+    item.possiblePoints]), [['Bia', 16, 22], ['Ana', 14, 22]]);
+  profiles[1].values = { type: ['remote'] };
+  const next = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  assert.equal(next.items[0].candidate.name, 'Ana');
 });
 
 test('recalibrating published desirable multiplier affects both ranking directions equally', async (context) => {

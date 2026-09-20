@@ -3,9 +3,11 @@ const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority,
   isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 const { validateRequirements } = require('./vacancy-requirements.service');
+const { DIMENSIONS, normalizePlace, validGeographyWeights } = require('../config/geography');
 
 const FIELD_KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
-const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location', 'matchProfile', 'expiresAt']);
+const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location',
+  'geographicRestrictions', 'matchProfile', 'expiresAt']);
 
 function invalid(message = 'Dados da vaga invalidos') {
   throw new ApiError(400, message);
@@ -19,9 +21,26 @@ function text(value, maxLength) {
 function normalizeLocation(value) {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'object' || Array.isArray(value) ||
-      Object.keys(value).length !== 3 ||
-      Object.keys(value).some((key) => !['city', 'state', 'country'].includes(key))) invalid();
-  return Object.fromEntries(['city', 'state', 'country'].map((key) => [key, text(value[key], 200)]));
+      !Object.keys(value).length ||
+      Object.keys(value).some((key) => !DIMENSIONS.includes(key))) invalid();
+  return Object.fromEntries(Object.entries(value).map(([key, place]) => {
+    if (!normalizePlace(place)) invalid('Localizacao invalida');
+    return [key, text(place, 200)];
+  }));
+}
+
+function normalizeRestrictions(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).length ||
+      Object.keys(value).some((key) => !DIMENSIONS.includes(key))) invalid('Restricoes geograficas invalidas');
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) ||
+        Object.keys(item).sort().join(',') !== 'importance,value' || !normalizePlace(item.value) ||
+        !['required', 'desirable', 'indifferent'].includes(item.importance)) {
+      invalid('Restricao geografica invalida');
+    }
+    return [key, { value: normalizePlace(item.value), importance: item.importance }];
+  }));
 }
 
 function normalizeVacancyInput(input, { allowUnidentified = false } = {}) {
@@ -32,6 +51,7 @@ function normalizeVacancyInput(input, { allowUnidentified = false } = {}) {
   const title = text(input.title, 200);
   const description = text(input.description, 10000);
   const location = normalizeLocation(input.location);
+  const geographicRestrictions = normalizeRestrictions(input.geographicRestrictions);
   let expiresAt = null;
   if (input.expiresAt !== undefined && input.expiresAt !== null) {
     if (typeof input.expiresAt !== 'string' ||
@@ -48,7 +68,7 @@ function normalizeVacancyInput(input, { allowUnidentified = false } = {}) {
       (!allowUnidentified && (!Object.keys(matchProfile.values).length ||
         !Object.hasOwn(matchProfile.values, 'type'))) ||
       Object.keys(matchProfile.values).some((key) => !FIELD_KEYS.includes(key))) invalid();
-  return { reference, title, description, location, expiresAt, values: matchProfile.values,
+  return { reference, title, description, location, geographicRestrictions, expiresAt, values: matchProfile.values,
     requirements: matchProfile.requirements };
 }
 
@@ -99,11 +119,15 @@ async function prepareVacancyContent(input, options) {
   const configuration = await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
   const values = normalizeValues(data.values, configuration);
+  if (data.geographicRestrictions && !validGeographyWeights(configuration.geographyWeights)) {
+    throw new ApiError(503, 'Pesos geograficos nao publicados');
+  }
   return {
     reference: data.reference,
     title: data.title,
     description: data.description,
     location: data.location,
+    geographicRestrictions: data.geographicRestrictions,
     expiresAt: data.expiresAt,
     matchProfile: {
       configurationVersion: configuration.version,

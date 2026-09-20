@@ -2,6 +2,7 @@ const Configuration = require('../models/match-profile-configuration.model');
 const ApiError = require('../errors/api.error');
 const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority,
   isUnidentifiedModality } = require('../config/match-profile');
+const { DIMENSIONS, validGeographyWeights } = require('../config/geography');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const OPTION_ID = /^[a-z][a-z0-9_-]*$/;
@@ -57,7 +58,9 @@ function normalizeOptions(options) {
 }
 
 function normalizeFields(input) {
-  if (!exactKeys(input, ['fields']) || !plainObject(input.fields) ||
+  if ((!exactKeys(input, ['fields']) && !exactKeys(input, ['fields', 'geographyWeights'])) ||
+      (Object.hasOwn(input, 'geographyWeights') && !validGeographyWeights(input.geographyWeights)) ||
+      !plainObject(input.fields) ||
       Object.keys(input.fields).length !== KEYS.length ||
       Object.keys(input.fields).some((key) => !KEYS.includes(key))) invalid();
 
@@ -113,17 +116,23 @@ async function publishConfiguration(user, input) {
   const fields = normalizeFields(input);
   await Configuration.init();
   const current = await Configuration.findOne().sort({ version: -1 });
+  const canonicalGeography = (weights) => weights ? Object.fromEntries(DIMENSIONS.map((key) =>
+    [key, weights[key]])) : null;
+  const geographyWeights = canonicalGeography(input.geographyWeights || current?.geographyWeights);
+  const sameGeography = (configuration) => JSON.stringify(canonicalGeography(configuration?.geographyWeights)) ===
+    JSON.stringify(geographyWeights);
   if (current) {
     assertStableIds(current.fields, fields);
-    if (sameFields(current.fields, fields)) return current;
+    if (sameFields(current.fields, fields) && sameGeography(current)) return current;
   }
 
   try {
-    return await Configuration.create({ version: (current?.version || 0) + 1, fields, createdBy: user.id });
+    return await Configuration.create({ version: (current?.version || 0) + 1, fields,
+      geographyWeights, createdBy: user.id });
   } catch (error) {
     if (error.code !== 11000) throw error;
     const latest = await Configuration.findOne().sort({ version: -1 });
-    if (latest && sameFields(latest.fields, fields)) return latest;
+    if (latest && sameFields(latest.fields, fields) && sameGeography(latest)) return latest;
     throw new ApiError(409, 'Configuracao alterada concorrentemente; tente novamente');
   }
 }

@@ -52,6 +52,15 @@ test('admin publishes validated pending vacancy atomically without changing tech
   assert.equal(update.mock.calls[0].arguments[1].$push.statusHistory.process, 'api');
 });
 
+test('vacancy with explicit geographic restrictions cannot activate without published weights', async (context) => {
+  const { update } = setup(context, { geographicRestrictions: {
+    country: { value: 'brasil', importance: 'required' },
+  } });
+  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+    { status: 'active', reason: 'Revisao aprovada' }, now), { statusCode: 409 });
+  assert.equal(update.mock.callCount(), 0);
+});
+
 test('imported vacancy can activate with classified identified field after false modality is omitted', async (context) => {
   const { update } = setup(context, { origin: 'IMPORTED', company: null, createdBy: null,
     importSource: 'board', importSourceId: 'job-1',

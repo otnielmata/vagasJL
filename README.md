@@ -527,6 +527,29 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Localização e restrições geográficas — VJ-58
+
+A vaga conserva `location.country`, `location.state`, `location.city` e a
+modalidade principal em `matchProfile.values.type` como componentes separados.
+O endereço `location` é descritivo e **nunca gera pontos sozinho**. País,
+estado e cidade informados pelo candidato no cadastro/edição são comparados
+somente às dimensões presentes em `geographicRestrictions` da vaga. Por
+exemplo, `"geographicRestrictions": { "country": { "value": "Brasil",
+"importance": "required" } }` limita o cálculo ao país; uma vaga remota
+sem restrições explícitas ignora cidade e estado, mesmo que tenha endereço.
+
+Os valores geográficos são normalizados (acentos, caixa e espaços) para
+comparação; `UNKNOWN` não coincide com ausência. Países com nomes diferentes
+não são inferidos como equivalentes: use o mesmo valor normalizado nas duas
+fontes. A administração publica `geographyWeights` com pesos inteiros
+positivos para `country`, `state` e `city` na configuração VJ-28; restrições
+sem pesos publicados retornam **503**. A importância `required`, `desirable`
+ou `indifferent` é declarada por dimensão e utiliza os multiplicadores já
+publicados. Uma divergência geográfica reduz somente a pontuação, sem tornar
+o candidato inelegível por si só. Localizações importadas em texto livre ficam
+apenas em auditoria interna e não viram requisitos geográficos. Nenhuma rota
+nova foi criada.
+
 ## Modalidade de trabalho — VJ-57
 
 O candidato informa uma ou mais modalidades aceitas em `values.type` no cadastro

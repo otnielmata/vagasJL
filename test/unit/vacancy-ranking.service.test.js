@@ -42,7 +42,8 @@ function setup(context, vacancies) {
   const findVacancies = context.mock.method(Vacancy, 'find', () => vacancyQuery);
   const companyQuery = { select: async () => [{ _id: companyId }] };
   const findCompanies = context.mock.method(Company, 'find', () => companyQuery);
-  const configuration = { version: 1, fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
+  const configuration = { version: 1, geographyWeights: { country: 6, state: 4, city: 2 },
+    fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
     key, weight: INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
       ? [{ id: 'remote', label: 'Remoto', aliases: [] }] : [],
   })) };
@@ -73,6 +74,21 @@ test('equivalent technical requirements score identically across all three origi
   assert.deepEqual(result.items.map((item) => [item.earnedPoints, item.possiblePoints,
     item.configurationVersion]), [[8, 8, 1], [8, 8, 1], [8, 8, 1]]);
   assert.deepEqual(result.items.map((item) => item.multipliersVersion), [1, 1, 1]);
+});
+
+test('candidate ranking counts explicit country but not remote job address alone', async (context) => {
+  const restricted = vacancy('a', 'ADMIN', 'active', {
+    geographicRestrictions: { country: { value: 'brasil', importance: 'required' } },
+    location: { city: 'Campinas', state: 'São Paulo', country: 'Brasil' },
+  });
+  const unrestricted = vacancy('b', 'ADMIN', 'active', {
+    location: { city: 'Campinas', state: 'São Paulo', country: 'Brasil' },
+  });
+  const { candidateQuery } = setup(context, [restricted, unrestricted]);
+  candidateQuery.select = async () => ({ _id: actor.id, country: 'Portugal', city: 'Lisboa' });
+  const result = await rankVacancies(actor, {}, now);
+  assert.deepEqual(result.items.map((item) => [item.vacancy._id, item.earnedPoints,
+    item.possiblePoints]), [['b', 8, 8], ['a', 8, 14]]);
 });
 
 test('company vacancy disappears when owner is inactive or blocked', async (context) => {

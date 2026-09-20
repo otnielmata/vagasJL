@@ -1715,6 +1715,15 @@ components:
       required: [fields]
       additionalProperties: false
       properties:
+        geographyWeights:
+          type: object
+          description: Pesos inteiros positivos por dimensão; publicar antes de usar restrições geográficas.
+          required: [country, state, city]
+          additionalProperties: false
+          properties:
+            country: { type: integer, minimum: 1 }
+            state: { type: integer, minimum: 1 }
+            city: { type: integer, minimum: 1 }
         fields:
           type: object
           description: Exatamente as 22 chaves tecnicas definidas no contrato VJ-28
@@ -1726,6 +1735,10 @@ components:
       type: object
       required: [_id, version, fields, createdAt]
       properties:
+        geographyWeights:
+          type: object
+          nullable: true
+          description: Pesos publicados para restrições geográficas explícitas.
         _id: { type: string }
         version: { type: integer, minimum: 1 }
         fields:
@@ -1753,12 +1766,22 @@ components:
         location:
           type: object
           nullable: true
-          required: [city, state, country]
+          minProperties: 1
           additionalProperties: false
           properties:
             city: { type: string, minLength: 1, maxLength: 200 }
             state: { type: string, minLength: 1, maxLength: 200 }
             country: { type: string, minLength: 1, maxLength: 200 }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          description: Restricoes explicitas, independentes do endereco da empresa e da modalidade.
+          properties:
+            country: { $ref: '#/components/schemas/GeographicRestriction' }
+            state: { $ref: '#/components/schemas/GeographicRestriction' }
+            city: { $ref: '#/components/schemas/GeographicRestriction' }
         matchProfile:
           type: object
           required: [values]
@@ -1814,6 +1837,10 @@ components:
         title: { type: string }
         description: { type: string }
         location: { type: object, nullable: true }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          description: Apenas dimensões declaradas participam do Match; endereço descritivo não pontua.
         matchProfile:
           type: object
           properties:
@@ -2087,6 +2114,13 @@ components:
           type: string
           format: date-time
           nullable: true
+    GeographicRestriction:
+      type: object
+      required: [value, importance]
+      additionalProperties: false
+      properties:
+        value: { type: string, minLength: 1, maxLength: 200 }
+        importance: { type: string, enum: [required, desirable, indifferent] }
     CandidateRegistrationRequest:
       type: object
       required: [name, email]

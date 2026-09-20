@@ -144,7 +144,7 @@ test('non-company role, invalid company id and malformed body fail before storag
     { statusCode: 403 });
   await assert.rejects(registerCompanyVacancy(actor, 'invalid', minimum), { statusCode: 400 });
   for (const body of [null, {}, { ...minimum, title: '' }, { ...minimum, description: null },
-    { ...minimum, reference: '../bad' }, { ...minimum, location: { city: 'SP' } },
+    { ...minimum, reference: '../bad' }, { ...minimum, location: {} },
     { ...minimum, matchProfile: { values: {} } },
     { ...minimum, matchProfile: { configurationVersion: 99, values: { type: 'remote' } } },
   ]) {

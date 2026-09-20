@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { DIMENSIONS } = require('../config/geography');
 
 const matchFields = Object.fromEntries(Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => [key,
   key === 'yearsOfExperience'
@@ -20,12 +21,18 @@ const matchProfileSchema = new mongoose.Schema({
   requirements: { type: [requirementSchema], default: [] },
 }, { _id: false });
 const locationSchema = new mongoose.Schema({
-  city: { type: String, required: true, trim: true, maxlength: 200 },
-  state: { type: String, required: true, trim: true, maxlength: 200 },
-  country: { type: String, required: true, trim: true, maxlength: 200 },
+  city: { type: String, trim: true, maxlength: 200 },
+  state: { type: String, trim: true, maxlength: 200 },
+  country: { type: String, trim: true, maxlength: 200 },
 }, { _id: false });
+const geographicRestrictionSchema = new mongoose.Schema(Object.fromEntries(DIMENSIONS.map((key) =>
+  [key, { type: new mongoose.Schema({
+    value: { type: String, required: true, trim: true, maxlength: 200 },
+    importance: { type: String, enum: ['required', 'desirable', 'indifferent'], required: true },
+  }, { _id: false }), default: undefined }])), { _id: false });
 const importMappingAuditSchema = new mongoose.Schema({
   unknownLevel: { type: Boolean, default: false },
+  rawLocation: { type: String, default: null, maxlength: 2000 },
   rawFalseValues: { type: [{
     field: { type: String, required: true, enum: Object.keys(INITIAL_MATCH_WEIGHTS) },
     value: { type: Boolean, required: true, enum: [false] },
@@ -48,6 +55,7 @@ const vacancySchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, maxlength: 200 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },
   location: { type: locationSchema, default: null },
+  geographicRestrictions: { type: geographicRestrictionSchema, default: null },
   matchProfile: { type: matchProfileSchema, required: true },
   origin: {
     type: String,

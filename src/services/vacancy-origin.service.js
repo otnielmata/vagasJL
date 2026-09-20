@@ -59,7 +59,8 @@ async function registerImportedVacancy(provenance, input) {
     ? Object.entries(rawValues).filter(([field, value]) =>
       Object.hasOwn(INITIAL_MATCH_WEIGHTS, field) && value === false).map(([field]) => field)
     : [];
-  const mappedInput = { ...input, matchProfile: { ...input?.matchProfile,
+  const mappedInput = { ...input, ...(typeof input?.location === 'string' ? { location: null } : {}),
+    matchProfile: { ...input?.matchProfile,
     values: preparedValues && typeof preparedValues === 'object' && !Array.isArray(preparedValues)
       ? Object.fromEntries(Object.entries(preparedValues)
         .filter(([field, value]) => !rawFalseFields.includes(field) &&
@@ -101,6 +102,7 @@ async function registerImportedVacancy(provenance, input) {
         revision: 1, requirements: content.matchProfile.requirements,
       }] } : {}),
       importMappingAudit: { unknownLevel,
+        rawLocation: typeof input.location === 'string' ? input.location.slice(0, 2000) : null,
         rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
     });
   } catch (error) {

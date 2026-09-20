@@ -4,6 +4,7 @@ const Configuration = require('../models/match-profile-configuration.model');
 const User = require('../models/user.model');
 const Vacancy = require('../models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
+const { validGeographyWeights } = require('../config/geography');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -62,6 +63,9 @@ async function ensurePublishable(vacancy, now) {
   });
   if (!configuration || !profile.values) {
     throw new ApiError(409, 'Perfil de Match sem configuracao valida');
+  }
+  if (vacancy.geographicRestrictions && !validGeographyWeights(configuration.geographyWeights)) {
+    throw new ApiError(409, 'Restricoes geograficas sem pesos publicados');
   }
   const values = typeof profile.values.toObject === 'function'
     ? profile.values.toObject() : profile.values;

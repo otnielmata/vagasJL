@@ -37,7 +37,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
   const matchConfiguration = await getPublishedMultipliers();
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
-    deletedAt: null }).select('_id name');
+    deletedAt: null }).select('_id name city state country');
   const profiles = candidates.length ? await CandidateMatchProfile.find({
     candidate: { $in: candidates.map((candidate) => candidate._id) }, deletedAt: null,
   }).select('candidate values configurationVersion') : [];
@@ -48,7 +48,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, configuration,
-      matchConfiguration.multipliers, now);
+      matchConfiguration.multipliers, now, candidate);
     if (!score.eligibility.eligible || score.possiblePoints === 0) return [];
     return [{ candidate: { _id: candidate._id, name: candidate.name }, percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
