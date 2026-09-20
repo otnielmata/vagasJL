@@ -527,6 +527,30 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Catálogo de ferramentas de automação — VJ-59
+
+O campo `testAutomationTechnologies` usa o catálogo versionado de
+`PUT /perfil-match/configuracao`. Para gerar **uma proposta de configuração
+inicial** (sem gravar no banco), execute `npm run match:automation-proposal`.
+Ela contém Cypress, Selenium, Playwright, Postman, Appium, Robot Framework,
+Cucumber, JMeter, K6, RestAssured, TestNG, SoapUI, Karate, Gatling e
+LoadRunner. São sugestões para conferir com a base real, **não** uma lista
+fechada; outras ferramentas aprovadas podem ser incluídas com IDs únicos.
+O arquivo `src/config/automation-tools.js` define os IDs, nomes amigáveis e
+aliases sugeridos. `Cypress.io` e `Cypress Framework` apontam para `cypress`.
+
+Após revisão, o administrador publica o JSON no endpoint existente e recebe
+**200** com a versão. Em uma instalação que já possui configuração, **mescle
+as opções** na versão vigente em vez de enviar a proposta inteira: esta deixa
+os demais catálogos vazios e sua publicação removeria IDs anteriores. O campo
+`type`, necessário ao cadastro de vagas próprias, também precisa ter opções
+aprovadas e publicadas. O servidor recusa aliases atribuídos a IDs diferentes
+e remoção de IDs publicados (**409**), sem alterar a configuração vigente. Nome fora do
+catálogo é rejeitado (**400**) no perfil do candidato ou na vaga; IDs
+canônicos são persistidos e aliases repetidos de uma ferramenta pontuam uma
+única vez. O peso da ferramenta é o peso configurado para o campo, não uma
+propriedade do nome. Não há rota nova nem publicação automática.
+
 ## Localização e restrições geográficas — VJ-58
 
 A vaga conserva `location.country`, `location.state`, `location.city` e a

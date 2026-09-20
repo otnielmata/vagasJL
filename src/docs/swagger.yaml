@@ -1726,7 +1726,11 @@ components:
             city: { type: integer, minimum: 1 }
         fields:
           type: object
-          description: Exatamente as 22 chaves tecnicas definidas no contrato VJ-28
+          description: >
+            Exatamente as 22 chaves tecnicas da VJ-28. Em testAutomationTechnologies,
+            publicar IDs canonicos com labels e aliases conferidos na base real;
+            a proposta opcional pode ser gerada por npm run match:automation-proposal.
+            Uma nova publicacao deve preservar todos os IDs ja publicados.
           minProperties: 22
           maxProperties: 22
           additionalProperties:

@@ -10,7 +10,8 @@
     "candidates:revalidate": "node scripts/revalidate-candidate.js",
     "candidates:sync-indexes": "node scripts/sync-candidate-indexes.js",
     "vacancies:audit-origins": "node scripts/audit-vacancy-origins.js",
-    "vacancies:expire": "node scripts/expire-vacancies.js"
+    "vacancies:expire": "node scripts/expire-vacancies.js",
+    "match:automation-proposal": "node scripts/print-automation-catalog-proposal.js"
   },
   "keywords": [
     "express",
