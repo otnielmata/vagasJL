@@ -409,13 +409,15 @@ essa execução externamente, pois timers locais não são confiáveis.
 
 `GET /candidatos/me/vagas/ranking?page=1&limit=20` exige JWT de candidato com cadastro e
 Perfil de Match atual. `page` começa em 1 e `limit` aceita 1–50. A resposta contém `items`
-com `vacancy`, `percentage`, `earnedPoints`, `possiblePoints` e `configurationVersion`,
+com `vacancy`, `percentage`, `earnedPoints`, `possiblePoints`, `matchedRequiredCount` e
+`configurationVersion`,
 além de `total`, `page`, `limit` e `pages`. Apenas vagas `active`,
 não excluídas e com prazo vigente entram no cálculo; vagas `COMPANY` também exigem empresa
 `active`. Origem e status não acrescentam pontos. O percentual reutiliza a comparação de
 competências canônicas e pesos da configuração versionada, sem inventar uma fórmula para
-campos ainda não contemplados pelo motor. A ordenação é percentual decrescente, data de
-criação decrescente e ID como desempate. O total e as páginas contam apenas vagas elegíveis.
+campos ainda não contemplados pelo motor. A ordenação é percentual decrescente, quantidade
+de requisitos obrigatórios atendidos, data de atualização da vaga e ID estável. O total e as
+páginas contam apenas vagas elegíveis.
 Não há cache; a próxima consulta reflete pausas, bloqueios e vencimentos. Sem cadastro retorna
 **404**, sem Perfil de Match **409**, parâmetros inválidos **400**, sem autenticação **401**
 e papel diferente de candidato **403**.
@@ -429,10 +431,22 @@ pode consultar vaga `COMPANY` da própria empresa ativa; administrador pode cons
 qualquer origem válida. A vaga precisa estar `active`, vigente e com requisitos
 pontuáveis. Apenas candidatos `active` com Perfil de Match atual entram no cálculo.
 Critério eliminatório não atendido remove o candidato do resultado, sem alterar o
-percentual dos demais. O ranking ordena por percentual decrescente e ID estável; a
+percentual dos demais. O ranking ordena por percentual decrescente, quantidade de requisitos
+obrigatórios atendidos, atualização do Perfil de Match e ID estável; a
 resposta paginada contém apenas ID e nome do candidato, nunca contato ou dados
 internos. O resultado sem pontos possíveis não é apresentado como 100%.
-Cada item também informa `earnedPoints`, `possiblePoints` e `configurationVersion`.
+Cada item também informa `earnedPoints`, `possiblePoints`, `matchedRequiredCount` e
+`configurationVersion`.
+
+## Top e desempates do ranking — VJ-63
+
+Os dois rankings existentes aceitam `limit=3`, `limit=5` ou `limit=10` para apresentar Top 3,
+Top 5 ou Top 10, sem endpoint adicional e mantendo `page`, `total` e `pages`. Status, prazo,
+empresa ativa, perfil existente, critérios eliminatórios e cálculo possível são filtrados antes
+da ordenação, do total e do recorte. Empates usam, nesta ordem: requisitos `required` atendidos
+integralmente, atualização mais recente do item apresentado e ID estável. O desempate não altera
+o percentual técnico, não concede bônus por pontos possíveis ou prioridade comercial e ignora
+engajamento no MVP.
 
 ID ou paginação inválidos retornam **400**; falta de autenticação **401**; vínculo
 empresarial ausente, empresa inativa ou origem alheia **403**; vaga inexistente ou

@@ -5,7 +5,7 @@ const Configuration = require('../models/match-profile-configuration.model');
 const { getPublishedMultipliers } = require('./match-multipliers-configuration.service');
 const Vacancy = require('../models/vacancy.model');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
-const { scorePair } = require('./match-ranking.service');
+const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const ApiError = require('../errors/api.error');
 
 function pagination(query = {}) {
@@ -57,17 +57,19 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
     const score = scorePair(vacancy, candidateValues, configuration,
       matchConfiguration.multipliers, now, candidate);
-    return { vacancy: vacancy.toJSON(), percentage: score.percentage,
+    const item = { vacancy: vacancy.toJSON(), percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
+      matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
-      multipliersVersion: matchConfiguration.version,
-      eligible: score.eligibility.eligible && score.possiblePoints > 0 };
-  }).filter((item) => item.eligible).map(({ eligible, ...item }) => item);
-  ranked.sort((left, right) => right.percentage - left.percentage ||
-    new Date(right.vacancy.createdAt) - new Date(left.vacancy.createdAt) ||
-    String(left.vacancy._id).localeCompare(String(right.vacancy._id)));
+      multipliersVersion: matchConfiguration.version };
+    return { item, percentage: score.percentage,
+      matchedRequiredCount: score.matchedRequiredCount, updatedAt: vacancy.updatedAt,
+      stableId: vacancy._id, eligible: score.eligibility.eligible && score.possiblePoints > 0 };
+  }).filter((row) => row.eligible);
+  ranked.sort(compareRankingRows);
   const total = ranked.length;
-  return { items: ranked.slice((page - 1) * limit, page * limit), total, page, limit,
+  return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
+    total, page, limit,
     pages: Math.ceil(total / limit) };
 }
 

@@ -7,7 +7,7 @@ const Vacancy = require('../models/vacancy.model');
 const { CANDIDATE_STATUS } = require('../config/candidate');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { ensureCompanyAuthorized } = require('./vacancy-status.service');
-const { scorePair } = require('./match-ranking.service');
+const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const { pagination } = require('./vacancy-ranking.service');
 const ApiError = require('../errors/api.error');
 
@@ -40,7 +40,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
     deletedAt: null }).select('_id name city state country');
   const profiles = candidates.length ? await CandidateMatchProfile.find({
     candidate: { $in: candidates.map((candidate) => candidate._id) }, deletedAt: null,
-  }).select('candidate values configurationVersion') : [];
+  }).select('candidate values configurationVersion updatedAt') : [];
   const byCandidate = new Map(profiles.map((profile) => [String(profile.candidate), profile]));
   const ranked = candidates.flatMap((candidate) => {
     const profile = byCandidate.get(String(candidate._id));
@@ -50,15 +50,19 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
     const score = scorePair(vacancy, candidateValues, configuration,
       matchConfiguration.multipliers, now, candidate);
     if (!score.eligibility.eligible || score.possiblePoints === 0) return [];
-    return [{ candidate: { _id: candidate._id, name: candidate.name }, percentage: score.percentage,
-      earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
+    const item = { candidate: { _id: candidate._id, name: candidate.name },
+      percentage: score.percentage, earnedPoints: score.earnedPoints,
+      possiblePoints: score.possiblePoints, matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
-      multipliersVersion: matchConfiguration.version }];
+      multipliersVersion: matchConfiguration.version };
+    return [{ item, percentage: score.percentage,
+      matchedRequiredCount: score.matchedRequiredCount, updatedAt: profile.updatedAt,
+      stableId: candidate._id }];
   });
-  ranked.sort((left, right) => right.percentage - left.percentage ||
-    String(left.candidate._id).localeCompare(String(right.candidate._id)));
+  ranked.sort(compareRankingRows);
   const total = ranked.length;
-  return { items: ranked.slice((page - 1) * limit, page * limit), total, page, limit,
+  return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
+    total, page, limit,
     pages: Math.ceil(total / limit) };
 }
 

@@ -74,6 +74,18 @@ test('equivalent technical requirements score identically across all three origi
   assert.deepEqual(result.items.map((item) => [item.earnedPoints, item.possiblePoints,
     item.configurationVersion]), [[8, 8, 1], [8, 8, 1], [8, 8, 1]]);
   assert.deepEqual(result.items.map((item) => item.multipliersVersion), [1, 1, 1]);
+  assert.deepEqual(result.items.map((item) => item.matchedRequiredCount), [1, 1, 1]);
+});
+
+test('candidate ranking accepts Top 3, Top 5 and Top 10 and keeps total before limiting', async (context) => {
+  const rows = Array.from({ length: 10 }, (_, index) => vacancy(String(index), 'ADMIN'));
+  setup(context, rows);
+  for (const limit of [3, 5, 10]) {
+    const result = await rankVacancies(actor, { limit: String(limit) }, now);
+    assert.equal(result.items.length, limit);
+    assert.equal(result.total, 10);
+    assert.equal(result.limit, limit);
+  }
 });
 
 test('candidate ranking counts explicit country but not remote job address alone', async (context) => {

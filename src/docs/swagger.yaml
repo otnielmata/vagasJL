@@ -126,13 +126,16 @@ paths:
   /candidatos/me/vagas/ranking:
     get:
       tags: [Vacancies]
-      summary: Lista apenas vagas elegiveis para o candidato (VJ-45)
+      summary: Lista vagas elegiveis por Match com Top 3, 5 ou 10 (VJ-45/VJ-63)
       description: >
         Requer JWT de candidato com cadastro e Perfil de Match. Aplica status active,
         prazo vigente e empresa active para vagas COMPANY antes de pontuar, ordenar e
         paginar. Nao usa cache. Origem nao modifica o percentual tecnico. Campos false
         de vagas IMPORTED nao pontuam nem eliminam; sem requisito pontuavel, a
-        compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking.
+        compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking. O
+        limit aceita Top 3, Top 5 e Top 10. Depois dos filtros, ordena por percentual,
+        requisitos obrigatorios atendidos, atualizacao da vaga e ID estavel. Engajamento
+        nao altera o ranking tecnico.
       security:
         - bearerAuth: []
       parameters:
@@ -155,12 +158,13 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [vacancy, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion]
+                      required: [vacancy, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion]
                       properties:
                         vacancy: { $ref: '#/components/schemas/Vacancy' }
                         percentage: { type: number, minimum: 0, maximum: 100 }
                         earnedPoints: { type: number, minimum: 0 }
                         possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        matchedRequiredCount: { type: integer, minimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
                         multipliersVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }
@@ -176,12 +180,14 @@ paths:
   /vagas/{id}/candidatos/ranking:
     get:
       tags: [Vacancies]
-      summary: Lista candidatos ativos compativeis com a vaga (VJ-50)
+      summary: Lista candidatos ativos por Match com Top 3, 5 ou 10 (VJ-50/VJ-63)
       description: >
         Reutiliza o mesmo calculo tecnico do ranking do candidato, com a vaga como
         referencia de requisitos e denominador. Recrutador vinculado consulta apenas
         vaga COMPANY da propria empresa ativa; admin pode consultar origens validas.
-        Exclui candidatos inativos, sem perfil ou inelegiveis e retorna somente ID e nome.
+        Exclui candidatos inativos, sem perfil ou inelegiveis antes de ordenar e limitar.
+        O limit aceita Top 3, Top 5 e Top 10. Ordena por percentual, requisitos obrigatorios
+        atendidos, atualizacao do perfil e ID estavel. Engajamento nao participa do MVP.
       security:
         - bearerAuth: []
       parameters:
@@ -208,7 +214,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [candidate, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion]
+                      required: [candidate, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion]
                       properties:
                         candidate:
                           type: object
@@ -219,6 +225,7 @@ paths:
                         percentage: { type: number, minimum: 0, maximum: 100 }
                         earnedPoints: { type: number, minimum: 0 }
                         possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        matchedRequiredCount: { type: integer, minimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
                         multipliersVersion: { type: integer, minimum: 1 }
                   total: { type: integer, minimum: 0 }

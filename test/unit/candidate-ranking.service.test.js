@@ -80,6 +80,7 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(result.items[0].percentage, 100);
   assert.deepEqual([result.items[0].earnedPoints, result.items[0].possiblePoints,
     result.items[0].configurationVersion], [16, 16, 1]);
+  assert.equal(result.items[0].matchedRequiredCount, 2);
   assert.equal(result.items[0].multipliersVersion, 1);
   assert.equal(result.items[0].candidate.email, undefined);
   assert.equal(findCandidates.mock.calls[0].arguments[0].status, 'active');
@@ -87,6 +88,24 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
     { page: '2', limit: '1' }, now);
   assert.equal(second.items[0].candidate.name, 'Ana');
   assert.equal(second.items[0].percentage, 50);
+});
+
+test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit', async (context) => {
+  const { candidates, profiles } = setup(context);
+  candidates.splice(0, candidates.length);
+  profiles.splice(0, profiles.length);
+  for (let index = 0; index < 10; index += 1) {
+    const id = `6512f1e2b3a1c2d3e4f5a${String(index).padStart(2, '0')}`;
+    candidates.push({ _id: id, name: `Candidate ${index}` });
+    profiles.push({ candidate: id, updatedAt: new Date(`2026-09-${String(index + 1).padStart(2, '0')}T00:00:00Z`),
+      configurationVersion: 1, values: { type: ['remote'], agile: ['scrum'] } });
+  }
+  for (const limit of [3, 5, 10]) {
+    const result = await rankCandidates({ role: 'admin' }, vacancyId, { limit: String(limit) }, now);
+    assert.equal(result.items.length, limit);
+    assert.equal(result.total, 10);
+    assert.equal(result.limit, limit);
+  }
 });
 
 test('both ranking directions use identical score and vacancy denominator for same pair', async (context) => {
