@@ -192,6 +192,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
+| GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
@@ -479,6 +480,27 @@ candidato inelegível. Quando calculável, o percentual técnico permanece dispo
 seguro; gaps podem coexistir com baixa compatibilidade, mas não geram plano de estudos. Vagas
 pausadas, removidas, expiradas ou pertencentes a empresa inativa continuam retornando **404**,
 sem receber classificação falsa.
+
+## Engajamento oficial somente leitura — VJ-67
+
+`GET /candidatos/me/engajamento` consulta somente os dados do candidato ativo e validado pelo
+e-mail associado à própria conta. A rota não aceita `studentId`, e-mail ou outro identificador
+na query, não possui variantes `POST`, `PATCH` ou `DELETE` e não persiste uma cópia editável.
+Empresas não têm acesso nesta história.
+
+O conector chama `ENGAGEMENT_API_URL` por `GET`, envia o identificador validado no header
+`X-Student-Identifier` e autentica o servidor pelo token Bearer `ENGAGEMENT_API_TOKEN`, que nunca
+é devolvido ao cliente. O contrato provisório aceita somente campos presentes e autorizados:
+`cohort`, `challengesCompleted`, `totalChallenges`, `score`, `participation`, `history` e
+`projects`; propriedades adicionais são descartadas. `referenceAt` é retornado apenas quando
+fornecido pela origem. O contrato definitivo deve ser alinhado com a plataforma de engajamento.
+
+A resposta informa `available`, `no_data` ou `unavailable`, sempre com `data: null` quando não
+há informação oficial, sem preencher zeros fictícios e sem modificar o Perfil de Match. O timeout
+é configurado por `ENGAGEMENT_API_TIMEOUT_MS` (padrão 3000 ms). Respostas disponíveis ou sem
+vínculo são mantidas somente em memória pelo período de `ENGAGEMENT_CACHE_TTL_MS` (padrão cinco
+minutos); falhas não são armazenadas. Defina TTL zero para desabilitar cache. Em ambientes
+serverless, o cache é oportunista por instância e nunca é fonte oficial.
 
 ## Match explicável — VJ-64
 

@@ -29,6 +29,12 @@ const config = {
   match: {
     eliminatoryEnabled: (process.env.MATCH_ELIMINATORY_ENABLED ?? 'true') === 'true',
   },
+  engagement: {
+    apiUrl: process.env.ENGAGEMENT_API_URL || '',
+    apiToken: process.env.ENGAGEMENT_API_TOKEN || '',
+    timeoutMs: Number(process.env.ENGAGEMENT_API_TIMEOUT_MS || 3000),
+    cacheTtlMs: Number(process.env.ENGAGEMENT_CACHE_TTL_MS || 300000),
+  },
 };
 
 function validateConfig() {
@@ -39,6 +45,25 @@ function validateConfig() {
   }
   if (!['true', 'false'].includes(process.env.MATCH_ELIMINATORY_ENABLED ?? 'true')) {
     errors.push('MATCH_ELIMINATORY_ENABLED deve ser true ou false');
+  }
+  if (Boolean(config.engagement.apiUrl) !== Boolean(config.engagement.apiToken)) {
+    errors.push('ENGAGEMENT_API_URL e ENGAGEMENT_API_TOKEN devem ser configurados juntos');
+  }
+  if (config.engagement.apiUrl) {
+    try {
+      const engagementUrl = new URL(config.engagement.apiUrl);
+      if (!['http:', 'https:'].includes(engagementUrl.protocol)) throw new Error();
+    } catch {
+      errors.push('ENGAGEMENT_API_URL deve ser uma URL HTTP ou HTTPS valida');
+    }
+  }
+  if (!Number.isSafeInteger(config.engagement.timeoutMs) || config.engagement.timeoutMs < 100 ||
+      config.engagement.timeoutMs > 30000) {
+    errors.push('ENGAGEMENT_API_TIMEOUT_MS deve ser inteiro entre 100 e 30000');
+  }
+  if (!Number.isSafeInteger(config.engagement.cacheTtlMs) || config.engagement.cacheTtlMs < 0 ||
+      config.engagement.cacheTtlMs > 3600000) {
+    errors.push('ENGAGEMENT_CACHE_TTL_MS deve ser inteiro entre 0 e 3600000');
   }
 
   if (!config.jwt.secret || Buffer.byteLength(config.jwt.secret) < 32 || config.jwt.secret.startsWith('troque-')) {

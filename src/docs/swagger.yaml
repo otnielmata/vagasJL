@@ -297,6 +297,84 @@ paths:
         '403': { description: Conta nao e candidata }
         '404': { description: Candidato inexistente ou vaga indisponivel }
         '503': { description: Configuracao tecnica indisponivel }
+  /candidatos/me/engajamento:
+    get:
+      tags: [Candidates]
+      summary: Consulta engajamento oficial do proprio candidato (VJ-67)
+      description: >
+        Somente candidato ativo e validado. Usa a identidade vinculada a conta e rejeita
+        identificadores externos na query. Consulta a origem com credenciais do servidor,
+        aplica timeout e cache apenas em memoria, filtra campos autorizados e nunca persiste
+        copia editavel. Retorna estado explicito sem inventar zeros quando nao ha dados ou a
+        origem esta indisponivel.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Estado da consulta oficial de engajamento
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [engagement]
+                properties:
+                  engagement:
+                    type: object
+                    required: [status, readOnly, data, referenceAt, retrievedAt, cache]
+                    properties:
+                      status:
+                        type: string
+                        enum: [available, no_data, unavailable]
+                      readOnly: { type: boolean, enum: [true] }
+                      data:
+                        type: object
+                        nullable: true
+                        additionalProperties: false
+                        properties:
+                          cohort: { type: string }
+                          challengesCompleted: { type: number }
+                          totalChallenges: { type: number }
+                          score: { type: number }
+                          participation:
+                            oneOf:
+                              - { type: string }
+                              - { type: number }
+                          history:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                type: { type: string }
+                                title: { type: string }
+                                status: { type: string }
+                                occurredAt: { type: string }
+                                score: { type: number }
+                          projects:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                name: { type: string }
+                                description: { type: string }
+                                url: { type: string }
+                                status: { type: string }
+                                completedAt: { type: string }
+                      referenceAt: { type: string, format: date-time, nullable: true }
+                      retrievedAt: { type: string, format: date-time }
+                      reason:
+                        type: string
+                        enum: [student_link_missing, integration_not_configured, student_not_found, authorized_data_absent, origin_unavailable]
+                      cache:
+                        type: object
+                        required: [hit, ttlSeconds]
+                        properties:
+                          hit: { type: boolean }
+                          ttlSeconds: { type: number, minimum: 0, maximum: 3600 }
+        '400': { description: Identificador externo enviado na query }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel, cadastro ou validacao de candidato ausente }
   /vagas/{id}/candidatos/ranking:
     get:
       tags: [Vacancies]

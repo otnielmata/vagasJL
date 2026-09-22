@@ -9,6 +9,7 @@ const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
 const matchProfileController = require('../controllers/candidate-match-profile.controller');
+const engagementController = require('../controllers/candidate-engagement.controller');
 
 const router = Router();
 
@@ -16,6 +17,8 @@ router.get('/me/vagas/ranking', authenticate, authorize('candidate'), ensureData
   candidateController.rankVacancies);
 router.get('/me/vagas/:id/match', authenticate, authorize('candidate'), ensureDatabase,
   candidateController.showMatchDetail);
+router.get('/me/engajamento', authenticate, authorize('candidate'), ensureDatabase,
+  engagementController.show);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.patch('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.update);
