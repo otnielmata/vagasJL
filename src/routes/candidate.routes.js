@@ -14,6 +14,8 @@ const router = Router();
 
 router.get('/me/vagas/ranking', authenticate, authorize('candidate'), ensureDatabase,
   candidateController.rankVacancies);
+router.get('/me/vagas/:id/match', authenticate, authorize('candidate'), ensureDatabase,
+  candidateController.showMatchDetail);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.patch('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.update);

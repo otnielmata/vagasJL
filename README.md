@@ -190,6 +190,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
+| GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
@@ -447,6 +448,23 @@ da ordenação, do total e do recorte. Empates usam, nesta ordem: requisitos `re
 integralmente, atualização mais recente do item apresentado e ID estável. O desempate não altera
 o percentual técnico, não concede bônus por pontos possíveis ou prioridade comercial e ignora
 engajamento no MVP.
+
+## Match explicável — VJ-64
+
+`GET /candidatos/me/vagas/{id}/match` permite que somente o candidato autenticado consulte
+o detalhe do próprio Match com uma vaga ativa e visível. O endpoint reutiliza o mesmo Motor de
+Match dos rankings e retorna `percentage`, `earnedPoints`, `possiblePoints`, versões da
+configuração e dos multiplicadores, `metCriteria`, `gaps` e `availableCriteria`. Cada critério
+contém ID canônico, label amigável, importância, status e contribuição em pontos.
+
+Os gaps incluem somente requisitos aplicáveis não atendidos ou parcialmente atendidos e são
+ordenados pela maior perda efetiva, com desempate estável. Competências extras, requisitos
+`indifferent`, campos derivados, texto livre e valores não identificados de importação não viram
+gaps. Perfil ausente ou incompleto e denominador zero retornam
+`calculationStatus: "not_calculable"` e percentual nulo, sem inventar 100%. Inelegibilidade é
+informada separadamente por motivo estruturado e seguro. A resposta não cria plano de estudos,
+não expõe dados privados de terceiros e devolve **404** para vaga inativa, expirada ou vinculada
+a empresa inativa.
 
 ID ou paginação inválidos retornam **400**; falta de autenticação **401**; vínculo
 empresarial ausente, empresa inativa ou origem alheia **403**; vaga inexistente ou

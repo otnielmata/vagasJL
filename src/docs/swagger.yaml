@@ -177,6 +177,66 @@ paths:
         '404': { description: Cadastro de candidato inexistente }
         '409': { description: Perfil de Match nao cadastrado }
         '503': { description: Configuracao tecnica indisponivel }
+  /candidatos/me/vagas/{id}/match:
+    get:
+      tags: [Vacancies]
+      summary: Explica o Match do candidato autenticado com uma vaga (VJ-64)
+      description: >
+        Reutiliza o mesmo Motor de Match dos rankings. Retorna criterios atendidos,
+        gaps canonicos ordenados pela perda efetiva e motivo seguro de inelegibilidade.
+        Competencias extras, indifferent, derivados, texto livre e valores importados nao
+        identificados nao viram gaps. Perfil incompleto ou denominador zero produz estado
+        not_calculable e percentual nulo. Nao gera plano de estudos nem expoe dados privados.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      responses:
+        '200':
+          description: Detalhe explicavel do Match
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vacancy, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, eligibility, metCriteria, gaps, availableCriteria]
+                properties:
+                  vacancy:
+                    type: object
+                    required: [_id, title]
+                    properties:
+                      _id: { type: string }
+                      title: { type: string }
+                  calculationStatus:
+                    type: string
+                    enum: [calculable, not_calculable]
+                  percentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  earnedPoints: { type: number, minimum: 0, nullable: true }
+                  possiblePoints: { type: number, minimum: 0, nullable: true }
+                  configurationVersion: { type: integer, minimum: 1 }
+                  multipliersVersion: { type: integer, minimum: 1 }
+                  eligibility:
+                    type: object
+                    required: [eligible, reason]
+                    properties:
+                      eligible: { type: boolean, nullable: true }
+                      reason: { type: object, nullable: true, additionalProperties: true }
+                  metCriteria:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  gaps:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  availableCriteria:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+        '400': { description: Identificador da vaga invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Conta nao e candidata }
+        '404': { description: Candidato inexistente ou vaga indisponivel }
+        '503': { description: Configuracao tecnica indisponivel }
   /vagas/{id}/candidatos/ranking:
     get:
       tags: [Vacancies]
@@ -1697,6 +1757,23 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchCriterionDetail:
+      type: object
+      required: [field, id, label, importance, status, earnedPoints, possiblePoints, lostPoints]
+      additionalProperties: false
+      properties:
+        field: { type: string, example: testAutomationTechnologies }
+        id: { type: string, example: playwright }
+        label: { type: string, example: Playwright }
+        importance:
+          type: string
+          enum: [required, desirable]
+        status:
+          type: string
+          enum: [met, gap, unknown]
+        earnedPoints: { type: number, minimum: 0, nullable: true }
+        possiblePoints: { type: number, exclusiveMinimum: 0 }
+        lostPoints: { type: number, minimum: 0, nullable: true }
     MatchProfileOption:
       type: object
       required: [id, label, aliases]
