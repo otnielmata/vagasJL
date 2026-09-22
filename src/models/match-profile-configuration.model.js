@@ -10,6 +10,7 @@ const optionSchema = new mongoose.Schema({
 
 const fieldSchema = new mongoose.Schema({
   key: { type: String, required: true, enum: Object.keys(INITIAL_MATCH_WEIGHTS) },
+  label: { type: String, trim: true, maxlength: 100, default: undefined },
   weight: { type: Number, required: true, min: 1, validate: Number.isInteger },
   options: { type: [optionSchema], default: [] },
 }, { _id: false });

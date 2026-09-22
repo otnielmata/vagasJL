@@ -527,6 +527,34 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Ferramentas de QA e Gestão de Testes — VJ-61
+
+O campo técnico continua persistido como `tecnologies` para preservar perfis,
+vagas e configurações existentes. Sua configuração agora aceita o metadado
+opcional `label`; a proposta usa **“Ferramentas de QA e Gestão de Testes”**.
+Esse nome é somente de apresentação e não renomeia a chave no MongoDB nem no
+contrato atual. Para gerar **uma proposta sem publicar automaticamente**,
+execute `npm run match:qa-management-proposal`.
+
+A proposta contém TestRail, Xray, Zephyr, Azure DevOps, TestLink, qTest e HP
+ALM, com IDs, labels e aliases normalizados. Ela não é uma lista fechada e
+deve ser conferida com a base real. O administrador publica as opções pelo
+mesmo `PUT /perfil-match/configuracao` e recebe **200** com uma versão. Em uma
+instalação já configurada, mescle as opções com a versão vigente, pois o JSON
+gerado mantém vazios os demais catálogos e IDs publicados não podem ser
+removidos (**409**).
+
+Perfis e vagas persistem somente IDs canônicos. Variações como `qTest` e
+`Tricentis qTest` resolvem para `qtest` e pontuam uma vez. Alterar apenas o
+label do campo cria uma nova configuração, mas não regrava perfis anteriores
+nem modifica seus IDs ou sua versão. Alias ambíguo é recusado (**409**) e
+texto livre não publicado retorna **400** sem criar competência.
+
+`tecnologies` e `testAutomationTechnologies` permanecem catálogos separados.
+A configuração recusa nomes, labels ou aliases sobrepostos entre eles, para
+evitar pontuação dupla sem decisão explícita de produto e migração. Nenhuma
+rota nova foi adicionada.
+
 ## Catálogo de linguagens de programação — VJ-60
 
 O campo `programmingLanguages` usa o catálogo versionado de

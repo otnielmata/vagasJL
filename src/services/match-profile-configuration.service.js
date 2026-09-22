@@ -66,15 +66,31 @@ function normalizeFields(input) {
 
   return KEYS.map((key) => {
     const field = input.fields[key];
-    if (!exactKeys(field, ['weight', 'options']) || !Number.isSafeInteger(field.weight) ||
+    if ((!exactKeys(field, ['weight', 'options']) &&
+        !exactKeys(field, ['label', 'weight', 'options'])) ||
+        (Object.hasOwn(field, 'label') && (typeof field.label !== 'string' ||
+          !field.label.trim() || field.label.trim().length > 100)) ||
+        !Number.isSafeInteger(field.weight) ||
         field.weight <= 0) invalid();
     const options = normalizeOptions(field.options);
     if (key === 'level' && options.some((option) =>
       [option.id, option.label, ...option.aliases].some(isUnknownSeniority))) invalid();
     if (key === 'type' && options.some((option) =>
       [option.id, option.label, ...option.aliases].some(isUnidentifiedModality))) invalid();
-    return { key, weight: field.weight, options };
+    return { key, ...(field.label ? { label: field.label.trim() } : {}),
+      weight: field.weight, options };
   });
+}
+
+function assertSeparateQaCatalogs(fields) {
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+  const automationNames = new Set(byKey.get('testAutomationTechnologies').options.flatMap((option) =>
+    [option.id, option.label, ...option.aliases].map(normalizeAlias)));
+  const overlap = byKey.get('tecnologies').options.some((option) =>
+    [option.id, option.label, ...option.aliases].some((name) => automationNames.has(normalizeAlias(name))));
+  if (overlap) {
+    throw new ApiError(409, 'Ferramenta exige decisao de catalogo antes da publicacao');
+  }
 }
 
 function assertStableIds(previousFields, nextFields) {
@@ -101,6 +117,7 @@ function assertStableIds(previousFields, nextFields) {
 function sameFields(left, right) {
   const normalized = (fields) => fields.map((field) => ({
     key: field.key,
+    label: field.label || null,
     weight: field.weight,
     options: field.options.map((option) => ({
       id: option.id,
@@ -114,6 +131,7 @@ function sameFields(left, right) {
 async function publishConfiguration(user, input) {
   if (user?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem configurar o Perfil de Match');
   const fields = normalizeFields(input);
+  assertSeparateQaCatalogs(fields);
   await Configuration.init();
   const current = await Configuration.findOne().sort({ version: -1 });
   const canonicalGeography = (weights) => weights ? Object.fromEntries(DIMENSIONS.map((key) =>
