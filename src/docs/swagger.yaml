@@ -1730,6 +1730,9 @@ components:
             Exatamente as 22 chaves tecnicas da VJ-28. Em testAutomationTechnologies,
             publicar IDs canonicos com labels e aliases conferidos na base real;
             a proposta opcional pode ser gerada por npm run match:automation-proposal.
+            Em programmingLanguages, a proposta opcional pode ser gerada por
+            npm run match:programming-languages-proposal; Java, JavaScript,
+            TypeScript, C, C++ e C# devem manter IDs distintos.
             Uma nova publicacao deve preservar todos os IDs ja publicados.
           minProperties: 22
           maxProperties: 22

@@ -527,6 +527,32 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Catálogo de linguagens de programação — VJ-60
+
+O campo `programmingLanguages` usa o catálogo versionado de
+`PUT /perfil-match/configuracao`; não existe endpoint separado. Para gerar
+**uma proposta inicial sem gravar no MongoDB**, execute
+`npm run match:programming-languages-proposal`. A proposta contém JavaScript,
+TypeScript, Java, Python, C#, PHP, Ruby, Kotlin, Swift, C++, Groovy e PL/SQL.
+Ela não é exaustiva: linguagens existentes na base podem ser acrescentadas
+depois de revisão e normalização.
+
+Cada opção possui ID estável, label e aliases. Os IDs `javascript`,
+`typescript` e `java` são independentes; `c`, `cpp` e `csharp` também devem
+permanecer distintos. A normalização resolve somente IDs, labels ou aliases
+publicados, sem aproximação textual: Java não atende JavaScript, assim como C
+não atende C++ ou C#. Repetições por ID, caixa ou alias são persistidas uma
+vez, e linguagens extras do candidato não reduzem o Match. O peso vem da
+configuração de `programmingLanguages`, e a importância vem do requisito da
+vaga.
+
+Antes de publicar a proposta em uma instalação já configurada, mescle suas
+opções com a versão vigente: o arquivo gerado deixa os demais catálogos vazios
+e a API impede a remoção de IDs já publicados (**409**). Alias ambíguo também
+retorna **409**, enquanto texto livre fora do catálogo retorna **400** sem
+criar uma linguagem ou modificar a versão atual. A publicação é exclusiva de
+administrador e retorna **200** com a configuração versionada.
+
 ## Catálogo de ferramentas de automação — VJ-59
 
 O campo `testAutomationTechnologies` usa o catálogo versionado de
