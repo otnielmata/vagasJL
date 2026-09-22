@@ -8,6 +8,7 @@ const DERIVED_FIELDS = Object.freeze([
   'skillsRequiredCounter',
   'amountOfTestingRelatedKeywords',
   'amountOfGenAITools',
+  'genAITecnologies',
   'hasGenAI',
   'isTestingRelated',
   'reasonToBeRemoved',

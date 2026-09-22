@@ -33,10 +33,10 @@ test('changing a published technical weight changes only eligible scoring', () =
   assert.equal(result.possiblePoints, 16);
 });
 
-test('the six derived fields never earn or lose points or enter breakdown', () => {
+test('derived and legacy fields never earn or lose points or enter breakdown', () => {
   const baseline = calculateMatchScore({ technicalResults, configuration: configuration() });
   const variations = [0, 1, -100, true, false, null, 'remove', { value: 999 }];
-  assert.equal(DERIVED_FIELDS.length, 6);
+  assert.equal(DERIVED_FIELDS.length, 7);
   for (const field of DERIVED_FIELDS) {
     assert.equal(TECHNICAL_FIELDS.includes(field), false);
     for (const value of variations) {

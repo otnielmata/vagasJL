@@ -5,6 +5,8 @@ const { CANDIDATE_STATUS } = require('../config/candidate');
 const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias,
   isUnknownSeniority, isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
+const { migrateLegacyAiValues, LEGACY_AI_FIELD,
+  CANONICAL_AI_FIELD } = require('./legacy-ai-migration.service');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 
@@ -57,15 +59,16 @@ function normalizeValues(input, configuration, allowRemoval = false) {
       Object.keys(input).length !== 1 || !Object.prototype.hasOwnProperty.call(input, 'values') ||
       !input.values || typeof input.values !== 'object' || Array.isArray(input.values)) invalid();
   const submitted = input.values;
-  if (Object.keys(submitted).some((key) => !KEYS.includes(key))) invalid();
+  if (Object.keys(submitted).some((key) => !KEYS.includes(key) && key !== LEGACY_AI_FIELD)) invalid();
   if (allowRemoval && Object.keys(submitted).length === 0) invalid();
 
   const catalog = new Map(configuration.fields.map((field) => [field.key, field]));
   if (catalog.size !== KEYS.length || KEYS.some((key) => !catalog.has(key))) {
     throw new ApiError(503, 'Configuracao do Perfil de Match incompleta');
   }
+  const migration = migrateLegacyAiValues(submitted, configuration);
   const values = {};
-  for (const [key, value] of Object.entries(submitted)) {
+  for (const [key, value] of Object.entries(migration.values)) {
     if (allowRemoval && (value === null || (Array.isArray(value) && value.length === 0))) {
       values[key] = null;
       continue;
@@ -77,7 +80,8 @@ function normalizeValues(input, configuration, allowRemoval = false) {
       if (choices !== undefined) values[key] = choices;
     }
   }
-  return values;
+  return { values, legacyAiAudit: migration.audit,
+    explicitCanonicalAi: Object.hasOwn(submitted, CANONICAL_AI_FIELD) };
 }
 
 async function registerMatchProfile(user, input) {
@@ -96,7 +100,7 @@ async function registerMatchProfile(user, input) {
   }
   const configuration = await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
-  const values = normalizeValues(input, configuration);
+  const { values, legacyAiAudit } = normalizeValues(input, configuration);
 
   try {
     return await MatchProfile.create({
@@ -104,6 +108,7 @@ async function registerMatchProfile(user, input) {
       user: user.id,
       configurationVersion: configuration.version,
       values,
+      ...(legacyAiAudit ? { legacyAiMigrationHistory: [legacyAiAudit] } : {}),
     });
   } catch (error) {
     if (error.code === 11000) throw new ApiError(409, 'Perfil de Match ja cadastrado');
@@ -131,7 +136,14 @@ async function updateMatchProfile(user, input, ifMatch) {
 
   const configuration = await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
-  const values = normalizeValues(input, configuration, true);
+  const { values, legacyAiAudit, explicitCanonicalAi } = normalizeValues(input, configuration, true);
+  if (legacyAiAudit && !explicitCanonicalAi) {
+    if (values[CANONICAL_AI_FIELD]?.length) {
+      values[CANONICAL_AI_FIELD] = [...new Set([
+        ...(current.values?.[CANONICAL_AI_FIELD] || []), ...values[CANONICAL_AI_FIELD],
+      ])].sort();
+    } else delete values[CANONICAL_AI_FIELD];
+  }
   const changes = { configurationVersion: configuration.version };
   const removals = {};
   for (const [key, value] of Object.entries(values)) {
@@ -143,6 +155,7 @@ async function updateMatchProfile(user, input, ifMatch) {
   const operation = { $set: changes };
   if (!legacy) operation.$inc = { revision: 1 };
   if (Object.keys(removals).length) operation.$unset = removals;
+  if (legacyAiAudit) operation.$push = { legacyAiMigrationHistory: legacyAiAudit };
   const revisionFilter = legacy ? { revision: { $exists: false } } : { revision: expectedRevision };
   const updated = await MatchProfile.findOneAndUpdate({ ...filter, ...revisionFilter }, operation,
     { new: true, runValidators: true });

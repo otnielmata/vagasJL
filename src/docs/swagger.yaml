@@ -2016,6 +2016,11 @@ components:
             tecnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
             programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }
             genAITools: { $ref: '#/components/schemas/MatchProfileChoices' }
+            genAITecnologies:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: >
+                Entrada legada de migracao. Alias publicado e confiavel e mapeado para genAITools;
+                valor sem correspondencia fica pendente em auditoria privada e nao pontua.
             level:
               allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
               description: Senioridade canonica; unknown/desconhecido nao sao opcoes validas.
@@ -2056,6 +2061,11 @@ components:
             tecnologies: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             programmingLanguages: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             genAITools: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            genAITecnologies:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: >
+                Entrada legada de migracao; nao remove genAITools existente, nao e persistida
+                como criterio e nao aceita null. Use genAITools para edicao canonica.
             level:
               allOf: [{ $ref: '#/components/schemas/MatchProfileUpdateChoices' }]
               description: Senioridade canonica ou null para remover; unknown/desconhecido sao invalidos.

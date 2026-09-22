@@ -68,7 +68,12 @@ async function registerImportedVacancy(provenance, input) {
           !(['level', 'type'].includes(field) &&
             (value === undefined || Array.isArray(value) && !value.length))))
       : preparedValues } };
-  const content = await prepareVacancyContent(mappedInput, { allowUnidentified: true });
+  const preparedContent = await prepareVacancyContent(mappedInput,
+    { allowUnidentified: true, allowLegacyAi: true });
+  const { legacyAiMigrationAudit, ...content } = preparedContent;
+  for (const entry of legacyAiMigrationAudit?.entries || []) {
+    if (entry.status === 'mapped') identified.push({ field: 'genAITools', id: entry.canonicalId });
+  }
   let importImportance = null;
   if (identified.length) {
     const configuration = await ImportImportanceConfiguration.findOne().sort({ version: -1 });
@@ -101,7 +106,7 @@ async function registerImportedVacancy(provenance, input) {
         reason: `Importancia padrao v${importImportance.version} aplicada na importacao`,
         revision: 1, requirements: content.matchProfile.requirements,
       }] } : {}),
-      importMappingAudit: { unknownLevel,
+      importMappingAudit: { unknownLevel, legacyAi: legacyAiMigrationAudit,
         rawLocation: typeof input.location === 'string' ? input.location.slice(0, 2000) : null,
         rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
     });

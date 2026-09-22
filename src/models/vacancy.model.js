@@ -33,6 +33,15 @@ const geographicRestrictionSchema = new mongoose.Schema(Object.fromEntries(DIMEN
 const importMappingAuditSchema = new mongoose.Schema({
   unknownLevel: { type: Boolean, default: false },
   rawLocation: { type: String, default: null, maxlength: 2000 },
+  legacyAi: { type: new mongoose.Schema({
+    at: { type: Date, required: true },
+    sourceField: { type: String, required: true, enum: ['genAITecnologies'] },
+    entries: { type: [{
+      submitted: { type: String, required: true, maxlength: 100 },
+      canonicalId: { type: String, default: null },
+      status: { type: String, required: true, enum: ['mapped', 'pending'] },
+    }], required: true },
+  }, { _id: false }), default: null },
   rawFalseValues: { type: [{
     field: { type: String, required: true, enum: Object.keys(INITIAL_MATCH_WEIGHTS) },
     value: { type: Boolean, required: true, enum: [false] },

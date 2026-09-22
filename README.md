@@ -527,6 +527,31 @@ Vagas `COMPANY` e `ADMIN` podem declarar zero explicitamente: candidato com
 experiência informada recebe o peso integral, enquanto ausência continua sem
 pontos. O cálculo é compartilhado pelos dois rankings, sem endpoint adicional.
 
+## Representação única de ferramentas de IA — VJ-62
+
+Na primeira versão, somente `genAITools` é canônico e pontuável. O campo
+`genAITecnologies` é aceito apenas como entrada legada de migração nos
+endpoints existentes do Perfil de Match do candidato e no processo interno
+de importação de vagas. `hasGenAI`, `amountOfGenAITools` e
+`genAITecnologies` não recebem peso, bônus, requisito ou detalhamento próprio.
+Não foi criado endpoint novo nem catálogo inicial de produtos de IA.
+
+O administrador publica IDs, labels e aliases reais em `genAITools` pelo
+`PUT /perfil-match/configuracao`. Um valor legado com correspondência única
+é convertido para esse ID e unido aos valores canônicos sem duplicação. A
+origem `genAITecnologies`, o texto recebido, o ID resolvido e o status
+`mapped` ficam em auditoria privada. Valores desconhecidos ou ambíguos ficam
+com status `pending`, não são gravados como competência e não participam do
+Match. Na importação, somente mapeamento confiável gera requisito com a
+importância padrão publicada.
+
+Se ChatGPT aparecer simultaneamente em `genAITools`, `genAITecnologies` e
+`hasGenAI`, apenas o requisito canônico em `genAITools` altera numerador,
+denominador e detalhamento, no máximo uma vez. Atualizações do catálogo criam
+nova versão, preservam IDs existentes e não regravam perfis anteriores. Na
+edição por entrada legada, IDs canônicos já presentes são preservados e o
+evento de migração é anexado ao histórico de auditoria.
+
 ## Ferramentas de QA e Gestão de Testes — VJ-61
 
 O campo técnico continua persistido como `tecnologies` para preservar perfis,
