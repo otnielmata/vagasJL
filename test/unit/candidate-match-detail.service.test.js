@@ -6,9 +6,11 @@ const Candidate = require('../../src/models/candidate.model');
 const CandidateMatchProfile = require('../../src/models/candidate-match-profile.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
-const { getCandidateMatchDetail } = require('../../src/services/candidate-match-detail.service');
+const { getCandidateMatchDetail, classifyMatchResult } =
+  require('../../src/services/candidate-match-detail.service');
 
 const actor = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'candidate' };
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b8';
@@ -52,15 +54,20 @@ function setup(context, currentVacancy = vacancy(), values = {
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 3, multipliers: { required: 1, desirable: 0.5, indifferent: 0 },
   }) }));
+  const thresholdState = { current: null };
+  context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
+    sort: async () => thresholdState.current,
+  }));
   const profileQuery = { select: async () => values === null ? null : { values, configurationVersion: 1 } };
   context.mock.method(CandidateMatchProfile, 'findOne', () => profileQuery);
-  return { profileQuery };
+  return { profileQuery, thresholdState };
 }
 
 test('returns reconciled strengths and canonical gaps without penalizing extra skills', async (context) => {
   setup(context);
   const result = await getCandidateMatchDetail(actor, vacancyId, now);
   assert.equal(result.calculationStatus, 'calculable');
+  assert.deepEqual([result.resultState, result.resultLabel], ['eligible', 'Compatível']);
   assert.deepEqual([result.earnedPoints, result.possiblePoints, result.percentage], [19, 24, 79.17]);
   assert.deepEqual(result.metCriteria.map((criterion) => criterion.id), ['cypress', 'javascript']);
   assert.deepEqual(result.gaps.map((criterion) => criterion.id), ['playwright']);
@@ -70,6 +77,19 @@ test('returns reconciled strengths and canonical gaps without penalizing extra s
   assert.equal(result.availableCriteria.some((criterion) => criterion.id === 'selenium'), false);
   assert.equal(Object.hasOwn(result, 'studyPlan'), false);
   assert.deepEqual([result.configurationVersion, result.multipliersVersion], [1, 3]);
+});
+
+test('returns below threshold for low compatibility without changing eligibility or gaps', async (context) => {
+  const { thresholdState } = setup(context);
+  thresholdState.current = { version: 4, minimumPercentage: 80 };
+  const result = await getCandidateMatchDetail(actor, vacancyId, now);
+  assert.equal(result.resultState, 'below_threshold');
+  assert.equal(result.resultLabel, 'Compatibilidade baixa');
+  assert.equal(result.percentage, 79.17);
+  assert.deepEqual(result.eligibility, { eligible: true, reason: null });
+  assert.deepEqual(result.gaps.map((criterion) => criterion.id), ['playwright']);
+  assert.deepEqual([result.minimumMatchPercentage, result.rankingThresholdVersion], [80, 4]);
+  assert.equal(Object.hasOwn(result, 'studyPlan'), false);
 });
 
 test('orders gaps by effective point loss with a stable fallback', async (context) => {
@@ -84,6 +104,8 @@ test('returns not calculable instead of 100 percent when vacancy has no applicab
   setup(context, currentVacancy);
   const result = await getCandidateMatchDetail(actor, vacancyId, now);
   assert.equal(result.calculationStatus, 'not_calculable');
+  assert.equal(result.resultState, 'not_calculable');
+  assert.equal(result.resultLabel, 'Compatibilidade não calculável');
   assert.equal(result.percentage, null);
   assert.equal(result.earnedPoints, null);
   assert.equal(result.possiblePoints, null);
@@ -110,10 +132,23 @@ test('exposes only a safe structured eliminatory reason', async (context) => {
   currentVacancy.matchProfile.requirements[1].eliminatory = true;
   setup(context, currentVacancy);
   const result = await getCandidateMatchDetail(actor, vacancyId, now);
+  assert.equal(result.resultState, 'ineligible');
+  assert.equal(result.resultLabel, 'Não atende critério eliminatório');
+  assert.equal(result.percentage, 79.17);
   assert.deepEqual(result.eligibility, { eligible: false, reason: {
     code: 'ELIMINATORY_REQUIREMENT_UNMET', field: 'testAutomationTechnologies', id: 'playwright',
   } });
   assert.deepEqual(Object.keys(result.vacancy).sort(), ['_id', 'title']);
+});
+
+test('ineligibility takes precedence over threshold even with high technical percentage', () => {
+  const score = { earnedPoints: 94, possiblePoints: 100, percentage: 94,
+    eligibility: { eligible: false, reason: { code: 'ELIMINATORY_REQUIREMENT_UNMET' } } };
+  assert.deepEqual(classifyMatchResult(score, true, { version: 1, minimumPercentage: 60 }),
+    { state: 'ineligible', label: 'Não atende critério eliminatório' });
+  assert.deepEqual(classifyMatchResult({ ...score, eligibility: { eligible: true, reason: null } },
+    true, { version: 1, minimumPercentage: 95 }),
+  { state: 'below_threshold', label: 'Compatibilidade baixa' });
 });
 
 test('rejects another role, malformed id and invisible vacancy without profile data', async (context) => {

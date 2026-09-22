@@ -236,7 +236,9 @@ paths:
         gaps canonicos ordenados pela perda efetiva e motivo seguro de inelegibilidade.
         Competencias extras, indifferent, derivados, texto livre e valores importados nao
         identificados nao viram gaps. Perfil incompleto ou denominador zero produz estado
-        not_calculable e percentual nulo. Nao gera plano de estudos nem expoe dados privados.
+        not_calculable e percentual nulo. Distingue eligible, below_threshold, ineligible e
+        not_calculable, avaliando eliminacao antes do limiar. Nao gera plano de estudos nem
+        expoe dados privados.
       security:
         - bearerAuth: []
       parameters:
@@ -251,7 +253,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vacancy, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, eligibility, metCriteria, gaps, availableCriteria]
+                required: [vacancy, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
                 properties:
                   vacancy:
                     type: object
@@ -259,6 +261,12 @@ paths:
                     properties:
                       _id: { type: string }
                       title: { type: string }
+                  resultState:
+                    type: string
+                    enum: [eligible, below_threshold, ineligible, not_calculable]
+                  resultLabel:
+                    type: string
+                    enum: [Compatível, Compatibilidade baixa, Não atende critério eliminatório, Compatibilidade não calculável]
                   calculationStatus:
                     type: string
                     enum: [calculable, not_calculable]
@@ -267,6 +275,8 @@ paths:
                   possiblePoints: { type: number, minimum: 0, nullable: true }
                   configurationVersion: { type: integer, minimum: 1 }
                   multipliersVersion: { type: integer, minimum: 1 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
                   eligibility:
                     type: object
                     required: [eligible, reason]

@@ -465,6 +465,21 @@ não calculáveis permanecem excluídos mesmo com limiar zero. `total` e `pages`
 itens aprovados pelo corte, e a resposta informa `minimumMatchPercentage` e
 `rankingThresholdVersion`. O limiar não altera pontos, pesos, gaps ou motivos eliminatórios.
 
+## Estados do resultado do Match — VJ-66
+
+O endpoint existente `GET /candidatos/me/vagas/{id}/match` retorna `resultState` e
+`resultLabel` para separar quatro situações: `eligible` (`Compatível`), `below_threshold`
+(`Compatibilidade baixa`), `ineligible` (`Não atende critério eliminatório`) e
+`not_calculable` (`Compatibilidade não calculável`). Não foi criado outro endpoint.
+
+A avaliação ocorre nesta ordem: possibilidade de cálculo, critério eliminatório e limiar.
+Assim, percentual alto não supera inelegibilidade e pontuação baixa isoladamente não torna o
+candidato inelegível. Quando calculável, o percentual técnico permanece disponível mesmo em
+`ineligible`, sem penalidade numérica adicional. O motivo eliminatório continua estruturado e
+seguro; gaps podem coexistir com baixa compatibilidade, mas não geram plano de estudos. Vagas
+pausadas, removidas, expiradas ou pertencentes a empresa inativa continuam retornando **404**,
+sem receber classificação falsa.
+
 ## Match explicável — VJ-64
 
 `GET /candidatos/me/vagas/{id}/match` permite que somente o candidato autenticado consulte

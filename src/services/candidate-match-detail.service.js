@@ -6,6 +6,8 @@ const Vacancy = require('../models/vacancy.model');
 const { BOOLEAN_MATCH_FIELDS } = require('../config/match-profile');
 const { normalizePlace } = require('../config/geography');
 const { getPublishedMultipliers } = require('./match-multipliers-configuration.service');
+const { getPublishedRankingThreshold, meetsRankingThreshold } =
+  require('./ranking-threshold-configuration.service');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair } = require('./match-ranking.service');
 const ApiError = require('../errors/api.error');
@@ -61,6 +63,19 @@ function compareGaps(left, right) {
     String(left.id).localeCompare(String(right.id));
 }
 
+function classifyMatchResult(score, calculable, rankingThreshold) {
+  if (!calculable) {
+    return { state: 'not_calculable', label: 'Compatibilidade não calculável' };
+  }
+  if (!score.eligibility.eligible) {
+    return { state: 'ineligible', label: 'Não atende critério eliminatório' };
+  }
+  if (rankingThreshold && !meetsRankingThreshold(score, rankingThreshold)) {
+    return { state: 'below_threshold', label: 'Compatibilidade baixa' };
+  }
+  return { state: 'eligible', label: 'Compatível' };
+}
+
 async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   if (actor?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem consultar o Match');
   if (typeof vacancyId !== 'string' || !OBJECT_ID.test(vacancyId)) {
@@ -82,6 +97,7 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   const configuration = await Configuration.findOne({ version: vacancy.matchProfile.configurationVersion });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
   const matchConfiguration = await getPublishedMultipliers();
+  const rankingThreshold = await getPublishedRankingThreshold();
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id, deletedAt: null })
     .select('values configurationVersion');
   const candidateValues = plain(profile?.values);
@@ -91,15 +107,20 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   const calculable = score.calculationStatus === 'calculable' &&
     criteria.every((criterion) => criterion.status !== 'unknown');
   const eligibility = calculable ? score.eligibility : { eligible: null, reason: null };
+  const classification = classifyMatchResult(score, calculable, rankingThreshold);
 
   return {
     vacancy: { _id: vacancy._id, title: vacancy.title },
+    resultState: classification.state,
+    resultLabel: classification.label,
     calculationStatus: calculable ? 'calculable' : 'not_calculable',
     percentage: calculable ? score.percentage : null,
     earnedPoints: calculable ? score.earnedPoints : null,
     possiblePoints: calculable ? score.possiblePoints : null,
     configurationVersion: vacancy.matchProfile.configurationVersion,
     multipliersVersion: matchConfiguration.version,
+    minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
+    rankingThresholdVersion: rankingThreshold?.version ?? null,
     eligibility,
     metCriteria: criteria.filter((criterion) => criterion.status === 'met'),
     gaps: criteria.filter((criterion) => criterion.status === 'gap').sort(compareGaps),
@@ -107,4 +128,4 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   };
 }
 
-module.exports = { getCandidateMatchDetail, compareGaps };
+module.exports = { getCandidateMatchDetail, compareGaps, classifyMatchResult };
