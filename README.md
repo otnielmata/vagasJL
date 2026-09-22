@@ -187,6 +187,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
+| PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
@@ -448,6 +449,21 @@ da ordenação, do total e do recorte. Empates usam, nesta ordem: requisitos `re
 integralmente, atualização mais recente do item apresentado e ID estável. O desempate não altera
 o percentual técnico, não concede bônus por pontos possíveis ou prioridade comercial e ignora
 engajamento no MVP.
+
+## Limiar mínimo dos rankings — VJ-65
+
+`PUT /configuracoes/match/limiar-ranking` permite que um administrador ativo publique
+`{"minimumPercentage":60}`. O valor aceita números de 0 a 100, inclusive, com até duas casas
+decimais. A resposta contém valor, `version`, `author` e `effectiveAt`; repetir o valor vigente
+é idempotente e não cria nova versão. Não existe limiar padrão implícito: sem publicação, os
+rankings mantêm apenas os filtros de elegibilidade existentes.
+
+Os dois rankings aplicam o corte inclusivo (`percentual >= limiar`) depois do cálculo e da
+elegibilidade, mas antes de ordenar, paginar e montar Top 3/5/10. A comparação usa o percentual
+técnico bruto; o arredondamento continua restrito à apresentação. Itens inelegíveis e Matches
+não calculáveis permanecem excluídos mesmo com limiar zero. `total` e `pages` consideram somente
+itens aprovados pelo corte, e a resposta informa `minimumMatchPercentage` e
+`rankingThresholdVersion`. O limiar não altera pontos, pesos, gaps ou motivos eliminatórios.
 
 ## Match explicável — VJ-64
 

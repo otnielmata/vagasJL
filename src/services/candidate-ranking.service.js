@@ -9,6 +9,8 @@ const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { ensureCompanyAuthorized } = require('./vacancy-status.service');
 const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const { pagination } = require('./vacancy-ranking.service');
+const { getPublishedRankingThreshold, meetsRankingThreshold } =
+  require('./ranking-threshold-configuration.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -35,6 +37,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
   const configuration = await Configuration.findOne({ version: vacancy.matchProfile.configurationVersion });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
   const matchConfiguration = await getPublishedMultipliers();
+  const rankingThreshold = await getPublishedRankingThreshold();
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
     deletedAt: null }).select('_id name city state country');
@@ -49,7 +52,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, configuration,
       matchConfiguration.multipliers, now, candidate);
-    if (!score.eligibility.eligible || score.possiblePoints === 0) return [];
+    if (!meetsRankingThreshold(score, rankingThreshold)) return [];
     const item = { candidate: { _id: candidate._id, name: candidate.name },
       percentage: score.percentage, earnedPoints: score.earnedPoints,
       possiblePoints: score.possiblePoints, matchedRequiredCount: score.matchedRequiredCount,
@@ -62,7 +65,8 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
   ranked.sort(compareRankingRows);
   const total = ranked.length;
   return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
-    total, page, limit,
+    total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
+    rankingThresholdVersion: rankingThreshold?.version ?? null,
     pages: Math.ceil(total / limit) };
 }
 

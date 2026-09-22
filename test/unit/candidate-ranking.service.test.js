@@ -8,6 +8,7 @@ const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const User = require('../../src/models/user.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -46,6 +47,10 @@ function setup(context, currentVacancy = vacancy()) {
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({
     sort: async () => matchConfiguration,
   }));
+  const thresholdState = { current: null };
+  context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
+    sort: async () => thresholdState.current,
+  }));
   const vacancyLookup = { select: async () => currentVacancy };
   context.mock.method(Vacancy, 'findById', () => vacancyLookup);
   const companyLookup = { select: async () => ({ _id: companyId }) };
@@ -67,7 +72,7 @@ function setup(context, currentVacancy = vacancy()) {
   const profileQuery = { select: async () => profiles };
   context.mock.method(CandidateMatchProfile, 'find', () => profileQuery);
   return { candidates, candidateQuery, profiles, profileQuery, companyLookup, findCandidates,
-    matchConfiguration };
+    matchConfiguration, thresholdState };
 }
 
 test('company ranking scores from vacancy requirements, sorts and hides private candidate fields', async (context) => {
@@ -76,6 +81,8 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
     { page: '1', limit: '1' }, now);
   assert.equal(result.total, 2);
   assert.equal(result.pages, 2);
+  assert.equal(result.minimumMatchPercentage, null);
+  assert.equal(result.rankingThresholdVersion, null);
   assert.equal(result.items[0].candidate.name, 'Bia');
   assert.equal(result.items[0].percentage, 100);
   assert.deepEqual([result.items[0].earnedPoints, result.items[0].possiblePoints,
@@ -106,6 +113,17 @@ test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit
     assert.equal(result.total, 10);
     assert.equal(result.limit, limit);
   }
+});
+
+test('company ranking applies published cutoff before total and pagination', async (context) => {
+  const { thresholdState } = setup(context);
+  thresholdState.current = { version: 4, minimumPercentage: 60 };
+  const result = await rankCandidates({ role: 'admin' }, vacancyId, { limit: '1' }, now);
+  assert.equal(result.total, 1);
+  assert.equal(result.pages, 1);
+  assert.equal(result.items[0].candidate.name, 'Bia');
+  assert.equal(result.minimumMatchPercentage, 60);
+  assert.equal(result.rankingThresholdVersion, 4);
 });
 
 test('both ranking directions use identical score and vacancy denominator for same pair', async (context) => {

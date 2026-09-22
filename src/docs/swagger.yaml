@@ -84,6 +84,53 @@ paths:
         '401': { description: JWT ausente ou invalido }
         '403': { description: Sem permissao administrativa }
         '409': { description: Publicacao concorrente de outra configuracao }
+  /configuracoes/match/limiar-ranking:
+    put:
+      tags: [Match Profile]
+      summary: Publica percentual minimo versionado para rankings (VJ-65)
+      description: >
+        Apenas administrador autenticado. Aceita percentual de 0 a 100 com ate duas
+        casas decimais. Repetir o valor vigente nao incrementa a versao. Sem publicacao,
+        nenhum corte percentual arbitrario e aplicado. Novas consultas usam imediatamente
+        a versao mais recente, sem alterar pontos, pesos, gaps ou inelegibilidade.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minimumPercentage]
+              additionalProperties: false
+              properties:
+                minimumPercentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  multipleOf: 0.01
+                  example: 60
+      responses:
+        '200':
+          description: Limiar publicado ou mantido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, minimumPercentage, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      minimumPercentage: { type: number, minimum: 0, maximum: 100 }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Percentual ou corpo invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outro limiar }
   /configuracoes/importacao/importancia-padrao:
     put:
       tags: [Match Profile]
@@ -135,7 +182,8 @@ paths:
         compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking. O
         limit aceita Top 3, Top 5 e Top 10. Depois dos filtros, ordena por percentual,
         requisitos obrigatorios atendidos, atualizacao da vaga e ID estavel. Engajamento
-        nao altera o ranking tecnico.
+        nao altera o ranking tecnico. Se houver limiar publicado, aplica corte inclusivo
+        sobre o percentual bruto antes da ordenacao, total e paginacao.
       security:
         - bearerAuth: []
       parameters:
@@ -152,7 +200,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, page, limit, pages]
+                required: [items, total, page, limit, pages, minimumMatchPercentage, rankingThresholdVersion]
                 properties:
                   items:
                     type: array
@@ -171,6 +219,8 @@ paths:
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
                   pages: { type: integer, minimum: 0 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
         '400': { description: Paginacao invalida }
         '401': { description: JWT ausente ou invalido }
         '403': { description: Conta nao e candidata }
@@ -248,6 +298,8 @@ paths:
         Exclui candidatos inativos, sem perfil ou inelegiveis antes de ordenar e limitar.
         O limit aceita Top 3, Top 5 e Top 10. Ordena por percentual, requisitos obrigatorios
         atendidos, atualizacao do perfil e ID estavel. Engajamento nao participa do MVP.
+        Se houver limiar publicado, aplica corte inclusivo sobre o percentual bruto antes
+        da ordenacao, total e paginacao.
       security:
         - bearerAuth: []
       parameters:
@@ -268,7 +320,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, page, limit, pages]
+                required: [items, total, page, limit, pages, minimumMatchPercentage, rankingThresholdVersion]
                 properties:
                   items:
                     type: array
@@ -292,6 +344,8 @@ paths:
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
                   pages: { type: integer, minimum: 0 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
         '400': { description: ID ou paginacao invalidos }
         '401': { description: JWT ausente ou invalido }
         '403': { description: Sem permissao empresarial ou administrativa }

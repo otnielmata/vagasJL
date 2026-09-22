@@ -6,6 +6,8 @@ const { getPublishedMultipliers } = require('./match-multipliers-configuration.s
 const Vacancy = require('../models/vacancy.model');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair, compareRankingRows } = require('./match-ranking.service');
+const { getPublishedRankingThreshold, meetsRankingThreshold } =
+  require('./ranking-threshold-configuration.service');
 const ApiError = require('../errors/api.error');
 
 function pagination(query = {}) {
@@ -48,6 +50,7 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
 
   const versions = [...new Set(eligible.map((vacancy) => vacancy.matchProfile.configurationVersion))];
   const matchConfiguration = eligible.length && await getPublishedMultipliers();
+  const rankingThreshold = await getPublishedRankingThreshold();
   const configurations = versions.length ? await Configuration.find({ version: { $in: versions } }) : [];
   const byVersion = new Map(configurations.map((configuration) => [configuration.version, configuration]));
   const candidateValues = typeof profile.values.toObject === 'function'
@@ -64,12 +67,13 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
       multipliersVersion: matchConfiguration.version };
     return { item, percentage: score.percentage,
       matchedRequiredCount: score.matchedRequiredCount, updatedAt: vacancy.updatedAt,
-      stableId: vacancy._id, eligible: score.eligibility.eligible && score.possiblePoints > 0 };
+      stableId: vacancy._id, eligible: meetsRankingThreshold(score, rankingThreshold) };
   }).filter((row) => row.eligible);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
   return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
-    total, page, limit,
+    total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
+    rankingThresholdVersion: rankingThreshold?.version ?? null,
     pages: Math.ceil(total / limit) };
 }
 

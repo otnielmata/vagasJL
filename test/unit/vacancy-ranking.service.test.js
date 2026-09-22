@@ -7,6 +7,7 @@ const CandidateMatchProfile = require('../../src/models/candidate-match-profile.
 const Company = require('../../src/models/company.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { rankVacancies } = require('../../src/services/vacancy-ranking.service');
@@ -33,6 +34,10 @@ function setup(context, vacancies) {
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 1, multipliers: { required: 1, desirable: 0.5, indifferent: 0 },
   }) }));
+  const thresholdState = { current: null };
+  context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
+    sort: async () => thresholdState.current,
+  }));
   const candidateQuery = { select: async () => ({ _id: actor.id }) };
   context.mock.method(Candidate, 'findOne', () => candidateQuery);
   const profileQuery = { select: async () => ({ values: { type: ['remote'] },
@@ -45,10 +50,12 @@ function setup(context, vacancies) {
   const configuration = { version: 1, geographyWeights: { country: 6, state: 4, city: 2 },
     fields: Object.keys(INITIAL_MATCH_WEIGHTS).map((key) => ({
     key, weight: INITIAL_MATCH_WEIGHTS[key], options: key === 'type'
-      ? [{ id: 'remote', label: 'Remoto', aliases: [] }] : [],
+      ? [{ id: 'remote', label: 'Remoto', aliases: [] },
+        { id: 'hybrid', label: 'Hibrido', aliases: [] }] : [],
   })) };
   const findConfigurations = context.mock.method(Configuration, 'find', async () => [configuration]);
-  return { findVacancies, findCompanies, findConfigurations, candidateQuery, profileQuery, companyQuery };
+  return { findVacancies, findCompanies, findConfigurations, candidateQuery, profileQuery,
+    companyQuery, thresholdState };
 }
 
 test('filters active unexpired vacancies before scoring and paginates only eligible rows', async (context) => {
@@ -60,6 +67,8 @@ test('filters active unexpired vacancies before scoring and paginates only eligi
   const result = await rankVacancies(actor, { page: '2', limit: '2' }, now);
   assert.equal(result.total, 3);
   assert.equal(result.pages, 2);
+  assert.equal(result.minimumMatchPercentage, null);
+  assert.equal(result.rankingThresholdVersion, null);
   assert.equal(result.items.length, 1);
   assert.deepEqual(result.items.map((item) => item.vacancy._id), ['c']);
   assert.equal(findVacancies.mock.calls[0].arguments[0].status, 'active');
@@ -86,6 +95,21 @@ test('candidate ranking accepts Top 3, Top 5 and Top 10 and keeps total before l
     assert.equal(result.total, 10);
     assert.equal(result.limit, limit);
   }
+});
+
+test('candidate ranking applies published cutoff before total and pagination', async (context) => {
+  const matching = vacancy('a', 'ADMIN');
+  const below = vacancy('b', 'ADMIN', 'active', { matchProfile: { configurationVersion: 1,
+    values: { type: ['hybrid'] },
+    requirements: [{ field: 'type', id: 'hybrid', importance: 'required' }] } });
+  const { thresholdState } = setup(context, [below, matching]);
+  thresholdState.current = { version: 2, minimumPercentage: 60 };
+  const result = await rankVacancies(actor, { limit: '1' }, now);
+  assert.equal(result.total, 1);
+  assert.equal(result.pages, 1);
+  assert.equal(result.items[0].vacancy._id, 'a');
+  assert.equal(result.minimumMatchPercentage, 60);
+  assert.equal(result.rankingThresholdVersion, 2);
 });
 
 test('candidate ranking counts explicit country but not remote job address alone', async (context) => {
