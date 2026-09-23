@@ -81,6 +81,7 @@ for (const [id, body] of [
   [candidateId, { eligibilityHistory: [] }],
   [candidateId, { visibleToCompanies: true }],
   [candidateId, { availableForOpportunities: true }],
+  [candidateId, { enterpriseDisplayPermissions: { contact: ['email'] } }],
   [candidateId, { createdAt: '2026-01-01' }],
   [candidateId, { updatedAt: '2026-01-01' }],
   [candidateId, { __v: 1 }],

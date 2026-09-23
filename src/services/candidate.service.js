@@ -4,6 +4,7 @@ const Company = require('../models/company.model');
 const CompanyUser = require('../models/company-user.model');
 const ApiError = require('../errors/api.error');
 const studentValidation = require('./student-validation.service');
+const { enterpriseCandidateData } = require('./candidate-display-permissions.service');
 const {
   UNKNOWN,
   CANDIDATE_STATUS,
@@ -25,6 +26,7 @@ const CANDIDATE_READ_PROJECTION = Object.freeze({
   user: 1,
   status: 1,
   ...Object.fromEntries(PUBLIC_CANDIDATE_FIELDS.map((field) => [field, 1])),
+  enterpriseDisplayPermissions: 1,
 });
 const EMAIL_UPDATE_TRANSACTION_OPTIONS = Object.freeze({
   readPreference: 'primary',
@@ -352,7 +354,9 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
     throw new ApiError(403, 'Voce so pode visualizar seu proprio cadastro de candidato');
   }
 
-  return publicCandidateData(candidate, requesterRole === 'candidate');
+  return requesterRole === 'candidate'
+    ? publicCandidateData(candidate, true)
+    : enterpriseCandidateData(candidate);
 }
 
 async function updateCandidateFields(candidate, updates) {
@@ -492,14 +496,25 @@ async function deleteCandidate(candidateId, requesterId, requesterRole) {
         availableForOpportunities: false,
         opportunityAvailabilityChangedAt: deletedAt,
         opportunitySearchCacheInvalidatedAt: deletedAt,
+        'enterpriseDisplayPermissions.contact': [],
+        'enterpriseDisplayPermissions.formation': [],
+        'enterpriseDisplayPermissions.changedAt': deletedAt,
+        'enterpriseDisplayPermissions.cacheInvalidatedAt': deletedAt,
       },
-      $inc: { 'publicProfile.cacheVersion': 1, opportunitySearchCacheVersion: 1 },
+      $inc: {
+        'publicProfile.cacheVersion': 1,
+        opportunitySearchCacheVersion: 1,
+        'enterpriseDisplayPermissions.cacheVersion': 1,
+      },
       $push: {
         publicProfileConsentHistory: {
           action: 'candidate_deleted', fields: [], actor: requesterId, changedAt: deletedAt,
         },
         opportunityAvailabilityHistory: {
           availableForOpportunities: false, actor: requesterId, changedAt: deletedAt,
+        },
+        enterpriseDisplayPermissionHistory: {
+          contact: [], formation: [], actor: requesterId, changedAt: deletedAt,
         },
       },
     },

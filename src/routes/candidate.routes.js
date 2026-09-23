@@ -8,6 +8,7 @@ const candidateDeleteRules = require('../middleware/candidate-delete.middleware'
 const candidatePublicProfileRules = require('../middleware/candidate-public-profile.middleware');
 const candidateOpportunityAvailabilityRules =
   require('../middleware/candidate-opportunity-availability.middleware');
+const candidateDisplayPermissionsRules = require('../middleware/candidate-display-permissions.middleware');
 const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
@@ -16,6 +17,7 @@ const engagementController = require('../controllers/candidate-engagement.contro
 const publicProfileController = require('../controllers/candidate-public-profile.controller');
 const opportunityAvailabilityController =
   require('../controllers/candidate-opportunity-availability.controller');
+const displayPermissionsController = require('../controllers/candidate-display-permissions.controller');
 
 const router = Router();
 
@@ -31,6 +33,10 @@ router.patch('/me/disponibilidade', authenticate, authorize('candidate'),
   candidateOpportunityAvailabilityRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase,
   opportunityAvailabilityController.update);
+router.patch('/me/permissoes-exibicao', authenticate, authorize('candidate'),
+  candidateDisplayPermissionsRules(),
+  (req, res, next) => validate(req, res, next, 400), ensureDatabase,
+  displayPermissionsController.update);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.get('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.show);

@@ -8,6 +8,8 @@ const {
   PROFILE_FIELDS,
 } = require('../config/candidate');
 const { PUBLIC_PROFILE_FIELDS } = require('../config/candidate-public-profile');
+const { CONTACT_DISPLAY_FIELDS, FORMATION_DISPLAY_FIELDS } =
+  require('../config/candidate-display-permissions');
 
 const optionalProfile = Object.fromEntries(PROFILE_FIELDS.map((field) => [field, {
   type: String,
@@ -71,6 +73,21 @@ const opportunityAvailabilityHistorySchema = new mongoose.Schema({
   changedAt: { type: Date, required: true },
 }, { _id: false });
 
+const enterpriseDisplayPermissionsSchema = new mongoose.Schema({
+  contact: [{ type: String, enum: CONTACT_DISPLAY_FIELDS }],
+  formation: [{ type: String, enum: FORMATION_DISPLAY_FIELDS }],
+  changedAt: { type: Date, default: null },
+  cacheVersion: { type: Number, default: 1, min: 1, required: true },
+  cacheInvalidatedAt: { type: Date, default: null },
+}, { _id: false });
+
+const enterpriseDisplayPermissionHistorySchema = new mongoose.Schema({
+  contact: [{ type: String, enum: CONTACT_DISPLAY_FIELDS }],
+  formation: [{ type: String, enum: FORMATION_DISPLAY_FIELDS }],
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
@@ -87,6 +104,16 @@ const candidateSchema = new mongoose.Schema({
   opportunitySearchCacheInvalidatedAt: { type: Date, default: null, select: false },
   opportunityAvailabilityHistory: {
     type: [opportunityAvailabilityHistorySchema],
+    default: () => [],
+    select: false,
+  },
+  enterpriseDisplayPermissions: {
+    type: enterpriseDisplayPermissionsSchema,
+    default: () => ({}),
+    select: false,
+  },
+  enterpriseDisplayPermissionHistory: {
+    type: [enterpriseDisplayPermissionHistorySchema],
     default: () => [],
     select: false,
   },
@@ -149,6 +176,8 @@ candidateSchema.set('toJSON', {
     delete result.opportunityAvailabilityHistory;
     delete result.opportunitySearchCacheVersion;
     delete result.opportunitySearchCacheInvalidatedAt;
+    delete result.enterpriseDisplayPermissions;
+    delete result.enterpriseDisplayPermissionHistory;
     delete result.deletedAt;
     if (result.eligibility) delete result.eligibility.source;
     return result;

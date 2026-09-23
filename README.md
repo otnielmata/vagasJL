@@ -197,6 +197,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
 | PATCH  | `/candidatos/me/perfil-publico` | Candidato ativo (Bearer) | Controla consentimento da futura publicação (VJ-74) |
 | PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
+| PATCH  | `/candidatos/me/permissoes-exibicao` | Candidato (Bearer) | Controla contato e formação exibidos às empresas (VJ-76) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
@@ -1248,6 +1249,37 @@ esta preferência não habilita o perfil público da VJ-74, não cria página p�
 automaticamente e-mail, telefone ou dados oficiais da formação. Esses dados continuam sujeitos
 a seus controles próprios.
 
+### Permissões de exibição para empresas — VJ-76
+
+`PATCH /candidatos/me/permissoes-exibicao` substitui as preferências granulares usadas nas
+respostas para empresas. A privacidade é o padrão: cadastro novo ou legado sem escolha não expõe
+e-mail, telefone, links de contato nem dados da formação. Contato e formação são categorias
+independentes:
+
+```json
+{
+  "contact": ["linkedinUrl"],
+  "formation": ["cohort", "projects"]
+}
+```
+
+Em `contact`, são aceitos `email`, `phone`, `linkedinUrl`, `githubUrl` e `portfolioUrl`. Em
+`formation`, são aceitos `engagementLevel`, `cohort`, `challengesCompleted`, `totalChallenges`,
+`score`, `participation`, `history` e `projects`. Categoria omitida ou lista vazia revoga toda a
+autorização daquela categoria; `{}` revoga tudo. Campo desconhecido, duplicado ou controle de
+outro candidato retorna erro sem mutação.
+
+Ao atender `GET /candidatos/{id}` para uma empresa ativa e autorizada, a API aplica primeiro os
+requisitos de status e disponibilidade da VJ-75 e depois monta uma resposta minimizada. Dados da
+formação são consultados pela integração protegida VJ-67 e permanecem somente leitura. O
+consentimento do candidato é necessário, mas um campo ausente ou vedado pela origem não é
+exibido. A API não persiste uma cópia editável desses dados.
+
+Cada alteração registra titular, data e conjunto final em auditoria privada e invalida a versão
+de cache. Novas consultas leem as permissões atuais. Empresas não enviam flags para ampliar a
+resposta. O candidato continua vendo os próprios dados cadastrais e consultando seu engajamento
+oficial, independentemente das permissões concedidas a terceiros.
+
 ### Cadastro de candidato — VJ-22
 
 `POST /candidatos` exige JWT válido e uma conta existente, ativa e com papel `candidate`.
@@ -1416,7 +1448,8 @@ plataforma de vendas sem alterar a URL nem o corpo público.
 | Fonte ou banco indisponível | 503 | Estado anterior preservado integralmente |
 
 A aprovação de elegibilidade **nunca ativa** o cadastro. A conclusão do perfil e a ativação são
-fluxos separados; somente `status: active` torna `visibleToCompanies` verdadeiro. Uma repetição
+fluxos separados; `status: active` ainda exige o opt-in da VJ-75 para tornar
+`visibleToCompanies` verdadeiro. Uma repetição
 após aprovação retorna **200** e preserva o estado válido. Candidatos antigos já aprovados recebem
 os metadados legados uma única vez, sem promoção para `active`.
 
@@ -1427,11 +1460,11 @@ o próprio cadastro, independentemente de estar pendente, incompleto, ativo, ina
 bloqueado. Por segurança, o papel `company` isolado recebe **403** até haver vínculo verificável
 com uma empresa ativa (VJ-37), mesmo quando o candidato consultado está `active`.
 
-A resposta contém apenas `_id`, nome, foto, e-mail de contato, telefone, localização, LinkedIn,
-GitHub, portfólio, apresentação profissional e disponibilidade. O titular também recebe `status`.
-Campos opcionais ausentes, nulos, vazios ou legados como booleano são apresentados
-como `UNKNOWN`, nunca como `false`. Conta vinculada, senha, hashes, tokens, comprovantes, datas e
-detalhes internos de elegibilidade não fazem parte da projeção nem do objeto retornado.
+O titular recebe os próprios dados cadastrais, incluindo contato, links, `status` e preferências.
+Para empresas, a resposta contém somente dados básicos minimizados e os contatos autorizados na
+VJ-76; dados oficiais da formação aparecem apenas com consentimento e autorização da origem.
+Campos sem autorização são omitidos, não retornados como `null`. Conta vinculada, senha, hashes,
+tokens, comprovantes e auditorias não fazem parte do objeto retornado.
 
 | Condição | HTTP |
 | --- | --- |
@@ -1661,6 +1694,16 @@ Confira também e-mail duplicado, senha incorreta, tentativa de `role: admin` e 
 Após `npm install`, execute `npm test`. A suíte usa `node:test` e mocks das dependências de
 persistência, sem iniciar a API, abrir portas HTTP ou conectar a um MongoDB. Não depende de
 um `.env`: os testes que precisam de configuração usam valores temporários de teste.
+
+| Critério da VJ-76 | Cobertura unitária |
+| --- | --- |
+| Contato e formação privados por padrão | Model e DTO empresarial minimizado |
+| LinkedIn pode ser liberado sem liberar telefone | Whitelist granular e serialização empresarial |
+| Consentimento não supera restrição da origem | Integração oficial e ausência segura do campo |
+| Revogação afeta novas respostas e invalida cache | Substituição atômica, versão e auditoria privada |
+| Empresa inativa ou não autorizada não acessa dados | Autorização anterior à leitura do candidato e da origem |
+| Terceiro não altera permissões | Rota candidate-only, identidade do JWT e erro 403 |
+| Dados oficiais permanecem somente leitura | Consulta protegida sem endpoint de edição ou persistência |
 
 | Critério da VJ-75 | Cobertura unitária |
 | --- | --- |

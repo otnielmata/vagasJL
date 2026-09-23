@@ -6,6 +6,7 @@ const Candidate = require('../../src/models/candidate.model');
 const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const User = require('../../src/models/user.model');
+const engagementClient = require('../../src/services/engagement-client.service');
 const { getCandidateById } = require('../../src/services/candidate.service');
 const { UNKNOWN, PROFILE_FIELDS, CANDIDATE_STATUS } = require('../../src/config/candidate');
 
@@ -102,6 +103,10 @@ test('active recruiter of active company sees only active candidates', async (co
   const result = await getCandidateById(candidateId, otherUserId, 'company');
   assert.equal(result.name, 'Maria Silva');
   assert.equal(result.status, undefined);
+  assert.equal(result.email, undefined);
+  assert.equal(result.phone, undefined);
+  assert.equal(result.linkedinUrl, undefined);
+  assert.equal(result.formation, undefined);
   assert.deepEqual(findUser.mock.calls[0].arguments[0], {
     _id: otherUserId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
   });
@@ -115,6 +120,24 @@ test('active recruiter of active company sees only active candidates', async (co
     availableForOpportunities: true,
     'eligibility.status': 'approved',
   });
+});
+
+test('authorized company receives only consented contact and source-provided formation fields', async (context) => {
+  context.mock.method(User, 'findOne', async () => ({ _id: otherUserId }));
+  context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+  context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+  const origin = context.mock.method(engagementClient, 'fetchOfficialEngagement', async () => ({
+    status: 'available', data: { projects: [{ name: 'VagasJL' }] },
+  }));
+  isolateLookup(context, storedCandidate({ enterpriseDisplayPermissions: {
+    contact: ['linkedinUrl'], formation: ['cohort', 'projects'], changedAt: new Date(),
+  } }));
+  const result = await getCandidateById(candidateId, otherUserId, 'company');
+  assert.equal(result.linkedinUrl, 'https://linkedin.com/in/maria');
+  assert.equal(result.email, undefined);
+  assert.equal(result.phone, undefined);
+  assert.deepEqual(result.formation, { projects: [{ name: 'VagasJL' }] });
+  assert.deepEqual(origin.mock.calls[0].arguments, ['maria@example.com']);
 });
 
 test('active recruiter cannot read an active candidate who disabled opportunities', async (context) => {
@@ -151,6 +174,20 @@ test('inactive account, missing membership or non-active company deny access bef
   await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
   assert.equal(findOne.mock.callCount(), 0);
   assert.equal(findCompany.mock.callCount(), 3);
+});
+
+test('unauthorized company cannot reach candidate permissions or official formation origin', async (context) => {
+  const { findOne } = isolateLookup(context, storedCandidate({ enterpriseDisplayPermissions: {
+    contact: ['email'], formation: ['cohort'], changedAt: new Date(),
+  } }));
+  context.mock.method(User, 'findOne', async () => ({ _id: otherUserId }));
+  context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+  context.mock.method(Company, 'findOne', async () => null);
+  const origin = context.mock.method(engagementClient, 'fetchOfficialEngagement', async () =>
+    assert.fail('unauthorized company must not call formation origin'));
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 403 });
+  assert.equal(findOne.mock.callCount(), 0);
+  assert.equal(origin.mock.callCount(), 0);
 });
 
 test('candidate cannot view another candidate profile', async (context) => {

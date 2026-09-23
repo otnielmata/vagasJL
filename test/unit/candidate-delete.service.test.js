@@ -75,6 +75,10 @@ for (const status of [
     assert.equal(operation.$set.opportunityAvailabilityChangedAt, state.candidate.deletedAt);
     assert.equal(operation.$inc.opportunitySearchCacheVersion, 1);
     assert.equal(operation.$push.opportunityAvailabilityHistory.availableForOpportunities, false);
+    assert.deepEqual(operation.$set['enterpriseDisplayPermissions.contact'], []);
+    assert.deepEqual(operation.$set['enterpriseDisplayPermissions.formation'], []);
+    assert.equal(operation.$inc['enterpriseDisplayPermissions.cacheVersion'], 1);
+    assert.deepEqual(operation.$push.enterpriseDisplayPermissionHistory.contact, []);
     assert.equal(operation.$push.publicProfileConsentHistory.action, 'candidate_deleted');
     assert.equal(operation.$push.publicProfileConsentHistory.actor, ownerId.toUpperCase());
     assert.deepEqual(options, { new: true, runValidators: true });

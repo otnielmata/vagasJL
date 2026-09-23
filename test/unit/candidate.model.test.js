@@ -26,6 +26,8 @@ test('defaults to pending and persists every omitted profile field as UNKNOWN', 
   assert.equal(candidate.publicProfile.cacheVersion, 1);
   assert.equal(candidate.availableForOpportunities, false);
   assert.equal(candidate.opportunityAvailabilityChangedAt, null);
+  assert.deepEqual(candidate.enterpriseDisplayPermissions.contact, []);
+  assert.deepEqual(candidate.enterpriseDisplayPermissions.formation, []);
   assert.equal(candidate.visibleToCompanies, false);
   for (const field of PROFILE_FIELDS) assert.equal(candidate[field], UNKNOWN);
   assert.equal(candidate.validateSync(), undefined);
@@ -111,6 +113,28 @@ test('stores opportunity availability audit and cache metadata privately', () =>
   assert.equal(json.opportunityAvailabilityHistory, undefined);
   assert.equal(json.opportunitySearchCacheVersion, undefined);
   assert.equal(json.opportunitySearchCacheInvalidatedAt, undefined);
+});
+
+test('stores granular enterprise display permissions and audit privately', () => {
+  const changedAt = new Date('2026-09-23T15:00:00.000Z');
+  const candidate = new Candidate({
+    ...input,
+    enterpriseDisplayPermissions: {
+      contact: ['linkedinUrl'], formation: ['cohort'], changedAt,
+      cacheVersion: 2, cacheInvalidatedAt: changedAt,
+    },
+    enterpriseDisplayPermissionHistory: [{
+      contact: ['linkedinUrl'], formation: ['cohort'], actor: input.user, changedAt,
+    }],
+  });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(Candidate.schema.path('enterpriseDisplayPermissions').options.select, false);
+  assert.equal(Candidate.schema.path('enterpriseDisplayPermissionHistory').options.select, false);
+  assert.equal(candidate.toJSON().enterpriseDisplayPermissions, undefined);
+  assert.equal(candidate.toJSON().enterpriseDisplayPermissionHistory, undefined);
+  const invalid = new Candidate({ ...input,
+    enterpriseDisplayPermissions: { contact: ['password'] } });
+  assert.ok(invalid.validateSync().errors['enterpriseDisplayPermissions.contact.0']);
 });
 
 test('does not persist client verification flags or student proofs', () => {

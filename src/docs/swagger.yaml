@@ -1183,6 +1183,42 @@ paths:
         '409': { description: Candidato nao ativo/validado, Perfil de Match ausente ou concorrencia }
         '503': { description: Banco de dados indisponivel }
 
+  /candidatos/me/permissoes-exibicao:
+    patch:
+      tags: [Candidates]
+      summary: Controla contato e formacao exibidos para empresas (VJ-76)
+      description: >
+        Substitui integralmente as permissoes granulares do candidato autenticado. Categorias
+        omitidas ou listas vazias significam nenhuma autorizacao. Contato e formacao sao
+        independentes. Dados oficiais da formacao continuam somente leitura, sao buscados pela
+        integracao protegida e so aparecem quando a origem tambem os fornece. Toda mudanca e
+        auditada e invalida a versao de cache. Empresas nao podem chamar esta operacao.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateDisplayPermissionsRequest'
+      responses:
+        '200':
+          description: Permissoes substituidas ou estado repetido de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [permissions]
+                properties:
+                  permissions:
+                    $ref: '#/components/schemas/CandidateDisplayPermissionsState'
+        '400': { description: Categoria, campo, tipo ou duplicidade invalida }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate ou tentativa de alterar outro titular }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Alteracao concorrente das permissoes }
+        '503': { description: Banco de dados indisponivel }
+
   /candidatos/me/perfil-match:
     get:
       tags: [Match Profile]
@@ -1463,9 +1499,11 @@ paths:
       description: >
         Exige JWT valido. O candidato pode consultar somente o proprio cadastro em qualquer
         status. Papel company isolado recebe 403. Somente conta company ativa com vinculo
-        ativo a empresa active pode consultar candidatos ativos (VJ-38). A resposta usa uma projecao explicita, converte campos
-        opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
-        senha, token ou detalhes internos da validacao. A operacao e somente leitura.
+        ativo a empresa active pode consultar candidato ativo, validado e disponivel (VJ-38/VJ-75).
+        Para empresas, email, telefone, links e formacao aparecem somente conforme as permissoes
+        VJ-76; formacao tambem depende da origem protegida. O titular continua vendo seus dados
+        cadastrais. A resposta usa projecao e DTO explicitos e nunca inclui conta vinculada,
+        comprovantes, senha, token, auditoria ou detalhes internos da validacao.
       security:
         - bearerAuth: []
       parameters:
@@ -2737,6 +2775,36 @@ components:
         visibleToCompanies:
           type: boolean
           description: true somente quando status e active e a preferencia esta habilitada
+    CandidateContactDisplayField:
+      type: string
+      enum: [email, phone, linkedinUrl, githubUrl, portfolioUrl]
+    CandidateFormationDisplayField:
+      type: string
+      enum: [engagementLevel, cohort, challengesCompleted, totalChallenges, score, participation, history, projects]
+    CandidateDisplayPermissionsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        contact:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CandidateContactDisplayField' }
+        formation:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CandidateFormationDisplayField' }
+    CandidateDisplayPermissionsState:
+      type: object
+      required: [contact, formation, changedAt]
+      additionalProperties: false
+      properties:
+        contact:
+          type: array
+          items: { $ref: '#/components/schemas/CandidateContactDisplayField' }
+        formation:
+          type: array
+          items: { $ref: '#/components/schemas/CandidateFormationDisplayField' }
+        changedAt: { type: string, format: date-time, nullable: true }
     CandidateRegistrationRequest:
       type: object
       required: [name, email]
@@ -2910,21 +2978,7 @@ components:
           format: date-time
     PublicCandidate:
       type: object
-      required:
-        - _id
-        - name
-        - photoUrl
-        - email
-        - phone
-        - city
-        - state
-        - country
-        - linkedinUrl
-        - githubUrl
-        - portfolioUrl
-        - professionalSummary
-        - availability
-        - availableForOpportunities
+      required: [_id, name]
       additionalProperties: false
       properties:
         _id:
@@ -2966,6 +3020,21 @@ components:
         availableForOpportunities:
           type: boolean
           readOnly: true
+        formation:
+          type: object
+          readOnly: true
+          additionalProperties: false
+          description: Somente campos consentidos e fornecidos pela origem oficial
+          properties:
+            engagementLevel: { type: string }
+            cohort: { type: string }
+            challengesCompleted: { type: number }
+            totalChallenges: { type: number }
+            score: { type: number }
+            participation:
+              oneOf: [{ type: string }, { type: number }]
+            history: { type: array, items: { type: object, additionalProperties: true } }
+            projects: { type: array, items: { type: object, additionalProperties: true } }
         status:
           allOf:
             - $ref: '#/components/schemas/CandidateStatus'
