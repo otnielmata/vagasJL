@@ -7,6 +7,7 @@ const CandidateMatchProfile = require('../../src/models/candidate-match-profile.
 const Company = require('../../src/models/company.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const MatchEvaluation = require('../../src/models/match-evaluation.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -31,6 +32,10 @@ function vacancy(id, origin, status = 'active', overrides = {}) {
 }
 
 function setup(context, vacancies) {
+  context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
+  context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
+    _id: `audit-${update.$setOnInsert.vacancy}`,
+  }));
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 1, multipliers: { required: 1, desirable: 0.5, indifferent: 0 },
   }) }));
@@ -41,7 +46,7 @@ function setup(context, vacancies) {
   const candidateQuery = { select: async () => ({ _id: actor.id }) };
   context.mock.method(Candidate, 'findOne', () => candidateQuery);
   const profileQuery = { select: async () => ({ values: { type: ['remote'] },
-    configurationVersion: 1 }) };
+    configurationVersion: 1, revision: 1, updatedAt: now }) };
   context.mock.method(CandidateMatchProfile, 'findOne', () => profileQuery);
   const vacancyQuery = { select: async () => vacancies };
   const findVacancies = context.mock.method(Vacancy, 'find', () => vacancyQuery);

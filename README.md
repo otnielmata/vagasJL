@@ -893,6 +893,26 @@ Encerramentos são lógicos (`expired` ou `removed`), entram no histórico e ret
 ativos. O resultado informa contagens de criadas, inalteradas, atualizadas, encerradas, pendentes e
 falhas, sem expor detalhes técnicos internos.
 
+## Auditoria e versão do Match — VJ-71
+
+Cada cálculo dos rankings e do detalhe do Match é gravado em histórico interno antes da resposta.
+O registro contém somente IDs de candidato e vaga, percentual ou estado não calculável, pontos,
+elegibilidade e motivo estruturado, horário UTC, causa, revisões das entradas e versões separadas
+do catálogo, multiplicadores e limiar. A regra do motor possui versão imutável própria, atualmente
+`MATCH_V1`, independente das configurações publicadas.
+
+As avaliações são append-only: um novo cálculo não sobrescreve o anterior. O resultado mais recente
+de um par é identificável pelo índice de `calculatedAt` e ID estável. Repetir o mesmo `executionId`
+para o mesmo par, revisões e algoritmo usa upsert e não cria duplicata equivalente. `ineligible`
+mantém percentual e motivo em campos separados; `not_calculable` grava percentual e pontos nulos,
+sem inventar zero ou 100%.
+
+As respostas existentes retornam somente uma referência segura `audit` com ID da avaliação,
+execução, versão do algoritmo, horário e versões/revisões utilizadas. Nenhum endpoint público de
+consulta histórica foi criado. O histórico não armazena nome, e-mail ou contato; guarda IDs internos
+para permitir aplicação futura da política de retenção/anonimização. Se a auditoria não puder ser
+persistida, o cálculo retorna **503** em vez de informar sucesso enganoso.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:

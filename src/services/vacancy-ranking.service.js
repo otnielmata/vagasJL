@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const Candidate = require('../models/candidate.model');
 const CandidateMatchProfile = require('../models/candidate-match-profile.model');
 const Company = require('../models/company.model');
@@ -8,6 +9,7 @@ const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
+const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
 const ApiError = require('../errors/api.error');
 
 function pagination(query = {}) {
@@ -24,14 +26,14 @@ function pagination(query = {}) {
   return { page, limit };
 }
 
-async function rankVacancies(actor, query = {}, now = new Date()) {
+async function rankVacancies(actor, query = {}, now = new Date(), auditContext = {}) {
   if (actor?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem consultar o ranking');
   const { page, limit } = pagination(query);
   const candidate = await Candidate.findOne({ user: actor.id, deletedAt: null })
     .select('_id city state country');
   if (!candidate) throw new ApiError(404, 'Cadastro de candidato nao encontrado');
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id,
-    deletedAt: null }).select('values configurationVersion');
+    deletedAt: null }).select('values configurationVersion revision updatedAt');
   if (!profile) throw new ApiError(409, 'Cadastre o Perfil de Match antes de consultar o ranking');
 
   const vacancies = await Vacancy.find({ status: 'active', deletedAt: null,
@@ -55,20 +57,26 @@ async function rankVacancies(actor, query = {}, now = new Date()) {
   const byVersion = new Map(configurations.map((configuration) => [configuration.version, configuration]));
   const candidateValues = typeof profile.values.toObject === 'function'
     ? profile.values.toObject() : profile.values;
-  const ranked = eligible.map((vacancy) => {
+  const executionId = auditContext.executionId || crypto.randomUUID();
+  const ranked = (await Promise.all(eligible.map(async (vacancy) => {
     const configuration = byVersion.get(vacancy.matchProfile.configurationVersion);
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
     const score = scorePair(vacancy, candidateValues, configuration,
       matchConfiguration.multipliers, now, candidate);
+    const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
+      cause: 'candidate_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
+      versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+        multipliers: matchConfiguration.version,
+        rankingThreshold: rankingThreshold?.version ?? null } });
     const item = { vacancy: vacancy.toJSON(), percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
       matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
-      multipliersVersion: matchConfiguration.version };
+      multipliersVersion: matchConfiguration.version, audit };
     return { item, percentage: score.percentage,
       matchedRequiredCount: score.matchedRequiredCount, updatedAt: vacancy.updatedAt,
       stableId: vacancy._id, eligible: meetsRankingThreshold(score, rankingThreshold) };
-  }).filter((row) => row.eligible);
+  }))).filter((row) => row.eligible);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
   return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),

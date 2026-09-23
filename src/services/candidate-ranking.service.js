@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const Candidate = require('../models/candidate.model');
 const CandidateMatchProfile = require('../models/candidate-match-profile.model');
 const Company = require('../models/company.model');
@@ -11,11 +12,12 @@ const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const { pagination } = require('./vacancy-ranking.service');
 const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
+const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
-async function rankCandidates(actor, id, query = {}, now = new Date()) {
+async function rankCandidates(actor, id, query = {}, now = new Date(), auditContext = {}) {
   if (!['admin', 'company'].includes(actor?.role)) throw new ApiError(403, 'Acesso negado ao ranking');
   if (typeof id !== 'string' || !OBJECT_ID.test(id)) throw new ApiError(400, 'Identificador da vaga invalido');
   const { page, limit } = pagination(query);
@@ -43,25 +45,32 @@ async function rankCandidates(actor, id, query = {}, now = new Date()) {
     deletedAt: null }).select('_id name city state country');
   const profiles = candidates.length ? await CandidateMatchProfile.find({
     candidate: { $in: candidates.map((candidate) => candidate._id) }, deletedAt: null,
-  }).select('candidate values configurationVersion updatedAt') : [];
+  }).select('candidate values configurationVersion revision updatedAt') : [];
   const byCandidate = new Map(profiles.map((profile) => [String(profile.candidate), profile]));
-  const ranked = candidates.flatMap((candidate) => {
+  const executionId = auditContext.executionId || crypto.randomUUID();
+  const evaluated = await Promise.all(candidates.map(async (candidate) => {
     const profile = byCandidate.get(String(candidate._id));
-    if (!profile?.values) return [];
+    if (!profile?.values) return null;
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, configuration,
       matchConfiguration.multipliers, now, candidate);
-    if (!meetsRankingThreshold(score, rankingThreshold)) return [];
+    const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
+      cause: 'vacancy_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
+      versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+        multipliers: matchConfiguration.version,
+        rankingThreshold: rankingThreshold?.version ?? null } });
+    if (!meetsRankingThreshold(score, rankingThreshold)) return null;
     const item = { candidate: { _id: candidate._id, name: candidate.name },
       percentage: score.percentage, earnedPoints: score.earnedPoints,
       possiblePoints: score.possiblePoints, matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
-      multipliersVersion: matchConfiguration.version };
-    return [{ item, percentage: score.percentage,
+      multipliersVersion: matchConfiguration.version, audit };
+    return { item, percentage: score.percentage,
       matchedRequiredCount: score.matchedRequiredCount, updatedAt: profile.updatedAt,
-      stableId: candidate._id }];
-  });
+      stableId: candidate._id };
+  }));
+  const ranked = evaluated.filter(Boolean);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
   return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),

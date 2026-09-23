@@ -6,6 +6,7 @@ const Candidate = require('../../src/models/candidate.model');
 const CandidateMatchProfile = require('../../src/models/candidate-match-profile.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const MatchEvaluation = require('../../src/models/match-evaluation.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -48,6 +49,10 @@ function vacancy(overrides = {}) {
 function setup(context, currentVacancy = vacancy(), values = {
   testAutomationTechnologies: ['cypress', 'selenium'], programmingLanguages: ['javascript'],
 }) {
+  context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
+  context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
+    _id: `audit-${update.$setOnInsert.vacancy}`,
+  }));
   context.mock.method(Candidate, 'findOne', () => ({ select: async () => ({ _id: candidateId }) }));
   context.mock.method(Vacancy, 'findById', () => ({ select: async () => currentVacancy }));
   context.mock.method(Configuration, 'findOne', async () => configuration());
@@ -58,7 +63,9 @@ function setup(context, currentVacancy = vacancy(), values = {
   context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
     sort: async () => thresholdState.current,
   }));
-  const profileQuery = { select: async () => values === null ? null : { values, configurationVersion: 1 } };
+  const profileQuery = { select: async () => values === null ? null : {
+    values, configurationVersion: 1, revision: 1, updatedAt: now,
+  } };
   context.mock.method(CandidateMatchProfile, 'findOne', () => profileQuery);
   return { profileQuery, thresholdState };
 }
@@ -164,4 +171,12 @@ test('rejects another role, malformed id and invisible vacancy without profile d
   await assert.rejects(getCandidateMatchDetail(actor, 'invalid', now), { statusCode: 400 });
   await assert.rejects(getCandidateMatchDetail(actor, vacancyId, now), { statusCode: 404 });
   assert.equal(profileReads, 0);
+});
+
+test('does not return Match detail when mandatory audit persistence fails', async (context) => {
+  setup(context);
+  MatchEvaluation.findOneAndUpdate.mock.mockImplementation(async () => {
+    throw new Error('audit unavailable');
+  });
+  await assert.rejects(getCandidateMatchDetail(actor, vacancyId, now), { statusCode: 503 });
 });

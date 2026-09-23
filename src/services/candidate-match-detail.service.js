@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const Candidate = require('../models/candidate.model');
 const CandidateMatchProfile = require('../models/candidate-match-profile.model');
 const Company = require('../models/company.model');
@@ -10,6 +11,7 @@ const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
 const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair } = require('./match-ranking.service');
+const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -76,7 +78,7 @@ function classifyMatchResult(score, calculable, rankingThreshold) {
   return { state: 'eligible', label: 'Compatível' };
 }
 
-async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
+async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), auditContext = {}) {
   if (actor?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem consultar o Match');
   if (typeof vacancyId !== 'string' || !OBJECT_ID.test(vacancyId)) {
     throw new ApiError(400, 'Identificador da vaga invalido');
@@ -99,7 +101,7 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   const matchConfiguration = await getPublishedMultipliers();
   const rankingThreshold = await getPublishedRankingThreshold();
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id, deletedAt: null })
-    .select('values configurationVersion');
+    .select('values configurationVersion revision updatedAt');
   const candidateValues = plain(profile?.values);
   const score = scorePair(vacancy, candidateValues, configuration,
     matchConfiguration.multipliers, now, candidate);
@@ -109,11 +111,18 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
   const eligibility = calculable ? score.eligibility : { eligible: null, reason: null };
   const classification = classifyMatchResult(score, calculable, rankingThreshold);
   const percentage = calculable ? score.percentage : null;
+  const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
+    eligibility, cause: 'match_detail', executionId: auditContext.executionId || crypto.randomUUID(),
+    calculatedAt: auditContext.calculatedAt || now,
+    versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+      multipliers: matchConfiguration.version,
+      rankingThreshold: rankingThreshold?.version ?? null } });
 
   return {
     vacancy: { _id: vacancy._id, title: vacancy.title },
     indicator: { dimension: 'technical_match', label: 'Match tecnico',
       percentage, status: classification.state },
+    audit,
     resultState: classification.state,
     resultLabel: classification.label,
     calculationStatus: calculable ? 'calculable' : 'not_calculable',

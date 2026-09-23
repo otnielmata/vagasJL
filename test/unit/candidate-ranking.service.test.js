@@ -8,6 +8,7 @@ const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
+const MatchEvaluation = require('../../src/models/match-evaluation.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const User = require('../../src/models/user.model');
 const Vacancy = require('../../src/models/vacancy.model');
@@ -42,6 +43,10 @@ function vacancy(overrides = {}) {
 }
 
 function setup(context, currentVacancy = vacancy()) {
+  context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
+  context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
+    _id: `audit-${update.$setOnInsert.candidate}`,
+  }));
   const matchConfiguration = { version: 1,
     multipliers: { required: 1, desirable: 0.5, indifferent: 0 } };
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({
@@ -65,9 +70,10 @@ function setup(context, currentVacancy = vacancy()) {
   const candidateQuery = { select: async () => candidates };
   const findCandidates = context.mock.method(Candidate, 'find', () => candidateQuery);
   const profiles = [
-    { candidate: candidateId, configurationVersion: 1, values: { type: ['remote'] } },
+    { candidate: candidateId, configurationVersion: 1, revision: 1, updatedAt: now,
+      values: { type: ['remote'] } },
     { candidate: '6512f1e2b3a1c2d3e4f5a6bb', configurationVersion: 1,
-      values: { type: ['remote', 'hybrid'], agile: ['scrum'] } },
+      revision: 1, updatedAt: now, values: { type: ['remote', 'hybrid'], agile: ['scrum'] } },
   ];
   const profileQuery = { select: async () => profiles };
   context.mock.method(CandidateMatchProfile, 'find', () => profileQuery);

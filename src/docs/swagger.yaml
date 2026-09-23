@@ -206,7 +206,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [vacancy, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion]
+                      required: [vacancy, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion, audit]
                       properties:
                         vacancy: { $ref: '#/components/schemas/Vacancy' }
                         percentage: { type: number, minimum: 0, maximum: 100 }
@@ -215,6 +215,7 @@ paths:
                         matchedRequiredCount: { type: integer, minimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
                         multipliersVersion: { type: integer, minimum: 1 }
+                        audit: { $ref: '#/components/schemas/MatchAuditReference' }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
@@ -254,7 +255,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vacancy, indicator, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
+                required: [vacancy, indicator, audit, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
                 properties:
                   vacancy:
                     type: object
@@ -270,6 +271,7 @@ paths:
                       label: { type: string, enum: [Match tecnico] }
                       percentage: { type: number, minimum: 0, maximum: 100, nullable: true }
                       status: { type: string, enum: [eligible, below_threshold, ineligible, not_calculable] }
+                  audit: { $ref: '#/components/schemas/MatchAuditReference' }
                   resultState:
                     type: string
                     enum: [eligible, below_threshold, ineligible, not_calculable]
@@ -435,7 +437,7 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [candidate, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion]
+                      required: [candidate, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion, audit]
                       properties:
                         candidate:
                           type: object
@@ -449,6 +451,7 @@ paths:
                         matchedRequiredCount: { type: integer, minimum: 0 }
                         configurationVersion: { type: integer, minimum: 1 }
                         multipliersVersion: { type: integer, minimum: 1 }
+                        audit: { $ref: '#/components/schemas/MatchAuditReference' }
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   limit: { type: integer, minimum: 1, maximum: 50 }
@@ -1920,6 +1923,33 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchAuditReference:
+      type: object
+      description: Referencia segura para a auditoria interna e imutavel do resultado de Match.
+      required: [evaluationId, executionId, algorithmVersion, calculatedAt, configurationVersions, inputRevisions]
+      additionalProperties: false
+      properties:
+        evaluationId: { type: string, example: 66f1d86e5b47d410ca2a6f15 }
+        executionId: { type: string, example: 3eb30c35-b8a4-4978-802d-8b92a52db912 }
+        algorithmVersion: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', example: MATCH_V1 }
+        calculatedAt: { type: string, format: date-time }
+        configurationVersions:
+          type: object
+          required: [profileCatalog, multipliers, rankingThreshold]
+          additionalProperties: false
+          properties:
+            profileCatalog: { type: integer, minimum: 1, example: 3 }
+            multipliers: { type: integer, minimum: 1, example: 2 }
+            rankingThreshold: { type: integer, minimum: 1, nullable: true, example: 4 }
+        inputRevisions:
+          type: object
+          required: [vacancyRequirements, vacancyUpdatedAt, candidateProfile, candidateProfileUpdatedAt]
+          additionalProperties: false
+          properties:
+            vacancyRequirements: { type: integer, minimum: 1, example: 5 }
+            vacancyUpdatedAt: { type: string, format: date-time }
+            candidateProfile: { type: integer, minimum: 1, nullable: true, example: 7 }
+            candidateProfileUpdatedAt: { type: string, format: date-time, nullable: true }
     MatchCriterionDetail:
       type: object
       required: [field, id, label, importance, status, earnedPoints, possiblePoints, lostPoints]
