@@ -11,11 +11,8 @@ const TRANSACTION_OPTIONS = Object.freeze({
 
 function parseInput(actor, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.keys(input).length ||
-      Object.keys(input).some((key) => !['empresa', 'usuarioAtual', 'status', 'verificationReference'].includes(key))) {
+      Object.keys(input).some((key) => !['empresa', 'usuarioAtual'].includes(key))) {
     throw new ApiError(400, 'Campos de cadastro invalidos');
-  }
-  if (Object.hasOwn(input, 'status') && actor.role !== 'admin') {
-    throw new ApiError(403, 'Somente operadores podem alterar o status da empresa');
   }
   if (Object.hasOwn(input, 'usuarioAtual') && actor.role !== 'company') {
     throw new ApiError(403, 'Somente o proprio recrutador pode alterar seus dados publicos');
@@ -31,32 +28,10 @@ function parseInput(actor, input) {
     }
     userUpdates = { name: user.name.trim() };
   }
-  const status = input.status;
-  if (status !== undefined && !['active', 'inactive', 'blocked'].includes(status)) {
-    throw new ApiError(400, 'Status empresarial invalido');
-  }
-  const reference = input.verificationReference;
-  if (status === 'active') {
-    if (typeof reference !== 'string' || !reference.trim() || reference.trim().length > 200) {
-      throw new ApiError(400, 'Referencia da verificacao empresarial obrigatoria');
-    }
-  } else if (reference !== undefined) {
-    throw new ApiError(400, 'Referencia de verificacao so e aceita na ativacao');
-  }
-  if (!companyUpdates && !userUpdates && status === undefined) {
+  if (!companyUpdates && !userUpdates) {
     throw new ApiError(400, 'Nenhuma alteracao informada');
   }
-  return { companyUpdates, userUpdates, status, reference: reference?.trim() };
-}
-
-function assertTransition(previous, next) {
-  const allowed = {
-    pending: ['active'], active: ['inactive', 'blocked'],
-    inactive: ['active'], blocked: ['active'],
-  };
-  if (!allowed[previous]?.includes(next)) {
-    throw new ApiError(409, 'Transicao de status empresarial nao permitida');
-  }
+  return { companyUpdates, userUpdates };
 }
 
 async function updateRegistration(actor, companyId, input) {
@@ -94,17 +69,8 @@ async function updateRegistration(actor, companyId, input) {
         if (duplicate) throw new ApiError(409, 'Email corporativo ja cadastrado');
       }
 
-      if (updates.status !== undefined) {
-        assertTransition(company.status, updates.status);
-        company.status = updates.status;
-        if (updates.status === 'active') {
-          company.statusVerifiedAt = new Date();
-          company.statusVerifiedBy = actor.id;
-          company.statusVerificationReference = updates.reference;
-        }
-      }
       if (updates.companyUpdates) company.set(updates.companyUpdates);
-      if (updates.companyUpdates || updates.status !== undefined) await company.save({ session });
+      if (updates.companyUpdates) await company.save({ session });
       if (updates.userUpdates) {
         account.name = updates.userUpdates.name;
         await account.save({ session });

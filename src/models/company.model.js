@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const companyStatusHistorySchema = new mongoose.Schema({
+  from: { type: String, enum: ['pending', 'active', 'inactive', 'blocked'], required: true },
+  to: { type: String, enum: ['pending', 'active', 'inactive', 'blocked'], required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+  reason: { type: String, required: true, trim: true, maxlength: 500 },
+}, { _id: false });
+
 const companySchema = new mongoose.Schema({
   legalName: { type: String, required: true, trim: true, maxlength: 200 },
   tradeName: { type: String, trim: true, maxlength: 200, default: null },
@@ -21,6 +29,9 @@ const companySchema = new mongoose.Schema({
   statusVerifiedAt: { type: Date, default: null, select: false },
   statusVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, select: false },
   statusVerificationReference: { type: String, default: null, maxlength: 200, select: false },
+  statusHistory: { type: [companyStatusHistorySchema], default: [], select: false },
+  authorizationVersion: { type: Number, default: 0, min: 0, select: false },
+  authorizationInvalidatedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
 companySchema.index({ email: 1 }, {
@@ -38,6 +49,9 @@ companySchema.set('toJSON', {
     delete result.statusVerifiedAt;
     delete result.statusVerifiedBy;
     delete result.statusVerificationReference;
+    delete result.statusHistory;
+    delete result.authorizationVersion;
+    delete result.authorizationInvalidatedAt;
     return result;
   },
 });

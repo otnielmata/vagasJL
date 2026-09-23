@@ -10,6 +10,7 @@ info:
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
+    administracao auditada do status empresarial (VJ-77),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -729,6 +730,47 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /admin/empresas/{id}/status:
+    patch:
+      tags: [Companies]
+      summary: Administra o status empresarial com auditoria (VJ-77)
+      description: >
+        Exige conta admin ativa. Ativacao requer cadastro minimo completo, vinculo recruiter
+        ativo e conta company ativa com email verificado. Inativacao e bloqueio invalidam
+        autorizacoes e impedem imediatamente consultas empresariais. Cada mudanca registra
+        estado anterior, novo estado, administrador, data e motivo. Repetir o estado atual e
+        idempotente e nao cria nova auditoria. Status nao pode ser alterado pelo endpoint de cadastro.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyStatusUpdateRequest'
+      responses:
+        '200':
+          description: Estado atual e indicador de mudanca idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyStatusUpdateResponse'
+        '400': { description: Identificador, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '404': { description: Empresa inexistente ou excluida }
+        '409': { description: Empresa inapta, transicao proibida ou alteracao concorrente }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /empresas:
     post:
       tags: [Companies]
@@ -974,9 +1016,9 @@ paths:
       summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
       description: >
         Exige JWT ativo. Recrutador verificado e vinculado pode editar empresa e seu nome;
-        admin pode editar empresa e transitar status. Ativacao exige referencia de verificacao
-        administrativa. Troca de email ou senha de login usa o fluxo User existente. A edicao
-        combinada e atomica e requer MongoDB com suporte a transacoes.
+        admin pode editar os dados empresariais. Status e auditoria usam exclusivamente o endpoint
+        administrativo da VJ-77. Troca de email ou senha de login usa o fluxo User existente.
+        A edicao combinada e atomica e requer MongoDB com suporte a transacoes.
       security:
         - bearerAuth: []
       parameters:
@@ -1007,7 +1049,7 @@ paths:
                   usuarioAtual:
                     $ref: '#/components/schemas/PublicCompanyUser'
         '400':
-          description: Campos, email, URL, status ou referencia de verificacao invalidos
+          description: Campos, email, URL ou corpo invalidos
           content:
             application/json:
               schema:
@@ -1019,7 +1061,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Usuario sem vinculo, de outra empresa, ou tentativa de autoativacao
+          description: Usuario sem vinculo ou de outra empresa
           content:
             application/json:
               schema:
@@ -1031,7 +1073,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Email corporativo duplicado ou transicao de status proibida
+          description: Email corporativo duplicado
           content:
             application/json:
               schema:
@@ -2395,16 +2437,28 @@ components:
           additionalProperties: false
           properties:
             name: { type: string, minLength: 1, maxLength: 200 }
-        status:
-          type: string
-          enum: [active, inactive, blocked]
-          description: Apenas admin; transicoes controladas
-        verificationReference:
-          type: string
-          minLength: 1
-          maxLength: 200
-          writeOnly: true
-          description: Obrigatoria ao ativar ou reativar; referencia de verificacao feita pelo operador
+    CompanyStatusUpdateRequest:
+      type: object
+      required: [status, reason]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [pending, active, inactive, blocked] }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CompanyStatusUpdateResponse:
+      type: object
+      required: [company, previousStatus, changed, changedAt]
+      additionalProperties: false
+      properties:
+        company:
+          type: object
+          required: [_id, status]
+          additionalProperties: false
+          properties:
+            _id: { type: string }
+            status: { type: string, enum: [pending, active, inactive, blocked] }
+        previousStatus: { type: string, enum: [pending, active, inactive, blocked] }
+        changed: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
     CompanyUser:
       type: object
       required: [_id, company, user, role, status]

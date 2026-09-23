@@ -27,12 +27,13 @@ test('company registration update route requires an active admin or company JWT'
 });
 
 test('controller returns 200 and forwards errors', async (context) => {
-  const update = context.mock.method(service, 'updateRegistration', async () => ({ company: { status: 'active' } }));
-  const request = { user: { id: 'admin', role: 'admin' }, params: { id: 'company' }, body: { status: 'active' } };
+  const update = context.mock.method(service, 'updateRegistration', async () => ({ company: { status: 'pending' } }));
+  const request = { user: { id: 'admin', role: 'admin' }, params: { id: 'company' },
+    body: { empresa: { city: 'Rio' } } };
   const response = { status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
   await controller.updateRegistration(request, response, () => assert.fail('unexpected error'));
   assert.equal(response.code, 200);
-  assert.deepEqual(response.body, { company: { status: 'active' } });
+  assert.deepEqual(response.body, { company: { status: 'pending' } });
   assert.deepEqual(update.mock.calls[0].arguments, [request.user, request.params.id, request.body]);
   const failure = new Error('failure');
   update.mock.mockImplementation(async () => { throw failure; });

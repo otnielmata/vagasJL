@@ -68,45 +68,13 @@ test('company-only update does not alter account or status', async (context) => 
   assert.equal(saveUser.mock.callCount(), 0);
 });
 
-test('admin activates pending company only with verification reference and private audit', async (context) => {
-  const { company, findUser, findMembership } = setup(context);
-  const result = await updateRegistration(admin, companyId, {
-    status: 'active', verificationReference: 'review-2026-01',
-  });
-  assert.equal(result.company.status, 'active');
-  assert.equal(company.statusVerifiedBy.toString(), adminId);
-  assert.equal(company.statusVerificationReference, 'review-2026-01');
-  assert.ok(company.statusVerifiedAt instanceof Date);
-  assert.equal(result.company.statusVerificationReference, undefined);
-  assert.equal(findUser.mock.callCount(), 0);
-  assert.equal(findMembership.mock.callCount(), 0);
-});
-
-for (const target of ['inactive', 'blocked']) {
-  test(`admin can change active company to ${target} without recruiter authorization`, async (context) => {
-    const { company, findUser } = setup(context, 'active');
-    const result = await updateRegistration(admin, companyId, { status: target });
-    assert.equal(result.company.status, target);
-    assert.equal(company.status, target);
-    assert.equal(findUser.mock.callCount(), 0);
-  });
-}
-
-for (const previous of ['inactive', 'blocked']) {
-  test(`reactivation from ${previous} requires a new verification reference`, async (context) => {
-    const { company } = setup(context, previous);
-    await assert.rejects(updateRegistration(admin, companyId, { status: 'active' }), { statusCode: 400 });
-    await updateRegistration(admin, companyId, { status: 'active', verificationReference: 'new-review' });
-    assert.equal(company.statusVerificationReference, 'new-review');
-  });
-}
-
-test('forbidden transitions and self-activation do not save', async (context) => {
-  const { saveCompany, saveUser } = setup(context);
-  await assert.rejects(updateRegistration(recruiter, companyId, { status: 'active', verificationReference: 'x' }),
-    { statusCode: 403 });
-  await assert.rejects(updateRegistration(admin, companyId, { status: 'blocked' }), { statusCode: 409 });
-  await assert.rejects(updateRegistration(admin, companyId, { status: 'pending' }), { statusCode: 400 });
+test('status fields are rejected because status has a dedicated audited endpoint', async (context) => {
+  const { transaction, saveCompany, saveUser } = setup(context);
+  for (const actor of [admin, recruiter]) {
+    await assert.rejects(updateRegistration(actor, companyId,
+      { status: 'active', verificationReference: 'review-2026-01' }), { statusCode: 400 });
+  }
+  assert.equal(transaction.mock.callCount(), 0);
   assert.equal(saveCompany.mock.callCount(), 0);
   assert.equal(saveUser.mock.callCount(), 0);
 });

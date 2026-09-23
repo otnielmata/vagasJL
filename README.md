@@ -182,9 +182,10 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
 | POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
-| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita cadastro e controla status (VJ-39) |
+| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita dados cadastrais (VJ-39) |
 | GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
+| PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
@@ -275,8 +276,8 @@ administrados em histórias futuras, sem embutir recrutadores no documento Empre
 ## Edição do cadastro empresarial — VJ-39
 
 `PATCH /empresas/{id}/cadastro` aceita os objetos opcionais `empresa` (campos públicos do cadastro)
-e `usuarioAtual` (somente `name` do recrutador vinculado), além de `status` e
-`verificationReference` para administradores. Pelo menos uma alteração é obrigatória. Exemplo:
+e `usuarioAtual` (somente `name` do recrutador vinculado). Pelo menos uma alteração é obrigatória.
+Status e auditoria não são aceitos; a gestão de status usa exclusivamente a VJ-77. Exemplo:
 
 ```json
 {
@@ -291,14 +292,9 @@ podem editar dados empresariais, mas não os dados públicos de outro usuário n
 `usuarioAtual.email`, senha e credenciais não são aceitos; a troca do e-mail de login ou da senha
 continua no fluxo `/usuarios/{id}`. Campos omitidos e status permanecem inalterados.
 
-Somente administradores transitam `pending → active`, `active → inactive/blocked` e
-`inactive/blocked → active`. Toda ativação/revalidação exige `verificationReference` (referência
-da verificação empresarial concluída pelo operador) e grava data/autor internos não expostos na
-resposta. Esta API registra a atestação do operador; não implementa um serviço externo de
-verificação empresarial. Inativar ou bloquear revoga imediatamente o acesso à leitura de
-candidatos, mesmo com JWT ainda válido. E-mail corporativo é normalizado e único; duplicidade
-retorna **409**, URL inválida **400**, sem atualização parcial. A edição conjunta usa transação
-MongoDB e, portanto, requer replica set; sem suporte retorna **503**.
+E-mail corporativo é normalizado e único; duplicidade retorna **409**, URL inválida **400**, sem
+atualização parcial. A edição conjunta usa transação MongoDB e, portanto, requer replica set;
+sem suporte retorna **503**.
 
 ## Consulta do cadastro empresarial — VJ-40
 
@@ -334,6 +330,32 @@ As leituras empresariais de candidatos verificam vínculo ativo, empresa `active
 `deletedAt=null` no banco a cada requisição; assim o acesso cessa após a exclusão mesmo com
 JWT ainda válido. Um cadastro posterior com o mesmo e-mail, se permitido, cria **nova empresa
 `pending` com novo identificador**, sem reativar a excluída.
+
+## Administração do status empresarial — VJ-77
+
+`PATCH /admin/empresas/{id}/status` exige JWT de administrador ativo e corpo contendo exatamente
+`status` e `reason`. Os estados controlados são `pending`, `active`, `inactive` e `blocked`; uma
+empresa pendente pode ser ativada, inativada ou bloqueada, enquanto o retorno a `pending` não é
+permitido após outra situação.
+
+```json
+{
+  "status": "active",
+  "reason": "Cadastro revisado e responsável empresarial verificado"
+}
+```
+
+Ativação exige cadastro mínimo completo, vínculo `recruiter` ativo e conta empresarial ativa com
+e-mail verificado. Ausência desses requisitos retorna **409** sem alterar o status. Inativação ou
+bloqueio impedem imediatamente consultas empresariais porque cada acesso continua validando a
+empresa como `active`; a alteração também incrementa a versão interna de autorização e invalida
+caches associados.
+
+Cada mudança registra estado anterior, novo estado, administrador, data/hora e motivo em histórico
+privado. Repetir o status atual retorna **200** com `changed: false`, sem novo histórico ou versão.
+Alteração concorrente retorna **409**. Candidatos e recrutadores recebem **403**, e o endpoint
+`PATCH /empresas/{id}/cadastro` não aceita mais status ou campos de auditoria. Reativar uma empresa
+não recupera permissões individuais que tenham sido revogadas em outros processos.
 
 ## Cadastro de vaga própria — VJ-42
 
@@ -1704,6 +1726,16 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Empresa inativa ou não autorizada não acessa dados | Autorização anterior à leitura do candidato e da origem |
 | Terceiro não altera permissões | Rota candidate-only, identidade do JWT e erro 403 |
 | Dados oficiais permanecem somente leitura | Consulta protegida sem endpoint de edição ou persistência |
+
+| Critério da VJ-77 | Cobertura unitária |
+| --- | --- |
+| Somente administrador ativo altera status | Autenticação, autorização da rota e validação defensiva do service |
+| Ativação exige cadastro completo e responsável verificado | Consultas simuladas de empresa, vínculo e conta empresarial |
+| Inativação e bloqueio cortam acesso | Filtro `status: active`, versão e data de invalidação de autorização |
+| Mudança auditada com ator, data, estados e motivo | Atualização atômica e schema privado de histórico |
+| Repetição é idempotente | Nenhuma escrita, auditoria ou invalidação adicional |
+| Concorrência preserva estado | Filtro otimista e resposta HTTP 409 |
+| Endpoint cadastral não contorna auditoria | Rejeição unitária de `status` e `verificationReference` |
 
 | Critério da VJ-75 | Cobertura unitária |
 | --- | --- |
