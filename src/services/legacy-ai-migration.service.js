@@ -1,4 +1,4 @@
-const { normalizeMatchAlias } = require('../config/match-profile');
+const { normalizeCatalogAlias } = require('../config/master-catalog');
 const ApiError = require('../errors/api.error');
 
 const LEGACY_AI_FIELD = 'genAITecnologies';
@@ -20,14 +20,14 @@ function migrateLegacyAiValues(values, configuration, now = new Date()) {
   const aliases = new Map();
   for (const option of field.options || []) {
     for (const name of [option.id, option.label, ...(option.aliases || [])]) {
-      const normalized = normalizeMatchAlias(name);
+      const normalized = normalizeCatalogAlias(name);
       const ids = aliases.get(normalized) || new Set();
       ids.add(option.id);
       aliases.set(normalized, ids);
     }
   }
   const entries = submitted.map((value) => {
-    const ids = [...(aliases.get(normalizeMatchAlias(value)) || [])];
+    const ids = [...(aliases.get(normalizeCatalogAlias(value)) || [])];
     return { submitted: value.trim(), canonicalId: ids.length === 1 ? ids[0] : null,
       status: ids.length === 1 ? 'mapped' : 'pending' };
   });

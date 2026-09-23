@@ -2,6 +2,7 @@ const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, isUnknownSeniority,
   isUnidentifiedModality } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
 const { DIMENSIONS, normalizePlace, validGeographyWeights } = require('../config/geography');
+const { normalizeCatalogAlias } = require('../config/master-catalog');
 
 const MATCH_SCORING_VERSION = 1;
 const DERIVED_FIELDS = Object.freeze([
@@ -79,8 +80,7 @@ function calculateMatchScore({ technicalResults = {}, configuration, vacancy = {
 
 function normalizeCompetency(value) {
   if (typeof value !== 'string' || !value.trim()) throw new TypeError('Competencia invalida');
-  return value.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/\s+/g, ' ');
+  return normalizeCatalogAlias(value);
 }
 
 function canonicalValues(values, field, ignoreUnknown = false) {

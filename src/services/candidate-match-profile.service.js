@@ -2,11 +2,12 @@ const Candidate = require('../models/candidate.model');
 const Configuration = require('../models/match-profile-configuration.model');
 const MatchProfile = require('../models/candidate-match-profile.model');
 const { CANDIDATE_STATUS } = require('../config/candidate');
-const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS, normalizeMatchAlias,
+const { INITIAL_MATCH_WEIGHTS, BOOLEAN_MATCH_FIELDS,
   isUnknownSeniority, isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 const { migrateLegacyAiValues, LEGACY_AI_FIELD,
   CANONICAL_AI_FIELD } = require('./legacy-ai-migration.service');
+const { normalizeCatalogAlias } = require('../config/master-catalog');
 
 const KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 
@@ -36,7 +37,7 @@ function normalizeChoices(value, field) {
   const canonical = new Map();
   for (const option of field.options) {
     for (const name of [option.id, option.label, ...option.aliases]) {
-      canonical.set(normalizeMatchAlias(name), option.id);
+      canonical.set(normalizeCatalogAlias(name), option.id);
     }
   }
   const selected = new Set();
@@ -44,7 +45,7 @@ function normalizeChoices(value, field) {
     if (typeof choice !== 'string' || !choice.trim() || choice.length > 100) invalid();
     if (field.key === 'level' && isUnknownSeniority(choice)) invalid('Senioridade desconhecida nao e opcao valida');
     if (field.key === 'type' && isUnidentifiedModality(choice)) invalid('Modalidade fora do catalogo');
-    const id = canonical.get(normalizeMatchAlias(choice));
+    const id = canonical.get(normalizeCatalogAlias(choice));
     if (!id) invalid('Valor fora do catalogo publicado');
     if (field.key === 'level' && isUnknownSeniority(id)) invalid('Senioridade desconhecida nao e opcao valida');
     if (field.key === 'type' && isUnidentifiedModality(id)) invalid('Modalidade fora do catalogo');

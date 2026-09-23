@@ -13,6 +13,7 @@ info:
     administracao auditada do status empresarial (VJ-77) e de candidatos (VJ-78),
     configuracao consolidada e versionada do Motor de Match (VJ-79),
     cadastro e revisao administrativa de vagas com auditoria (VJ-80),
+    Catalogo Mestre canonico, versionado e com sinonimos (VJ-81),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -37,6 +38,52 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /admin/catalogos/{category}/{id}:
+    put:
+      tags: [Match Profile]
+      summary: Publica item canonico do Catalogo Mestre (VJ-81)
+      description: >
+        Cria ou atualiza idempotentemente uma revisao publicada do item. O ID permanece estavel
+        quando o nome muda. Aliases equivalentes por caixa, acento, espaco, ponto, hifen ou
+        sublinhado convergem para o mesmo ID; ambiguidades retornam 409 sem alterar a versao
+        funcional vigente. active=false impede novos usos, mas preserva configuracoes e resultados
+        historicos. A publicacao sincroniza uma nova versao do Perfil de Match quando necessario,
+        invalida cache e agenda reprocessamento.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z][a-z0-9_]*$', maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterCatalogItemRequest' }
+      responses:
+        '200':
+          description: Item criado, atualizado ou repetido de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                additionalProperties: false
+                properties:
+                  item: { $ref: '#/components/schemas/MasterCatalogItem' }
+        '400': { description: Categoria ou identificador canonico invalido }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin ou conta administrativa inexistente }
+        '409': { description: ID reutilizado, alias ambiguo ou publicacao concorrente }
+        '422': { description: Estrutura, alias ou vigencia invalida }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /admin/vagas/{id}:
     put:
       tags: [Vacancies]
@@ -2308,6 +2355,55 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MasterCatalogCategory:
+      type: string
+      enum: [competency, test_automation, qa_tool, ai_tool, programming_language,
+        role, specialization, test_type]
+    MasterCatalogItemRequest:
+      type: object
+      required: [id, name, category, aliases, active]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_]*$', maxLength: 100, example: cypress }
+        name: { type: string, minLength: 1, maxLength: 100, example: Cypress }
+        category: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        aliases:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 100 }
+          example: [Cypress.io, Cypress Framework]
+        active: { type: boolean }
+        effectiveAt:
+          type: string
+          format: date-time
+          description: Vigencia igual ou anterior ao momento da publicacao; omissao usa o horario atual.
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    MasterCatalogItem:
+      type: object
+      required: [_id, id, name, category, aliases, active, revision, state, effectiveAt,
+        reason, profileConfigurationVersion, cacheInvalidatedAt, recalculation, createdAt]
+      properties:
+        _id: { type: string }
+        id: { type: string, pattern: '^[a-z][a-z0-9_]*$' }
+        name: { type: string }
+        category: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        aliases:
+          type: array
+          items: { type: string }
+        active: { type: boolean }
+        revision: { type: integer, minimum: 1 }
+        state: { type: string, enum: [published] }
+        effectiveAt: { type: string, format: date-time }
+        reason: { type: string }
+        profileConfigurationVersion: { type: integer, minimum: 1 }
+        cacheInvalidatedAt: { type: string, format: date-time }
+        recalculation:
+          type: object
+          required: [status, scheduledFor]
+          properties:
+            status: { type: string, enum: [scheduled] }
+            scheduledFor: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
     MatchEngineWeights:
       type: object
       additionalProperties: false

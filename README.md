@@ -189,6 +189,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
 | PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
 | PUT    | `/admin/vagas/{id}` | Admin (Bearer) | Cadastra ou revisa vaga com versão e auditoria (VJ-80) |
+| PUT    | `/admin/catalogos/{categoria}/{id}` | Admin (Bearer) | Publica item canônico do Catálogo Mestre (VJ-81) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
@@ -656,6 +657,26 @@ campos alterados e política de recálculo. Mudanças relevantes de Match, dispo
 agendam o reprocessamento conforme a configuração vigente, sem apagar avaliações históricas.
 Repetir a mesma versão com a mesma representação retorna **200** com `changed: false`. Os estados
 `paused`, `removed` e `rejected` retiram a vaga dos rankings sem exclusão física.
+
+## Catálogo Mestre — VJ-81
+
+`PUT /admin/catalogos/{categoria}/{id}` cria ou atualiza de forma idempotente um item canônico.
+O corpo mínimo contém `id`, `name`, `category`, `aliases` e `active`; `reason` e `effectiveAt`
+podem ser informados para auditoria. Categoria e identificador do corpo devem coincidir com a rota.
+As categorias iniciais são `competency`, `test_automation`, `qa_tool`, `ai_tool`,
+`programming_language`, `role`, `specialization` e `test_type`.
+
+Cada alteração produz uma revisão imutável com autor, motivo e vigência, invalida o cache e agenda
+reprocessamento. O item também gera, quando necessário, uma nova versão publicada do catálogo
+funcional do Perfil de Match; por isso candidatos e vagas passam a usar o mesmo ID. Alterar o nome
+amigável não altera o ID. Definir `active: false` remove a opção de novos cadastros, mas mantém as
+revisões e configurações antigas para auditoria e resultados históricos.
+
+Aliases são comparados sem diferenças de caixa, acentos, espaços, pontos, hífens ou sublinhados.
+Assim, `REST Assured`, `RestAssured` e `rest-assured` convergem para o mesmo item, enquanto símbolos
+significativos como `+`, `#` e `/` preservam a distinção entre linguagens. Um alias pertencente a
+outro item ativo ou ao catálogo funcional vigente retorna **409** antes de publicar qualquer versão.
+Repetir a mesma representação retorna a revisão atual sem duplicar histórico.
 
 ## Multiplicadores do Match — VJ-52
 

@@ -1,10 +1,11 @@
 const Configuration = require('../models/match-profile-configuration.model');
-const { INITIAL_MATCH_WEIGHTS, normalizeMatchAlias, isUnknownSeniority,
+const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority,
   isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
 const { validateRequirements } = require('./vacancy-requirements.service');
 const { DIMENSIONS, normalizePlace, validGeographyWeights } = require('../config/geography');
 const { migrateLegacyAiValues, LEGACY_AI_FIELD } = require('./legacy-ai-migration.service');
+const { normalizeCatalogAlias } = require('../config/master-catalog');
 
 const FIELD_KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location',
@@ -98,7 +99,7 @@ function normalizeValues(input, configuration) {
     const catalog = new Map();
     for (const option of fields.get(key).options) {
       for (const label of [option.id, option.label, ...option.aliases]) {
-        catalog.set(normalizeMatchAlias(label), option.id);
+        catalog.set(normalizeCatalogAlias(label), option.id);
       }
     }
     const selected = new Set();
@@ -106,7 +107,7 @@ function normalizeValues(input, configuration) {
       if (typeof choice !== 'string' || !choice.trim() || choice.length > 100) invalid();
       if (key === 'level' && isUnknownSeniority(choice)) invalid('Senioridade desconhecida nao e opcao valida');
       if (key === 'type' && isUnidentifiedModality(choice)) invalid('Modalidade nao identificada');
-      const canonicalId = catalog.get(normalizeMatchAlias(choice));
+      const canonicalId = catalog.get(normalizeCatalogAlias(choice));
       if (!canonicalId) invalid('Competencia fora do catalogo publicado');
       if (key === 'level' && isUnknownSeniority(canonicalId)) invalid('Senioridade desconhecida nao e opcao valida');
       if (key === 'type' && isUnidentifiedModality(canonicalId)) invalid('Modalidade nao identificada');
