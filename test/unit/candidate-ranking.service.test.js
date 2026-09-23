@@ -9,6 +9,7 @@ const CompanyUser = require('../../src/models/company-user.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const ProfileCompletionThresholdConfiguration =
   require('../../src/models/profile-completion-threshold-configuration.model');
@@ -45,6 +46,10 @@ function vacancy(overrides = {}) {
 }
 
 function setup(context, currentVacancy = vacancy()) {
+  const engineState = { current: null };
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({
+    sort: async () => engineState.current,
+  }));
   context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
   context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
     _id: `audit-${update.$setOnInsert.candidate}`,
@@ -83,7 +88,7 @@ function setup(context, currentVacancy = vacancy()) {
   const profileQuery = { select: async () => profiles };
   context.mock.method(CandidateMatchProfile, 'find', () => profileQuery);
   return { candidates, candidateQuery, profiles, profileQuery, companyLookup, findCandidates,
-    matchConfiguration, thresholdState };
+    matchConfiguration, thresholdState, engineState };
 }
 
 test('company ranking scores from vacancy requirements, sorts and hides private candidate fields', async (context) => {

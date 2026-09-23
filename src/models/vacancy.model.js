@@ -57,6 +57,7 @@ const vacancySchema = new mongoose.Schema({
   importMappingAudit: { type: importMappingAuditSchema, default: null, select: false },
   importImportance: { type: new mongoose.Schema({
     version: { type: Number, required: true, min: 1 },
+    engineVersion: { type: String, default: null, match: /^MATCH_V[1-9]\d*$/ },
     importance: { type: String, required: true, enum: ['required', 'desirable', 'indifferent'] },
     appliedAt: { type: Date, required: true },
   }, { _id: false }), default: null },

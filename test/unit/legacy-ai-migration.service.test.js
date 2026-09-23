@@ -7,6 +7,7 @@ const MatchProfile = require('../../src/models/candidate-match-profile.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const ImportConfiguration = require('../../src/models/import-importance-configuration.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { publishConfiguration } = require('../../src/services/match-profile-configuration.service');
 const { registerMatchProfile,
@@ -47,6 +48,7 @@ function setupCandidate(context) {
 }
 
 function setupImportedVacancy(context, importance = 'required') {
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => null }));
   context.mock.method(ImportConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 1, importance,
   }) }));

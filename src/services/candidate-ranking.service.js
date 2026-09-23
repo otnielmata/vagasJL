@@ -13,6 +13,8 @@ const { pagination } = require('./vacancy-ranking.service');
 const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
 const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
+const { getEffectiveMatchEngineConfiguration, applyEngineWeights } =
+  require('./match-engine-configuration.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
@@ -38,8 +40,15 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   }
   const configuration = await Configuration.findOne({ version: vacancy.matchProfile.configurationVersion });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
-  const matchConfiguration = await getPublishedMultipliers();
-  const rankingThreshold = await getPublishedRankingThreshold();
+  const engineConfiguration = await getEffectiveMatchEngineConfiguration(now);
+  const scoringConfiguration = applyEngineWeights(configuration, engineConfiguration);
+  const matchConfiguration = engineConfiguration
+    ? { version: engineConfiguration.revision, multipliers: engineConfiguration.multipliers }
+    : await getPublishedMultipliers();
+  const rankingThreshold = engineConfiguration
+    ? { version: engineConfiguration.revision,
+      minimumPercentage: engineConfiguration.minimumMatchPercentage }
+    : await getPublishedRankingThreshold();
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
     availableForOpportunities: true, 'eligibility.status': 'approved',
@@ -54,11 +63,13 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
     if (!profile?.values) return null;
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
-    const score = scorePair(vacancy, candidateValues, configuration,
+    const score = scorePair(vacancy, candidateValues, scoringConfiguration,
       matchConfiguration.multipliers, now, candidate);
     const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
       cause: 'vacancy_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
-      versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+      algorithmVersion: engineConfiguration?.version,
+      versions: { engine: engineConfiguration?.version,
+        profileCatalog: vacancy.matchProfile.configurationVersion,
         multipliers: matchConfiguration.version,
         rankingThreshold: rankingThreshold?.version ?? null } });
     if (!meetsRankingThreshold(score, rankingThreshold)) return null;
@@ -66,6 +77,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
       percentage: score.percentage, earnedPoints: score.earnedPoints,
       possiblePoints: score.possiblePoints, matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
+      engineConfigurationVersion: engineConfiguration?.version ?? null,
       multipliersVersion: matchConfiguration.version, audit };
     return { item, percentage: score.percentage,
       matchedRequiredCount: score.matchedRequiredCount, updatedAt: profile.updatedAt,
@@ -77,6 +89,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
     total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
     rankingThresholdVersion: rankingThreshold?.version ?? null,
+    engineConfigurationVersion: engineConfiguration?.version ?? null,
     pages: Math.ceil(total / limit) };
 }
 

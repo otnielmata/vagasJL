@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const Vacancy = require('../../src/models/vacancy.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const ImportConfiguration = require('../../src/models/import-importance-configuration.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { registerImportedVacancy } = require('../../src/services/vacancy-origin.service');
 const { calculateCompetencyMatch } = require('../../src/services/match-scoring.service');
@@ -22,6 +23,7 @@ const input = { reference: 'job-49', title: 'QA', description: 'Cypress', matchP
 
 function setup(context, importance = 'desirable') {
   context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => null }));
   context.mock.method(ImportConfiguration, 'findOne', () => ({ sort: async () => importance
     ? { version: 2, importance } : null }));
   context.mock.method(Vacancy, 'init', async () => Vacancy);
@@ -80,6 +82,7 @@ test('indifferent true requirement remains non-scoring', async (context) => {
 
 test('new configuration never changes a previously imported vacancy', async (context) => {
   context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => null }));
   let current = { version: 1, importance: 'desirable' };
   context.mock.method(ImportConfiguration, 'findOne', () => ({ sort: async () => current }));
   context.mock.method(Vacancy, 'init', async () => Vacancy);
@@ -93,4 +96,32 @@ test('new configuration never changes a previously imported vacancy', async (con
   assert.equal(earlier.matchProfile.requirements[0].importance, 'desirable');
   assert.equal(later.importImportance.version, 2);
   assert.equal(later.matchProfile.requirements[0].importance, 'required');
+});
+
+test('effective engine configuration supplies the imported requirement importance', async (context) => {
+  context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => ({
+    version: 'MATCH_V2', revision: 2, state: 'published',
+    weights: INITIAL_MATCH_WEIGHTS,
+    multipliers,
+    defaultImportImportance: 'required',
+    minimumMatchPercentage: 60,
+    minimumProfileCompletionPercentage: null,
+    effectiveAt: new Date('2026-01-01T00:00:00.000Z'),
+    recalculation: { policy: 'affected_matches' },
+  }) }));
+  const legacyConfiguration = context.mock.method(ImportConfiguration, 'findOne', () => ({
+    sort: async () => ({ version: 99, importance: 'desirable' }),
+  }));
+  context.mock.method(Vacancy, 'init', async () => Vacancy);
+  context.mock.method(Vacancy, 'findOne', async () => null);
+  context.mock.method(Vacancy, 'create', async (data) => new Vacancy(data));
+
+  const vacancy = await registerImportedVacancy(provenance, input);
+
+  assert.equal(vacancy.importImportance.version, 2);
+  assert.equal(vacancy.importImportance.engineVersion, 'MATCH_V2');
+  assert.equal(vacancy.importImportance.importance, 'required');
+  assert.equal(vacancy.matchProfile.requirements[0].importance, 'required');
+  assert.equal(legacyConfiguration.mock.callCount(), 0);
 });

@@ -8,6 +8,7 @@ const Company = require('../../src/models/company.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const ProfileCompletionThresholdConfiguration =
   require('../../src/models/profile-completion-threshold-configuration.model');
@@ -34,6 +35,10 @@ function vacancy(id, origin, status = 'active', overrides = {}) {
 }
 
 function setup(context, vacancies) {
+  const engineState = { current: null };
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({
+    sort: async () => engineState.current,
+  }));
   context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
   context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
     _id: `audit-${update.$setOnInsert.vacancy}`,
@@ -70,7 +75,8 @@ function setup(context, vacancies) {
     return configuration;
   });
   return { findVacancies, findCompanies, findConfigurations, candidateQuery, profileQuery,
-    companyQuery, thresholdState, completionThresholdState, findCompletionConfiguration };
+    companyQuery, thresholdState, completionThresholdState, findCompletionConfiguration,
+    engineState };
 }
 
 test('filters active unexpired vacancies before scoring and paginates only eligible rows', async (context) => {

@@ -14,6 +14,8 @@ const { completionFor } = require('./candidate-match-profile.service');
 const { getPublishedProfileCompletionThreshold, meetsProfileCompletionThreshold } =
   require('./profile-completion-threshold-configuration.service');
 const ApiError = require('../errors/api.error');
+const { getEffectiveMatchEngineConfiguration, applyEngineWeights } =
+  require('./match-engine-configuration.service');
 
 function pagination(query = {}) {
   if (Object.keys(query).some((key) => !['page', 'limit'].includes(key))) {
@@ -43,7 +45,14 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
     throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel para completude');
   }
   const completion = completionFor(profile, completionConfiguration);
-  const completionThreshold = await getPublishedProfileCompletionThreshold();
+  const engineConfiguration = await getEffectiveMatchEngineConfiguration(now);
+  const completionThreshold = engineConfiguration
+    ? engineConfiguration.minimumProfileCompletionPercentage === null ? null : {
+      version: engineConfiguration.revision,
+      minimumPercentage: engineConfiguration.minimumProfileCompletionPercentage,
+      effectiveAt: engineConfiguration.effectiveAt,
+    }
+    : await getPublishedProfileCompletionThreshold();
   if (!meetsProfileCompletionThreshold(completion, completionThreshold)) {
     return { recommendationStatus: 'insufficient_profile_completeness',
       profileCompletion: { percentage: completion.percentage,
@@ -69,8 +78,13 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
     vacancy.matchProfile.requirements?.some((item) => item.importance !== 'indifferent'));
 
   const versions = [...new Set(eligible.map((vacancy) => vacancy.matchProfile.configurationVersion))];
-  const matchConfiguration = eligible.length && await getPublishedMultipliers();
-  const rankingThreshold = await getPublishedRankingThreshold();
+  const matchConfiguration = eligible.length && (engineConfiguration
+    ? { version: engineConfiguration.revision, multipliers: engineConfiguration.multipliers }
+    : await getPublishedMultipliers());
+  const rankingThreshold = engineConfiguration
+    ? { version: engineConfiguration.revision,
+      minimumPercentage: engineConfiguration.minimumMatchPercentage }
+    : await getPublishedRankingThreshold();
   const configurations = versions.length ? await Configuration.find({ version: { $in: versions } }) : [];
   const byVersion = new Map(configurations.map((configuration) => [configuration.version, configuration]));
   const candidateValues = typeof profile.values.toObject === 'function'
@@ -79,11 +93,14 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
   const ranked = (await Promise.all(eligible.map(async (vacancy) => {
     const configuration = byVersion.get(vacancy.matchProfile.configurationVersion);
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
-    const score = scorePair(vacancy, candidateValues, configuration,
+    const scoringConfiguration = applyEngineWeights(configuration, engineConfiguration);
+    const score = scorePair(vacancy, candidateValues, scoringConfiguration,
       matchConfiguration.multipliers, now, candidate);
     const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
       cause: 'candidate_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
-      versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+      algorithmVersion: engineConfiguration?.version,
+      versions: { engine: engineConfiguration?.version,
+        profileCatalog: vacancy.matchProfile.configurationVersion,
         multipliers: matchConfiguration.version,
         rankingThreshold: rankingThreshold?.version ?? null,
         completionThreshold: completionThreshold?.version ?? null } });
@@ -91,6 +108,7 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
       matchedRequiredCount: score.matchedRequiredCount,
       configurationVersion: vacancy.matchProfile.configurationVersion,
+      engineConfigurationVersion: engineConfiguration?.version ?? null,
       multipliersVersion: matchConfiguration.version, audit };
     return { item, percentage: score.percentage,
       matchedRequiredCount: score.matchedRequiredCount, updatedAt: vacancy.updatedAt,
@@ -108,6 +126,7 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
     rankingThresholdVersion: rankingThreshold?.version ?? null,
     minimumProfileCompletionPercentage: completionThreshold?.minimumPercentage ?? null,
     completionThresholdVersion: completionThreshold?.version ?? null,
+    engineConfigurationVersion: engineConfiguration?.version ?? null,
     pages: Math.ceil(total / limit) };
 }
 

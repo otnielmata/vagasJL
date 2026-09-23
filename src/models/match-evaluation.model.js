@@ -9,6 +9,7 @@ const matchEvaluationSchema = new mongoose.Schema({
   calculatedAt: { type: Date, required: true, immutable: true },
   algorithmVersion: { type: String, required: true, match: /^MATCH_V[1-9]\d*$/, immutable: true },
   configurationVersions: {
+    engine: { type: String, default: null, match: /^MATCH_V[1-9]\d*$/, immutable: true },
     profileCatalog: { type: Number, required: true, min: 1, immutable: true },
     multipliers: { type: Number, required: true, min: 1, immutable: true },
     rankingThreshold: { type: Number, default: null, min: 1, immutable: true },

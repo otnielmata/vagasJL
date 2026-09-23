@@ -13,6 +13,8 @@ const { assessVacancyForMatch } = require('./vacancy-origin.service');
 const { scorePair } = require('./match-ranking.service');
 const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
 const ApiError = require('../errors/api.error');
+const { getEffectiveMatchEngineConfiguration, applyEngineWeights } =
+  require('./match-engine-configuration.service');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -98,14 +100,21 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
 
   const configuration = await Configuration.findOne({ version: vacancy.matchProfile.configurationVersion });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
-  const matchConfiguration = await getPublishedMultipliers();
-  const rankingThreshold = await getPublishedRankingThreshold();
+  const engineConfiguration = await getEffectiveMatchEngineConfiguration(now);
+  const scoringConfiguration = applyEngineWeights(configuration, engineConfiguration);
+  const matchConfiguration = engineConfiguration
+    ? { version: engineConfiguration.revision, multipliers: engineConfiguration.multipliers }
+    : await getPublishedMultipliers();
+  const rankingThreshold = engineConfiguration
+    ? { version: engineConfiguration.revision,
+      minimumPercentage: engineConfiguration.minimumMatchPercentage }
+    : await getPublishedRankingThreshold();
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id, deletedAt: null })
     .select('values configurationVersion revision updatedAt');
   const candidateValues = plain(profile?.values);
-  const score = scorePair(vacancy, candidateValues, configuration,
+  const score = scorePair(vacancy, candidateValues, scoringConfiguration,
     matchConfiguration.multipliers, now, candidate);
-  const criteria = criteriaFromScore(score, vacancy, configuration, candidateValues, candidate);
+  const criteria = criteriaFromScore(score, vacancy, scoringConfiguration, candidateValues, candidate);
   const calculable = score.calculationStatus === 'calculable' &&
     criteria.every((criterion) => criterion.status !== 'unknown');
   const eligibility = calculable ? score.eligibility : { eligible: null, reason: null };
@@ -114,7 +123,9 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
   const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
     eligibility, cause: 'match_detail', executionId: auditContext.executionId || crypto.randomUUID(),
     calculatedAt: auditContext.calculatedAt || now,
-    versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
+    algorithmVersion: engineConfiguration?.version,
+    versions: { engine: engineConfiguration?.version,
+      profileCatalog: vacancy.matchProfile.configurationVersion,
       multipliers: matchConfiguration.version,
       rankingThreshold: rankingThreshold?.version ?? null } });
 
@@ -130,6 +141,7 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
     earnedPoints: calculable ? score.earnedPoints : null,
     possiblePoints: calculable ? score.possiblePoints : null,
     configurationVersion: vacancy.matchProfile.configurationVersion,
+    engineConfigurationVersion: engineConfiguration?.version ?? null,
     multipliersVersion: matchConfiguration.version,
     minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
     rankingThresholdVersion: rankingThreshold?.version ?? null,

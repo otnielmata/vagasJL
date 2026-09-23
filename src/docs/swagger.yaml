@@ -11,6 +11,7 @@ info:
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
     administracao auditada do status empresarial (VJ-77) e de candidatos (VJ-78),
+    configuracao consolidada e versionada do Motor de Match (VJ-79),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -35,6 +36,47 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /admin/configuracoes/match/{version}:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao consolidada do Motor de Match (VJ-79)
+      description: >
+        Publica atomicamente pesos, multiplicadores, importancia padrao de importacao,
+        Match minimo e vigencia sob uma versao MATCH_Vx. Uma versao publicada e imutavel;
+        repetir o mesmo conteudo e idempotente. Versoes futuras nao substituem a vigente
+        antes de effectiveAt. Quando vigente, esta configuracao prevalece sobre os endpoints
+        legados e sua versao e registrada nos novos resultados de Match.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', example: MATCH_V2 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchEngineConfigurationRequest'
+      responses:
+        '200':
+          description: Versao criada, publicada ou repetida de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration: { $ref: '#/components/schemas/MatchEngineConfiguration' }
+        '400': { description: Identificador de versao invalido }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '409': { description: Versao publicada ou revisao ja existe com outro conteudo }
+        '422': { description: Configuracao parcial ou parametro fora dos limites }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /configuracoes/match/multiplicadores:
     put:
       tags: [Match Profile]
@@ -2222,6 +2264,83 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MatchEngineWeights:
+      type: object
+      additionalProperties: false
+      required: [type, agile, programming, automation, webTesting, apiTesting, mobileTesting,
+        desktopTesting, higherEducationDegree, english, spanish, yearsOfExperience,
+        continuousIntegration, certification, testAutomationTechnologies, tecnologies,
+        programmingLanguages, genAITools, level, classification, role, specialization]
+      properties:
+        type: { type: number, minimum: 0, maximum: 1000 }
+        agile: { type: number, minimum: 0, maximum: 1000 }
+        programming: { type: number, minimum: 0, maximum: 1000 }
+        automation: { type: number, minimum: 0, maximum: 1000 }
+        webTesting: { type: number, minimum: 0, maximum: 1000 }
+        apiTesting: { type: number, minimum: 0, maximum: 1000 }
+        mobileTesting: { type: number, minimum: 0, maximum: 1000 }
+        desktopTesting: { type: number, minimum: 0, maximum: 1000 }
+        higherEducationDegree: { type: number, minimum: 0, maximum: 1000 }
+        english: { type: number, minimum: 0, maximum: 1000 }
+        spanish: { type: number, minimum: 0, maximum: 1000 }
+        yearsOfExperience: { type: number, minimum: 0, maximum: 1000 }
+        continuousIntegration: { type: number, minimum: 0, maximum: 1000 }
+        certification: { type: number, minimum: 0, maximum: 1000 }
+        testAutomationTechnologies: { type: number, minimum: 0, maximum: 1000 }
+        tecnologies: { type: number, minimum: 0, maximum: 1000 }
+        programmingLanguages: { type: number, minimum: 0, maximum: 1000 }
+        genAITools: { type: number, minimum: 0, maximum: 1000 }
+        level: { type: number, minimum: 0, maximum: 1000 }
+        classification: { type: number, minimum: 0, maximum: 1000 }
+        role: { type: number, minimum: 0, maximum: 1000 }
+        specialization: { type: number, minimum: 0, maximum: 1000 }
+    MatchEngineMultipliers:
+      type: object
+      required: [required, desirable, indifferent]
+      additionalProperties: false
+      properties:
+        required: { type: number, enum: [1] }
+        desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+        indifferent: { type: number, enum: [0] }
+    MatchEngineConfigurationRequest:
+      type: object
+      required: [state, effectiveAt, weights, multipliers, defaultImportImportance,
+        minimumMatchPercentage]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [draft, published] }
+        effectiveAt: { type: string, format: date-time }
+        weights: { $ref: '#/components/schemas/MatchEngineWeights' }
+        multipliers: { $ref: '#/components/schemas/MatchEngineMultipliers' }
+        defaultImportImportance: { type: string, enum: [required, desirable, indifferent] }
+        minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, multipleOf: 0.01 }
+        minimumProfileCompletionPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          multipleOf: 0.01
+          nullable: true
+        recalculationPolicy: { type: string, enum: [none, affected_matches], default: affected_matches }
+    MatchEngineConfiguration:
+      allOf:
+        - $ref: '#/components/schemas/MatchEngineConfigurationRequest'
+        - type: object
+          required: [version, revision, createdBy, cacheVersion, recalculation]
+          properties:
+            version: { type: string, pattern: '^MATCH_V[1-9][0-9]*$' }
+            revision: { type: integer, minimum: 1 }
+            createdBy: { type: string }
+            publishedBy: { type: string, nullable: true }
+            publishedAt: { type: string, format: date-time, nullable: true }
+            cacheVersion: { type: integer, minimum: 1 }
+            cacheInvalidatedAt: { type: string, format: date-time, nullable: true }
+            recalculation:
+              type: object
+              required: [policy, status]
+              properties:
+                policy: { type: string, enum: [none, affected_matches] }
+                status: { type: string, enum: [not_scheduled, not_required, scheduled] }
+                scheduledFor: { type: string, format: date-time, nullable: true }
     MatchAuditReference:
       type: object
       description: Referencia segura para a auditoria interna e imutavel do resultado de Match.

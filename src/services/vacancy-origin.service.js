@@ -5,6 +5,8 @@ const { prepareVacancyContent } = require('./vacancy-content.service');
 const { initialRequirementsAudit } = require('./vacancy-requirements.service');
 const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority, isUnidentifiedModality } = require('../config/match-profile');
 const ApiError = require('../errors/api.error');
+const { getEffectiveMatchEngineConfiguration } =
+  require('./match-engine-configuration.service');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -76,7 +78,12 @@ async function prepareImportedVacancyData(provenance, input) {
   }
   let importImportance = null;
   if (identified.length) {
-    const configuration = await ImportImportanceConfiguration.findOne().sort({ version: -1 });
+    const engineConfiguration = await getEffectiveMatchEngineConfiguration();
+    const configuration = engineConfiguration ? {
+      version: engineConfiguration.revision,
+      engineVersion: engineConfiguration.version,
+      importance: engineConfiguration.defaultImportImportance,
+    } : await ImportImportanceConfiguration.findOne().sort({ version: -1 });
     if (!configuration) throw new ApiError(409, 'Importancia padrao da importacao nao publicada');
     const seen = new Set();
     const requirements = identified.map((item) => {
@@ -90,15 +97,17 @@ async function prepareImportedVacancyData(provenance, input) {
     }).filter(Boolean);
     const appliedAt = new Date();
     content.matchProfile.requirements = requirements;
-    importImportance = { version: configuration.version, importance: configuration.importance,
-      appliedAt };
+    importImportance = { version: configuration.version,
+      engineVersion: configuration.engineVersion || null,
+      importance: configuration.importance, appliedAt };
   }
   return {
     ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
       importImportance,
       ...(importImportance ? { requirementsRevision: 1, requirementsHistory: [{
         at: importImportance.appliedAt, actor: null, process: 'import',
-        reason: `Importancia padrao v${importImportance.version} aplicada na importacao`,
+        reason: `Importancia padrao ${importImportance.engineVersion || `v${importImportance.version}`} ` +
+          'aplicada na importacao',
         revision: 1, requirements: content.matchProfile.requirements,
       }] } : {}),
       importMappingAudit: { unknownLevel, legacyAi: legacyAiMigrationAudit,

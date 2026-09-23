@@ -91,7 +91,8 @@ test('rejects incomplete or malformed technical configuration', () => {
   assert.throws(() => calculateMatchScore({ technicalResults, configuration: null }), TypeError);
   const complete = configuration();
   complete.fields[0].weight = 0;
-  assert.throws(() => calculateMatchScore({ technicalResults, configuration: complete }), TypeError);
+  const zeroWeight = calculateMatchScore({ technicalResults, configuration: complete });
+  assert.equal(zeroWeight.details.some((detail) => detail.field === complete.fields[0].key), false);
 });
 
 test('invalid result for applicable technical criterion fails rather than awarding points', () => {

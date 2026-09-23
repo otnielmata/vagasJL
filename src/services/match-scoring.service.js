@@ -25,7 +25,7 @@ function configuredWeights(configuration) {
   const weights = new Map();
   for (const field of fields) {
     if (!TECHNICAL_FIELDS.includes(field.key) || weights.has(field.key) ||
-        !Number.isSafeInteger(field.weight) || field.weight <= 0) {
+        typeof field.weight !== 'number' || !Number.isFinite(field.weight) || field.weight < 0) {
       throw new TypeError('Configuracao de pesos tecnicos invalida');
     }
     weights.set(field.key, field.weight);
@@ -70,6 +70,7 @@ function calculateMatchScore({ technicalResults = {}, configuration, vacancy = {
     if (criterion == null || criterion.applicable !== true) continue;
     if (typeof criterion.matched !== 'boolean') throw new TypeError('Resultado tecnico invalido');
     const weight = weights.get(field);
+    if (weight === 0) continue;
     const earned = criterion.matched ? weight : 0;
     details.push({ field, weight, earnedPoints: earned });
   }
@@ -206,7 +207,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         unmetEliminatory = { code: 'ELIMINATORY_REQUIREMENT_UNMET', field,
           ...(field === 'yearsOfExperience' ? { value } : { id }) };
       }
-      details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
+      if (weight > 0) details.push({ field, id: field === 'yearsOfExperience' ? undefined : id,
         weight, earnedPoints });
     }
     const result = buildScoreResult([...details,
@@ -224,6 +225,7 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
     if (!required.size) continue;
     const offered = canonicalValues(candidateValues[key], field);
     const weight = weights.get(key);
+    if (weight === 0) continue;
     for (const id of [...required].sort()) {
       details.push({ field: key, id, weight, earnedPoints: offered.has(id) ? weight : 0 });
     }

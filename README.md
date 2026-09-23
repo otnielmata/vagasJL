@@ -187,6 +187,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
 | PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
+| PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
@@ -608,6 +609,33 @@ Sem pontos possíveis, o serviço de cálculo devolve `percentage: null` e
 `calculationStatus: "not_calculable"` para qualquer origem, nunca 0% ou 100%.
 Rankings não incluem pares não calculáveis; resultados autorizados incluem pontos
 obtidos, pontos possíveis e a versão da configuração técnica aplicada.
+
+## Configuração consolidada do Motor de Match — VJ-79
+
+`PUT /admin/configuracoes/match/{version}` permite que somente um administrador ativo publique uma
+versão completa como `MATCH_V2`. O corpo reúne os 22 pesos técnicos, multiplicadores de importância,
+importância padrão das vagas importadas, percentual mínimo de Match, vigência e estado `draft` ou
+`published`. Opcionalmente, também centraliza a completude mínima do perfil e a política de
+reprocessamento (`none` ou `affected_matches`).
+
+Pesos aceitam valores de 0 a 1000 com até duas casas decimais; peso zero retira o critério do cálculo.
+O multiplicador `required` permanece 1, `indifferent` permanece 0 e `desirable` deve ficar entre 0 e 1.
+Percentuais aceitam valores entre 0 e 100. Qualquer parâmetro inválido ou ausente retorna **422** sem
+publicação parcial e sem alterar a versão vigente.
+
+Versões publicadas são imutáveis. Repetir a mesma versão e conteúdo retorna **200** sem novo registro;
+usar a mesma versão ou revisão com conteúdo diferente retorna **409**. Um `draft` pode ser publicado
+somente com o conteúdo calibrado preservado. Configurações com `effectiveAt` futuro ficam armazenadas,
+mas o Motor continua usando a última versão publicada já vigente.
+
+Quando uma versão consolidada entra em vigor, ela prevalece sobre pesos, multiplicadores e limiares
+dos endpoints legados nos novos cálculos. Rankings e detalhes passam a informar
+`engineConfigurationVersion`, e a auditoria grava a mesma versão como `algorithmVersion`, preservando
+resultados históricos em `MATCH_V1`. A publicação invalida a versão de cache e registra o
+reprocessamento solicitado sem reescrever avaliações anteriores.
+
+Os endpoints administrativos anteriores permanecem disponíveis para compatibilidade enquanto não
+existir configuração consolidada vigente.
 
 ## Multiplicadores do Match — VJ-52
 

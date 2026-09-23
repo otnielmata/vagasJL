@@ -29,6 +29,7 @@ function auditData(input) {
   const candidate = input.candidate?._id || input.candidate;
   const vacancy = input.vacancy?._id || input.vacancy;
   const profileCatalog = input.versions?.profileCatalog;
+  const engine = input.versions?.engine ?? null;
   const multipliers = input.versions?.multipliers;
   const rankingThreshold = input.versions?.rankingThreshold ?? null;
   const completionThreshold = input.versions?.completionThreshold ?? null;
@@ -43,6 +44,7 @@ function auditData(input) {
   if (!candidate || !vacancy || typeof executionId !== 'string' || !executionId.trim() ||
       executionId.length > 200 || !calculatedAt || !vacancyUpdatedAt ||
       !/^MATCH_V[1-9]\d*$/.test(algorithmVersion) ||
+      (engine !== null && !/^MATCH_V[1-9]\d*$/.test(engine)) ||
       !['candidate_ranking', 'vacancy_ranking', 'match_detail', 'recalculation'].includes(input.cause) ||
       !Number.isSafeInteger(profileCatalog) || profileCatalog < 1 ||
       !Number.isSafeInteger(multipliers) || multipliers < 1 ||
@@ -55,8 +57,8 @@ function auditData(input) {
   }
   const eligibility = input.eligibility || input.score.eligibility || { eligible: null, reason: null };
   return { candidate, vacancy, executionId: executionId.trim(), cause: input.cause, calculatedAt,
-    algorithmVersion, configurationVersions: { profileCatalog, multipliers, rankingThreshold,
-      completionThreshold },
+    algorithmVersion, configurationVersions: { ...(engine ? { engine } : {}), profileCatalog,
+      multipliers, rankingThreshold, completionThreshold },
     inputRevisions: { vacancyRequirements, vacancyUpdatedAt, candidateProfile,
       candidateProfileUpdatedAt: profileUpdatedAt }, calculationStatus: status,
     percentage: calculable ? input.score.percentage : null,

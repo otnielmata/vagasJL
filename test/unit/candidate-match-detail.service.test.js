@@ -7,6 +7,7 @@ const CandidateMatchProfile = require('../../src/models/candidate-match-profile.
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -49,6 +50,10 @@ function vacancy(overrides = {}) {
 function setup(context, currentVacancy = vacancy(), values = {
   testAutomationTechnologies: ['cypress', 'selenium'], programmingLanguages: ['javascript'],
 }) {
+  const engineState = { current: null };
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({
+    sort: async () => engineState.current,
+  }));
   context.mock.method(MatchEvaluation, 'init', async () => MatchEvaluation);
   context.mock.method(MatchEvaluation, 'findOneAndUpdate', async (_filter, update) => ({
     _id: `audit-${update.$setOnInsert.vacancy}`,
@@ -67,8 +72,28 @@ function setup(context, currentVacancy = vacancy(), values = {
     values, configurationVersion: 1, revision: 1, updatedAt: now,
   } };
   context.mock.method(CandidateMatchProfile, 'findOne', () => profileQuery);
-  return { profileQuery, thresholdState };
+  return { profileQuery, thresholdState, engineState };
 }
+
+test('effective consolidated configuration controls score, threshold and audit version', async (context) => {
+  const { engineState } = setup(context);
+  engineState.current = {
+    version: 'MATCH_V2', revision: 2, state: 'published', effectiveAt: now,
+    weights: Object.fromEntries(Object.keys(INITIAL_MATCH_WEIGHTS).map((key) =>
+      [key, key === 'testAutomationTechnologies' ? 20 : INITIAL_MATCH_WEIGHTS[key]])),
+    multipliers: { required: 1, desirable: 0.25, indifferent: 0 },
+    defaultImportImportance: 'desirable', minimumMatchPercentage: 70,
+    minimumProfileCompletionPercentage: null,
+    recalculation: { policy: 'affected_matches' },
+  };
+  const result = await getCandidateMatchDetail(actor, vacancyId, now);
+  assert.equal(result.percentage, 85.29);
+  assert.equal(result.engineConfigurationVersion, 'MATCH_V2');
+  assert.equal(result.multipliersVersion, 2);
+  assert.equal(result.minimumMatchPercentage, 70);
+  assert.equal(result.audit.algorithmVersion, 'MATCH_V2');
+  assert.equal(result.audit.configurationVersions.engine, 'MATCH_V2');
+});
 
 test('returns reconciled strengths and canonical gaps without penalizing extra skills', async (context) => {
   setup(context);

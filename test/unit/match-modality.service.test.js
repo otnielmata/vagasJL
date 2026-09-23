@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const ImportConfiguration = require('../../src/models/import-importance-configuration.model');
+const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { calculateCompetencyMatch } = require('../../src/services/match-scoring.service');
 const { registerImportedVacancy } = require('../../src/services/vacancy-origin.service');
@@ -68,6 +69,7 @@ test('unidentified imported modality never scores or eliminates, including legac
 
 test('identified imported modality applies published default importance', async (context) => {
   context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
+  context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => null }));
   context.mock.method(ImportConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 2, importance: 'desirable',
   }) }));
