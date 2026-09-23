@@ -20,6 +20,30 @@ function validDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function safeExplanation(details) {
+  if (details === undefined) details = [];
+  if (!Array.isArray(details) || details.length > 500) return null;
+  const criteria = [];
+  for (const detail of details) {
+    const field = detail?.field;
+    const id = detail?.id ?? null;
+    const possiblePoints = detail?.weight;
+    const earnedPoints = detail?.earnedPoints;
+    if (typeof field !== 'string' || !field.trim() || field.length > 100 ||
+        id !== null && (typeof id !== 'string' || !id.trim() || id.length > 100) ||
+        !Number.isFinite(possiblePoints) || possiblePoints < 0 ||
+        !Number.isFinite(earnedPoints) || earnedPoints < 0 || earnedPoints > possiblePoints) return null;
+    const status = possiblePoints > 0 && earnedPoints === possiblePoints
+      ? 'met' : earnedPoints > 0 ? 'partial' : 'gap';
+    criteria.push({ field: field.trim(), id: id?.trim() || null, status,
+      earnedPoints, possiblePoints });
+  }
+  return { criteria,
+    metCount: criteria.filter((criterion) => criterion.status === 'met').length,
+    partialCount: criteria.filter((criterion) => criterion.status === 'partial').length,
+    gapCount: criteria.filter((criterion) => criterion.status === 'gap').length };
+}
+
 function auditData(input) {
   const calculatedAt = validDate(input.calculatedAt);
   const vacancyUpdatedAt = validDate(input.vacancy?.updatedAt || input.calculatedAt);
@@ -37,6 +61,7 @@ function auditData(input) {
   const candidateProfile = input.profile ? input.profile.revision ?? 1 : null;
   const status = input.score?.calculationStatus;
   const calculable = status === 'calculable';
+  const explanation = safeExplanation(input.score?.details);
   const validCalculatedScore = !calculable ||
     Number.isFinite(input.score.percentage) && input.score.percentage >= 0 && input.score.percentage <= 100 &&
     Number.isFinite(input.score.earnedPoints) && input.score.earnedPoints >= 0 &&
@@ -52,7 +77,7 @@ function auditData(input) {
       (completionThreshold !== null && (!Number.isSafeInteger(completionThreshold) || completionThreshold < 1)) ||
       !Number.isSafeInteger(vacancyRequirements) || vacancyRequirements < 0 ||
       (candidateProfile !== null && (!Number.isSafeInteger(candidateProfile) || candidateProfile < 1)) ||
-      !['calculable', 'not_calculable'].includes(status) || !validCalculatedScore) {
+      !['calculable', 'not_calculable'].includes(status) || !validCalculatedScore || !explanation) {
     throw new ApiError(503, 'Contexto de auditoria do Match invalido');
   }
   const eligibility = input.eligibility || input.score.eligibility || { eligible: null, reason: null };
@@ -64,6 +89,7 @@ function auditData(input) {
     percentage: calculable ? input.score.percentage : null,
     earnedPoints: calculable ? input.score.earnedPoints : null,
     possiblePoints: calculable ? input.score.possiblePoints : null,
+    explanation,
     eligibility: { eligible: eligibility.eligible ?? null, reason: safeReason(eligibility.reason) } };
 }
 
@@ -93,4 +119,4 @@ async function getLatestMatchEvaluation(candidate, vacancy) {
 }
 
 module.exports = { recordMatchEvaluation, getLatestMatchEvaluation,
-  auditData, safeReason, MATCH_ALGORITHM_VERSION };
+  auditData, safeReason, safeExplanation, MATCH_ALGORITHM_VERSION };

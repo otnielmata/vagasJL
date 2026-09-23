@@ -3,7 +3,8 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
-const { recordMatchEvaluation, getLatestMatchEvaluation, auditData, MATCH_ALGORITHM_VERSION } =
+const { recordMatchEvaluation, getLatestMatchEvaluation, auditData, safeExplanation,
+  MATCH_ALGORITHM_VERSION } =
   require('../../src/services/match-evaluation-audit.service');
 
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b7';
@@ -15,7 +16,10 @@ function input(overrides = {}) {
     requirementsRevision: 4, updatedAt: new Date('2026-09-23T14:00:00Z') },
   profile: { revision: 3, updatedAt: new Date('2026-09-23T13:00:00Z') },
   score: { calculationStatus: 'calculable', percentage: 82.5, earnedPoints: 33,
-    possiblePoints: 40, eligibility: { eligible: true, reason: null } },
+    possiblePoints: 40, eligibility: { eligible: true, reason: null }, details: [
+      { field: 'apiTesting', id: 'api-testing', weight: 20, earnedPoints: 20 },
+      { field: 'testAutomationTechnologies', id: 'playwright', weight: 20, earnedPoints: 13 },
+    ] },
   versions: { profileCatalog: 7, multipliers: 2, rankingThreshold: 3 },
   cause: 'match_detail', executionId: 'run-123', calculatedAt, ...overrides };
 }
@@ -41,6 +45,11 @@ test('records calculable result with algorithm, configuration versions and input
   assert.equal(filter['inputRevisions.candidateProfile'], 3);
   assert.deepEqual([update.$setOnInsert.percentage, update.$setOnInsert.earnedPoints,
     update.$setOnInsert.possiblePoints], [82.5, 33, 40]);
+  assert.deepEqual(update.$setOnInsert.explanation, { criteria: [
+    { field: 'apiTesting', id: 'api-testing', status: 'met', earnedPoints: 20, possiblePoints: 20 },
+    { field: 'testAutomationTechnologies', id: 'playwright', status: 'partial',
+      earnedPoints: 13, possiblePoints: 20 },
+  ], metCount: 1, partialCount: 1, gapCount: 0 });
   assert.deepEqual(options, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
 });
 
@@ -96,6 +105,23 @@ test('audit stores internal IDs and no candidate personal fields', () => {
   assert.equal(data.candidate, candidateId);
   assert.equal(JSON.stringify(data).includes('private@example.com'), false);
   assert.equal(JSON.stringify(data).includes('Ana'), false);
+  assert.equal(MatchEvaluation.schema.path('candidate').options.ref, 'Candidate');
+  assert.equal(MatchEvaluation.schema.path('vacancy').options.ref, 'Vacancy');
+  assert.equal(MatchEvaluation.schema.path('explanation').options.required, true);
+  assert.equal(MatchEvaluation.schema.path('email'), undefined);
+  assert.equal(MatchEvaluation.schema.path('phone'), undefined);
+});
+
+test('builds a bounded canonical explanation and rejects unsafe details', () => {
+  assert.deepEqual(safeExplanation([
+    { field: 'english', id: 'advanced', weight: 7, earnedPoints: 0,
+      label: 'ignored', email: 'private@example.com' },
+  ]), { criteria: [{ field: 'english', id: 'advanced', status: 'gap', earnedPoints: 0,
+    possiblePoints: 7 }], metCount: 0, partialCount: 0, gapCount: 1 });
+  assert.equal(safeExplanation([{ field: 'english', weight: 7, earnedPoints: 8 }]), null);
+  assert.throws(() => auditData(input({ score: { ...input().score,
+    details: [{ field: 'english', weight: 7, earnedPoints: 8 }] } })),
+  { statusCode: 503, message: 'Contexto de auditoria do Match invalido' });
 });
 
 test('latest pair lookup uses calculation time and stable id without deleting history', async (context) => {

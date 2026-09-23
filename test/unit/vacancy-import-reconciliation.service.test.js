@@ -47,6 +47,11 @@ function setup(context, vacancies = []) {
   context.mock.method(ImportBatch, 'init', async () => ImportBatch);
   context.mock.method(Vacancy, 'init', async () => Vacancy);
   context.mock.method(VacancyImportRevision, 'init', async () => VacancyImportRevision);
+  let transactionNumber = 0;
+  const transaction = context.mock.method(Vacancy.db, 'transaction', async (callback) => {
+    transactionNumber += 1;
+    return callback({ id: `session-${transactionNumber}` });
+  });
   const previous = { value: null };
   context.mock.method(ImportBatch, 'findOne', () => ({ lean: async () => previous.value }));
   const createBatch = context.mock.method(ImportBatch, 'create', async () => ({}));
@@ -58,7 +63,7 @@ function setup(context, vacancies = []) {
   const findVacancy = context.mock.method(Vacancy, 'findOne', () => ({
     select: async () => vacancies[vacancyIndex++] || null,
   }));
-  const createVacancy = context.mock.method(Vacancy, 'create', async (data) => ({ _id: vacancyId, ...data }));
+  const createVacancy = context.mock.method(Vacancy, 'create', async ([data]) => [{ _id: vacancyId, ...data }]);
   const updateVacancy = context.mock.method(Vacancy, 'updateOne', async () => ({ modifiedCount: 1 }));
   const replaceVacancy = context.mock.method(Vacancy, 'findOneAndUpdate', async (_filter, update) => ({
     ...(vacancies[Math.max(0, vacancyIndex - 1)] || existing()), ...update.$set,
@@ -66,7 +71,7 @@ function setup(context, vacancies = []) {
   const findMissing = context.mock.method(Vacancy, 'find', () => ({ select: async () => [] }));
   const createRevision = context.mock.method(VacancyImportRevision, 'create', async (data) => data);
   return { previous, createBatch, completeBatch, findVacancy, createVacancy, updateVacancy,
-    replaceVacancy, findMissing, createRevision };
+    replaceVacancy, findMissing, createRevision, transaction };
 }
 
 test('creates only the new vacancy and classifies identical known content as unchanged', async (context) => {
@@ -81,7 +86,9 @@ test('creates only the new vacancy and classifies identical known content as unc
   assert.equal(calls.createVacancy.mock.callCount(), 1);
   assert.equal(calls.updateVacancy.mock.callCount(), 1);
   assert.equal(calls.createRevision.mock.callCount(), 1);
-  assert.equal(calls.createRevision.mock.calls[0].arguments[0].action, 'created');
+  assert.equal(calls.createRevision.mock.calls[0].arguments[0][0].action, 'created');
+  assert.equal(calls.createVacancy.mock.calls[0].arguments[1].session,
+    calls.createRevision.mock.calls[0].arguments[1].session);
 });
 
 test('replaying a completed batch is idempotent and performs no vacancy write', async (context) => {
@@ -115,7 +122,7 @@ test('updates relevant changes while preserving identity and records before and 
   assert.equal(result.result.updated, 1);
   const filter = calls.replaceVacancy.mock.calls[0].arguments[0];
   assert.deepEqual(filter, { _id: vacancyId, updatedAt: known.updatedAt });
-  const revision = calls.createRevision.mock.calls[0].arguments[0];
+  const revision = calls.createRevision.mock.calls[0].arguments[0][0];
   assert.equal(revision.action, 'updated');
   assert.ok(revision.changedFields.includes('title'));
   assert.equal(revision.before.title, 'QA Antiga');
@@ -151,7 +158,7 @@ test('trusted complete snapshot closes only old absent vacancies inside its safe
   assert.equal(query.importSource, 'board-x');
   assert.equal(query.importScope, 'qa');
   assert.deepEqual(query.lastSeenImportAt, { $lte: new Date('2026-09-20T00:00:00.000Z') });
-  const revision = calls.createRevision.mock.calls[0].arguments[0];
+  const revision = calls.createRevision.mock.calls[0].arguments[0][0];
   assert.equal(revision.action, 'closed');
   assert.deepEqual([revision.before.status, revision.after.status], ['active', 'removed']);
 });
@@ -163,7 +170,8 @@ test('incomplete snapshot with an invalid item reports safe failure and closes n
       missingStatus: 'removed', absentBefore: '2026-09-20T00:00:00.000Z' },
   }));
   assert.equal(result.status, 'completed_with_failures');
-  assert.deepEqual(result.failures, [{ sourceId: null, code: 'MISSING_STABLE_SOURCE_ID' }]);
+  assert.deepEqual(result.failures, [{ sourceId: null, itemIndex: 0, stage: 'identity',
+    code: 'MISSING_STABLE_SOURCE_ID' }]);
   assert.deepEqual([result.result.reviewRequired, result.result.failed, result.result.closed], [1, 1, 0]);
   assert.equal(calls.findMissing.mock.callCount(), 0);
 });
@@ -182,7 +190,29 @@ test('manual requirement decisions are preserved and technical change is flagged
   const update = calls.replaceVacancy.mock.calls[0].arguments[1].$set;
   assert.deepEqual(update.matchProfile, known.matchProfile);
   assert.equal(update.importReconciliationReviewRequired, true);
-  assert.equal(calls.createRevision.mock.calls[0].arguments[0].reviewRequired, true);
+  assert.equal(calls.createRevision.mock.calls[0].arguments[0][0].reviewRequired, true);
+});
+
+test('reports the item and transformation stage without persisting an invalid profile', async (context) => {
+  const calls = setup(context);
+  const result = await reconcileImportBatch(batch([{ sourceId: 'invalid-profile', content: {
+    ...content(), matchProfile: { values: { unknownTechnicalField: 'value' } },
+  } }]));
+  assert.deepEqual(result.failures, [{ sourceId: 'invalid-profile', itemIndex: 0,
+    stage: 'transformation', code: 'INVALID_ITEM' }]);
+  assert.equal(calls.transaction.mock.callCount(), 0);
+  assert.equal(calls.createVacancy.mock.callCount(), 0);
+  assert.equal(calls.createRevision.mock.callCount(), 0);
+});
+
+test('treats vacancy and import revision as one atomic persistence operation', async (context) => {
+  const calls = setup(context);
+  calls.createRevision.mock.mockImplementation(async () => { throw new Error('audit unavailable'); });
+  const result = await reconcileImportBatch(batch([{ sourceId: 'new', content: content() }]));
+  assert.equal(calls.transaction.mock.callCount(), 1);
+  assert.deepEqual(result.failures, [{ sourceId: 'new', itemIndex: 0,
+    stage: 'persistence', code: 'ITEM_WRITE_FAILED' }]);
+  assert.equal(result.result.created, 0);
 });
 
 test('batch and revision models enforce source-scoped uniqueness', () => {
@@ -194,4 +224,6 @@ test('batch and revision models enforce source-scoped uniqueness', () => {
   assert.equal(batchIndex[1].unique, true);
   assert.deepEqual(revisionIndex[0], { source: 1, batchId: 1, sourceId: 1, action: 1 });
   assert.equal(revisionIndex[1].unique, true);
+  assert.equal(ImportBatch.schema.path('failures.stage').options.required, true);
+  assert.equal(ImportBatch.schema.path('failures.itemIndex').options.min, 0);
 });

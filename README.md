@@ -678,6 +678,25 @@ significativos como `+`, `#` e `/` preservam a distinção entre linguagens. Um 
 outro item ativo ou ao catálogo funcional vigente retorna **409** antes de publicar qualquer versão.
 Repetir a mesma representação retorna a revisão atual sem duplicar histórico.
 
+## Separação conceitual dos dados — VJ-82
+
+A transformação e a importação preservam uma única fonte de verdade para cada conceito. O cadastro
+do candidato contém somente dados pessoais e profissionais; o Perfil de Match permanece em sua
+coleção canônica e os dados oficiais de engajamento continuam externos, protegidos e somente leitura.
+Empresa e recrutador utilizam entidades vinculadas distintas. A vaga concentra os dados da
+oportunidade e seu Perfil de Match, sem criar estruturas técnicas paralelas.
+
+O histórico de Match mantém somente referências internas ao candidato e à vaga, resultado,
+explicação canônica dos critérios atendidos, parciais e gaps, data do cálculo e versões do algoritmo
+e das configurações. Dados pessoais e empresariais não são copiados para a avaliação, e versões
+anteriores permanecem imutáveis para auditoria.
+
+Na importação de vagas, a gravação da entidade e de sua revisão ocorre na mesma transação. Uma falha
+de validação ou persistência não confirma uma vaga sem auditoria. Os diagnósticos registram apenas o
+índice seguro do item, seu identificador externo quando disponível, a etapa e um código controlado,
+sem propagar o JSON bruto. Esta história não cria endpoint agregado nem transforma o JSON legado;
+ela estabelece as fronteiras consumidas pela camada de compatibilidade da VJ-83.
+
 ## Multiplicadores do Match — VJ-52
 
 Antes de calcular novos rankings, um administrador ativo deve publicar os
@@ -1001,11 +1020,12 @@ O serviço interno `reconcileImportBatch` processa lotes confiáveis sem criar e
 Cada execução informa `source`, `batchId`, `collectionType` (`incremental` ou `snapshot`),
 `referenceAt`, `scope` e até 1000 itens. A identidade externa é sempre o par normalizado
 `source` + `sourceId`; título nunca é usado para deduplicar. Item sem ID estável vira pendência
-segura `MISSING_STABLE_SOURCE_ID` no resultado persistido do lote.
+segura `MISSING_STABLE_SOURCE_ID` no resultado persistido do lote. Cada falha também informa o
+índice do item e a etapa controlada em que ocorreu, sem armazenar o conteúdo recebido.
 
 Conteúdo normalizado idêntico é classificado como `unchanged`, inclusive quando muda apenas
 `sourceVersion` ou metadado de coleta. Mudanças relevantes preservam `_id`, `origin` e procedência,
-atualizam a vaga com controle otimista e criam uma revisão com antes/depois, campos alterados,
+atualizam a vaga com controle otimista e criam, na mesma transação, uma revisão com antes/depois, campos alterados,
 fonte, lote, data, versão externa, versão do catálogo e fingerprint SHA-256. Decisões manuais de
 requisitos não são sobrescritas: uma mudança técnica fica marcada para revisão explícita.
 
@@ -1021,7 +1041,7 @@ falhas, sem expor detalhes técnicos internos.
 
 Cada cálculo dos rankings e do detalhe do Match é gravado em histórico interno antes da resposta.
 O registro contém somente IDs de candidato e vaga, percentual ou estado não calculável, pontos,
-elegibilidade e motivo estruturado, horário UTC, causa, revisões das entradas e versões separadas
+explicação canônica dos critérios, elegibilidade e motivo estruturado, horário UTC, causa, revisões das entradas e versões separadas
 do catálogo, multiplicadores e limiar. A regra do motor possui versão imutável própria, atualmente
 `MATCH_V1`, independente das configurações publicadas.
 

@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 
 const failureSchema = new mongoose.Schema({
   sourceId: { type: String, default: null, maxlength: 200 },
+  itemIndex: { type: Number, default: null, min: 0 },
+  stage: { type: String, required: true,
+    enum: ['identity', 'validation', 'transformation', 'status', 'persistence'] },
   code: { type: String, required: true, maxlength: 100 },
 }, { _id: false });
 

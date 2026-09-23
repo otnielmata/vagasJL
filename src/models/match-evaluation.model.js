@@ -1,5 +1,19 @@
 const mongoose = require('mongoose');
 
+const explanationCriterionSchema = new mongoose.Schema({
+  field: { type: String, required: true, maxlength: 100, immutable: true },
+  id: { type: String, default: null, maxlength: 100, immutable: true },
+  status: { type: String, enum: ['met', 'partial', 'gap'], required: true, immutable: true },
+  earnedPoints: { type: Number, required: true, min: 0, immutable: true },
+  possiblePoints: { type: Number, required: true, min: 0, immutable: true },
+}, { _id: false });
+const explanationSchema = new mongoose.Schema({
+  criteria: { type: [explanationCriterionSchema], required: true },
+  metCount: { type: Number, required: true, min: 0, immutable: true },
+  partialCount: { type: Number, required: true, min: 0, immutable: true },
+  gapCount: { type: Number, required: true, min: 0, immutable: true },
+}, { _id: false });
+
 const matchEvaluationSchema = new mongoose.Schema({
   candidate: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', required: true, immutable: true },
   vacancy: { type: mongoose.Schema.Types.ObjectId, ref: 'Vacancy', required: true, immutable: true },
@@ -30,6 +44,7 @@ const matchEvaluationSchema = new mongoose.Schema({
     eligible: { type: Boolean, default: null, immutable: true },
     reason: { type: mongoose.Schema.Types.Mixed, default: null, immutable: true },
   },
+  explanation: { type: explanationSchema, required: true, immutable: true },
   privacyScope: { type: String, enum: ['internal_ids_only'], default: 'internal_ids_only',
     immutable: true },
 }, { timestamps: { createdAt: true, updatedAt: false } });

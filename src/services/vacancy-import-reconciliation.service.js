@@ -117,8 +117,8 @@ function sourceVersion(item) {
     item.sourceVersion.trim().length <= 200 ? item.sourceVersion.trim() : null;
 }
 
-function safeFailure(failures, sourceId, code) {
-  failures.push({ sourceId, code });
+function safeFailure(failures, sourceId, itemIndex, stage, code) {
+  failures.push({ sourceId, itemIndex, stage, code });
 }
 
 function batchResponse(batch, replayed = false) {
@@ -129,17 +129,17 @@ function batchResponse(batch, replayed = false) {
 }
 
 async function auditRevision({ vacancy, batch, sourceId, action, before, after, fields,
-  fingerprint, version, reviewRequired = false }) {
-  await VacancyImportRevision.create({ vacancy: vacancy._id, source: batch.source, sourceId,
+  fingerprint, version, reviewRequired = false, session }) {
+  await VacancyImportRevision.create([{ vacancy: vacancy._id, source: batch.source, sourceId,
     batchId: batch.batchId, action, referenceAt: batch.referenceAt, sourceVersion: version,
     configurationVersion: after.matchProfile.configurationVersion, changedFields: fields,
-    before, after, contentFingerprint: fingerprint, reviewRequired });
+    before, after, contentFingerprint: fingerprint, reviewRequired }], { session });
 }
 
-async function closeExisting(existing, item, batch, result, failures) {
+async function closeExisting(existing, item, batch, result, failures, itemIndex = null) {
   const target = item.closedStatus;
   if (!['expired', 'removed'].includes(target)) {
-    safeFailure(failures, item.sourceId, 'INVALID_CLOSURE_STATUS');
+    safeFailure(failures, item.sourceId, itemIndex, 'status', 'INVALID_CLOSURE_STATUS');
     return;
   }
   if (existing.status === target) {
@@ -147,31 +147,41 @@ async function closeExisting(existing, item, batch, result, failures) {
     return;
   }
   if (!CLOSE_TRANSITIONS[existing.status]?.includes(target)) {
-    safeFailure(failures, item.sourceId, 'INVALID_STATUS_TRANSITION');
+    safeFailure(failures, item.sourceId, itemIndex, 'status', 'INVALID_STATUS_TRANSITION');
     return;
   }
   const before = auditSnapshot(existing);
-  const updated = await Vacancy.findOneAndUpdate({ _id: existing._id, status: existing.status,
-    updatedAt: existing.updatedAt }, { $set: { status: target, lastSeenImportAt: batch.referenceAt,
-    lastSeenImportBatchId: batch.batchId, importSourceVersion: sourceVersion(item) },
-  $push: { statusHistory: { from: existing.status, to: target, at: batch.referenceAt,
-    actor: null, process: 'import', reason: 'Encerramento explicito informado pela fonte' } } }, { new: true });
-  if (!updated) {
-    safeFailure(failures, item.sourceId, 'CONCURRENT_UPDATE');
+  let updated;
+  try {
+    await Vacancy.db.transaction(async (session) => {
+      updated = await Vacancy.findOneAndUpdate({ _id: existing._id, status: existing.status,
+        updatedAt: existing.updatedAt }, { $set: { status: target, lastSeenImportAt: batch.referenceAt,
+        lastSeenImportBatchId: batch.batchId, importSourceVersion: sourceVersion(item) },
+      $push: { statusHistory: { from: existing.status, to: target, at: batch.referenceAt,
+        actor: null, process: 'import', reason: 'Encerramento explicito informado pela fonte' } } },
+      { new: true, session });
+      if (!updated) return;
+      const after = auditSnapshot(updated);
+      await auditRevision({ vacancy: updated, batch, sourceId: item.sourceId, action: 'closed',
+        before, after, fields: ['status'], fingerprint: existing.importContentFingerprint ||
+          contentFingerprint(existing), version: sourceVersion(item), session });
+    });
+  } catch {
+    safeFailure(failures, item.sourceId, itemIndex, 'persistence', 'ITEM_WRITE_FAILED');
     return;
   }
-  const after = auditSnapshot(updated);
-  await auditRevision({ vacancy: updated, batch, sourceId: item.sourceId, action: 'closed',
-    before, after, fields: ['status'], fingerprint: existing.importContentFingerprint ||
-      contentFingerprint(existing), version: sourceVersion(item) });
+  if (!updated) {
+    safeFailure(failures, item.sourceId, itemIndex, 'persistence', 'CONCURRENT_UPDATE');
+    return;
+  }
   result.closed += 1;
 }
 
-async function reconcileItem(item, batch, result, failures) {
+async function reconcileItem(item, batch, result, failures, itemIndex) {
   const sourceId = itemIdentity(item);
   if (!sourceId) {
     result.reviewRequired += 1;
-    safeFailure(failures, null, 'MISSING_STABLE_SOURCE_ID');
+    safeFailure(failures, null, itemIndex, 'identity', 'MISSING_STABLE_SOURCE_ID');
     return;
   }
   const existing = await Vacancy.findOne({ origin: 'IMPORTED', importSource: batch.source,
@@ -179,29 +189,33 @@ async function reconcileItem(item, batch, result, failures) {
       '+importScope +lastSeenImportAt +lastSeenImportBatchId +importReconciliationReviewRequired ' +
       '+requirementsHistory +deletedAt');
   if (item.closedStatus !== undefined) {
-    if (!existing) safeFailure(failures, sourceId, 'CLOSURE_TARGET_NOT_FOUND');
-    else await closeExisting(existing, { ...item, sourceId }, batch, result, failures);
+    if (!existing) safeFailure(failures, sourceId, itemIndex, 'status', 'CLOSURE_TARGET_NOT_FOUND');
+    else await closeExisting(existing, { ...item, sourceId }, batch, result, failures, itemIndex);
     return;
   }
   let prepared;
   try {
     prepared = await prepareImportedVacancyData({ source: batch.source, sourceId }, item.content);
   } catch (error) {
-    safeFailure(failures, sourceId, error.statusCode ? 'INVALID_ITEM' : 'ITEM_PROCESSING_FAILED');
+    safeFailure(failures, sourceId, itemIndex, 'transformation',
+      error.statusCode ? 'INVALID_ITEM' : 'ITEM_PROCESSING_FAILED');
     return;
   }
   const fingerprint = contentFingerprint(prepared);
   const version = sourceVersion(item);
   if (!existing) {
     try {
-      const created = await Vacancy.create({ ...prepared, importContentFingerprint: fingerprint,
-        importSourceVersion: version, importScope: batch.scope, lastSeenImportAt: batch.referenceAt,
-        lastSeenImportBatchId: batch.batchId });
-      await auditRevision({ vacancy: created, batch, sourceId, action: 'created', before: null,
-        after: auditSnapshot(created), fields: EDITABLE_FIELDS, fingerprint, version });
+      await Vacancy.db.transaction(async (session) => {
+        const [created] = await Vacancy.create([{ ...prepared, importContentFingerprint: fingerprint,
+          importSourceVersion: version, importScope: batch.scope, lastSeenImportAt: batch.referenceAt,
+          lastSeenImportBatchId: batch.batchId }], { session });
+        await auditRevision({ vacancy: created, batch, sourceId, action: 'created', before: null,
+          after: auditSnapshot(created), fields: EDITABLE_FIELDS, fingerprint, version, session });
+      });
       result.created += 1;
     } catch (error) {
-      safeFailure(failures, sourceId, error.code === 11000 ? 'CONCURRENT_DUPLICATE' : 'ITEM_WRITE_FAILED');
+      safeFailure(failures, sourceId, itemIndex, 'persistence',
+        error.code === 11000 ? 'CONCURRENT_DUPLICATE' : 'ITEM_WRITE_FAILED');
     }
     return;
   }
@@ -226,14 +240,24 @@ async function reconcileItem(item, batch, result, failures) {
   Object.assign(set, { importContentFingerprint: fingerprint, importSourceVersion: version,
     importScope: batch.scope, lastSeenImportAt: batch.referenceAt,
     lastSeenImportBatchId: batch.batchId, importReconciliationReviewRequired: technicalReview });
-  const updated = await Vacancy.findOneAndUpdate({ _id: existing._id, updatedAt: existing.updatedAt },
-    { $set: set }, { new: true });
-  if (!updated) {
-    safeFailure(failures, sourceId, 'CONCURRENT_UPDATE');
+  let updated;
+  try {
+    await Vacancy.db.transaction(async (session) => {
+      updated = await Vacancy.findOneAndUpdate({ _id: existing._id, updatedAt: existing.updatedAt },
+        { $set: set }, { new: true, session });
+      if (!updated) return;
+      await auditRevision({ vacancy: updated, batch, sourceId, action: 'updated', before,
+        after: auditSnapshot(updated), fields, fingerprint, version,
+        reviewRequired: technicalReview, session });
+    });
+  } catch {
+    safeFailure(failures, sourceId, itemIndex, 'persistence', 'ITEM_WRITE_FAILED');
     return;
   }
-  await auditRevision({ vacancy: updated, batch, sourceId, action: 'updated', before,
-    after: auditSnapshot(updated), fields, fingerprint, version, reviewRequired: technicalReview });
+  if (!updated) {
+    safeFailure(failures, sourceId, itemIndex, 'persistence', 'CONCURRENT_UPDATE');
+    return;
+  }
   result.updated += 1;
   if (technicalReview) result.reviewRequired += 1;
 }
@@ -268,14 +292,14 @@ async function reconcileImportBatch(input) {
   const result = { created: 0, unchanged: 0, updated: 0, closed: 0, reviewRequired: 0, failed: 0 };
   const failures = [];
   const seen = new Set();
-  for (const item of batch.items) {
+  for (const [itemIndex, item] of batch.items.entries()) {
     const sourceId = itemIdentity(item);
     if (sourceId && seen.has(sourceId)) {
-      safeFailure(failures, sourceId, 'DUPLICATE_ITEM_IN_BATCH');
+      safeFailure(failures, sourceId, itemIndex, 'validation', 'DUPLICATE_ITEM_IN_BATCH');
       continue;
     }
     if (sourceId) seen.add(sourceId);
-    await reconcileItem(item, batch, result, failures);
+    await reconcileItem(item, batch, result, failures, itemIndex);
   }
   await closeMissingSnapshotVacancies(batch, result, failures);
   result.failed = failures.length;
