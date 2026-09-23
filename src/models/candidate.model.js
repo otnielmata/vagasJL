@@ -65,6 +65,12 @@ const publicProfileConsentHistorySchema = new mongoose.Schema({
   changedAt: { type: Date, required: true },
 }, { _id: false });
 
+const opportunityAvailabilityHistorySchema = new mongoose.Schema({
+  availableForOpportunities: { type: Boolean, required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
@@ -74,6 +80,15 @@ const candidateSchema = new mongoose.Schema({
     type: String,
     enum: ['available', 'unavailable', UNKNOWN],
     default: UNKNOWN,
+  },
+  availableForOpportunities: { type: Boolean, default: false, required: true },
+  opportunityAvailabilityChangedAt: { type: Date, default: null },
+  opportunitySearchCacheVersion: { type: Number, default: 1, min: 1, required: true, select: false },
+  opportunitySearchCacheInvalidatedAt: { type: Date, default: null, select: false },
+  opportunityAvailabilityHistory: {
+    type: [opportunityAvailabilityHistorySchema],
+    default: () => [],
+    select: false,
   },
   status: {
     type: String,
@@ -111,11 +126,16 @@ candidateSchema.index(
 );
 
 candidateSchema.virtual('visibleToCompanies').get(function visibleToCompanies() {
-  return this.status === CANDIDATE_STATUS.ACTIVE;
+  return this.status === CANDIDATE_STATUS.ACTIVE && this.availableForOpportunities === true;
 });
 
 candidateSchema.statics.findVisibleToCompanies = function findVisibleToCompanies() {
-  return this.find({ status: CANDIDATE_STATUS.ACTIVE });
+  return this.find({
+    status: CANDIDATE_STATUS.ACTIVE,
+    availableForOpportunities: true,
+    'eligibility.status': ELIGIBILITY_STATUS.APPROVED,
+    deletedAt: null,
+  });
 };
 
 candidateSchema.set('toJSON', {
@@ -126,6 +146,9 @@ candidateSchema.set('toJSON', {
     delete result.eligibilityHistory;
     delete result.publicProfile;
     delete result.publicProfileConsentHistory;
+    delete result.opportunityAvailabilityHistory;
+    delete result.opportunitySearchCacheVersion;
+    delete result.opportunitySearchCacheInvalidatedAt;
     delete result.deletedAt;
     if (result.eligibility) delete result.eligibility.source;
     return result;

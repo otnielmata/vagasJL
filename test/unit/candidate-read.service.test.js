@@ -29,6 +29,7 @@ function storedCandidate(overrides = {}) {
     portfolioUrl: 'https://maria.example.com',
     professionalSummary: 'Profissional de testes',
     availability: 'available',
+    availableForOpportunities: true,
     status: CANDIDATE_STATUS.ACTIVE,
     eligibility: { status: 'approved', method: 'purchase_code', source: 'mongodb' },
     purchaseCode: 'private-proof',
@@ -57,7 +58,10 @@ function isolateLookup(context, stored) {
     },
   };
   const findOne = context.mock.method(Candidate, 'findOne', (filter) => {
-    query.result = stored && (!filter.status || filter.status === stored.status) ? stored : null;
+    query.result = stored && (!filter.status || filter.status === stored.status) &&
+      (!filter.availableForOpportunities || stored.availableForOpportunities === true) &&
+      (!filter['eligibility.status'] || stored.eligibility?.status === filter['eligibility.status'])
+      ? stored : null;
     return query;
   });
   return { findOne, query };
@@ -105,7 +109,20 @@ test('active recruiter of active company sees only active candidates', async (co
   assert.deepEqual(findCompany.mock.calls[0].arguments[0], {
     _id: 'company-id', status: 'active', deletedAt: null,
   });
-  assert.deepEqual(findOne.mock.calls[0].arguments[0], { _id: candidateId, status: CANDIDATE_STATUS.ACTIVE });
+  assert.deepEqual(findOne.mock.calls[0].arguments[0], {
+    _id: candidateId,
+    status: CANDIDATE_STATUS.ACTIVE,
+    availableForOpportunities: true,
+    'eligibility.status': 'approved',
+  });
+});
+
+test('active recruiter cannot read an active candidate who disabled opportunities', async (context) => {
+  context.mock.method(User, 'findOne', async () => ({ _id: otherUserId }));
+  context.mock.method(CompanyUser, 'findOne', async () => ({ company: 'company-id' }));
+  context.mock.method(Company, 'findOne', async () => ({ status: 'active' }));
+  isolateLookup(context, storedCandidate({ availableForOpportunities: false }));
+  await assert.rejects(getCandidateById(candidateId, otherUserId, 'company'), { statusCode: 404 });
 });
 
 for (const status of Object.values(CANDIDATE_STATUS).filter((value) => value !== CANDIDATE_STATUS.ACTIVE)) {
@@ -163,6 +180,14 @@ test('missing or invalid optional values are returned as UNKNOWN and never false
 
   for (const field of PROFILE_FIELDS) assert.equal(result[field], UNKNOWN);
   assert.equal(Object.values(result).includes(false), false);
+});
+
+test('legacy candidate without opportunity preference is returned as conservatively unavailable', async (context) => {
+  const stored = storedCandidate();
+  delete stored.availableForOpportunities;
+  isolateLookup(context, stored);
+  const result = await getCandidateById(candidateId, ownerId, 'candidate');
+  assert.equal(result.availableForOpportunities, false);
 });
 
 test('unsupported account role is rejected before querying candidates', async (context) => {

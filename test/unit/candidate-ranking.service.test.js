@@ -102,6 +102,8 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(result.items[0].multipliersVersion, 1);
   assert.equal(result.items[0].candidate.email, undefined);
   assert.equal(findCandidates.mock.calls[0].arguments[0].status, 'active');
+  assert.equal(findCandidates.mock.calls[0].arguments[0].availableForOpportunities, true);
+  assert.equal(findCandidates.mock.calls[0].arguments[0]['eligibility.status'], 'approved');
   const second = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId,
     { page: '2', limit: '1' }, now);
   assert.equal(second.items[0].candidate.name, 'Ana');
@@ -142,7 +144,9 @@ test('both ranking directions use identical score and vacancy denominator for sa
   const { candidates, profiles } = setup(context, row);
   candidates.splice(1);
   profiles.splice(1);
-  context.mock.method(Candidate, 'findOne', () => ({ select: async () => ({ _id: candidateId }) }));
+  const findOwnCandidate = context.mock.method(Candidate, 'findOne', () => ({
+    select: async () => ({ _id: candidateId, availableForOpportunities: false }),
+  }));
   context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
   context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
   context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
@@ -151,6 +155,11 @@ test('both ranking directions use identical score and vacancy denominator for sa
   const fromCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(fromCandidate.items[0].percentage, 50);
   assert.equal(fromCandidate.items[0].percentage, fromCompany.items[0].percentage);
+  assert.deepEqual(findOwnCandidate.mock.calls[0].arguments[0], {
+    user: candidateId, deletedAt: null,
+  });
+  assert.equal(Object.hasOwn(findOwnCandidate.mock.calls[0].arguments[0],
+    'availableForOpportunities'), false);
 });
 
 test('company ranking considers only explicitly restricted country, not vacancy address', async (context) => {

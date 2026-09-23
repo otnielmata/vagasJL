@@ -165,3 +165,12 @@ test('public consent does not change company-search availability', () => {
   assert.deepEqual(buildPublicProfileSnapshot({ candidate }), { name: 'Maria' });
   assert.equal(candidate.availability, 'unavailable');
 });
+
+test('opportunity availability does not publish a profile without separate consent', () => {
+  const candidate = activeCandidate({
+    availableForOpportunities: true,
+    publicProfile: { enabled: false, fields: ['name'] },
+  });
+  assert.equal(buildPublicProfileSnapshot({ candidate }), null);
+  assert.equal(candidate.availableForOpportunities, true);
+});

@@ -17,7 +17,7 @@ const {
 
 const PUBLIC_CANDIDATE_FIELDS = Object.freeze([
   'name', 'photoUrl', 'email', 'phone', 'city', 'state', 'country', 'linkedinUrl',
-  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability',
+  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability', 'availableForOpportunities',
 ]);
 const PROFILE_FIELD_SET = new Set(PROFILE_FIELDS);
 const CANDIDATE_READ_PROJECTION = Object.freeze({
@@ -66,7 +66,9 @@ function normalizePublicProfileValue(value) {
 function publicCandidateData(candidate, includeStatus) {
   const result = { _id: candidate._id };
   for (const field of PUBLIC_CANDIDATE_FIELDS) {
-    result[field] = PROFILE_FIELD_SET.has(field)
+    result[field] = field === 'availableForOpportunities'
+      ? candidate[field] === true
+      : PROFILE_FIELD_SET.has(field)
       ? normalizePublicProfileValue(candidate[field])
       : candidate[field];
   }
@@ -337,7 +339,11 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
   }
 
   const filter = { _id: candidateId };
-  if (requesterRole === 'company') filter.status = CANDIDATE_STATUS.ACTIVE;
+  if (requesterRole === 'company') {
+    filter.status = CANDIDATE_STATUS.ACTIVE;
+    filter.availableForOpportunities = true;
+    filter['eligibility.status'] = ELIGIBILITY_STATUS.APPROVED;
+  }
 
   const candidate = await Candidate.findOne(filter).select(CANDIDATE_READ_PROJECTION).lean();
   if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
@@ -483,11 +489,17 @@ async function deleteCandidate(candidateId, requesterId, requesterRole) {
         'publicProfile.fields': [],
         'publicProfile.revokedAt': deletedAt,
         'publicProfile.cacheInvalidatedAt': deletedAt,
+        availableForOpportunities: false,
+        opportunityAvailabilityChangedAt: deletedAt,
+        opportunitySearchCacheInvalidatedAt: deletedAt,
       },
-      $inc: { 'publicProfile.cacheVersion': 1 },
+      $inc: { 'publicProfile.cacheVersion': 1, opportunitySearchCacheVersion: 1 },
       $push: {
         publicProfileConsentHistory: {
           action: 'candidate_deleted', fields: [], actor: requesterId, changedAt: deletedAt,
+        },
+        opportunityAvailabilityHistory: {
+          availableForOpportunities: false, actor: requesterId, changedAt: deletedAt,
         },
       },
     },

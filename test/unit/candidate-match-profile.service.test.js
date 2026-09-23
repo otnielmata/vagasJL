@@ -56,7 +56,7 @@ for (const status of ['pending_validation', 'incomplete_profile', 'active']) {
     assert.equal(profile.values.yearsOfExperience, 2.5);
     assert.equal(profile.configurationVersion, 3);
     assert.equal(candidate.status, status);
-    assert.equal(candidate.visibleToCompanies, status === 'active');
+    assert.equal(candidate.visibleToCompanies, false);
     assert.equal(create.mock.callCount(), 1);
     assert.deepEqual(findConfiguration.mock.calls[0].arguments, []);
     const json = profile.toJSON();

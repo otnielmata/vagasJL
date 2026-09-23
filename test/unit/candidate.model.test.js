@@ -24,6 +24,8 @@ test('defaults to pending and persists every omitted profile field as UNKNOWN', 
   assert.equal(candidate.publicProfile.enabled, false);
   assert.deepEqual(candidate.publicProfile.fields, []);
   assert.equal(candidate.publicProfile.cacheVersion, 1);
+  assert.equal(candidate.availableForOpportunities, false);
+  assert.equal(candidate.opportunityAvailabilityChangedAt, null);
   assert.equal(candidate.visibleToCompanies, false);
   for (const field of PROFILE_FIELDS) assert.equal(candidate[field], UNKNOWN);
   assert.equal(candidate.validateSync(), undefined);
@@ -54,10 +56,11 @@ test('stores public-profile consent and its audit privately with a controlled wh
 });
 
 for (const status of Object.values(CANDIDATE_STATUS)) {
-  test(`company visibility for ${status} follows the active-only rule`, () => {
-    const candidate = new Candidate({ ...input, status });
-    assert.equal(candidate.visibleToCompanies, status === CANDIDATE_STATUS.ACTIVE);
-    assert.equal(candidate.toJSON().visibleToCompanies, status === CANDIDATE_STATUS.ACTIVE);
+  test(`company visibility for ${status} requires active status and explicit availability`, () => {
+    const candidate = new Candidate({ ...input, status, availableForOpportunities: true });
+    const expected = status === CANDIDATE_STATUS.ACTIVE;
+    assert.equal(candidate.visibleToCompanies, expected);
+    assert.equal(candidate.toJSON().visibleToCompanies, expected);
   });
 }
 
@@ -75,11 +78,39 @@ test('rejects unknown status and enforces one current profile per user plus uniq
   assert.equal(Candidate.schema.path('user').options.unique, undefined);
 });
 
-test('company query restricts results to active candidates', (context) => {
+test('company query requires active, validated and explicitly available candidates', (context) => {
   const query = {};
   const find = context.mock.method(Candidate, 'find', () => query);
   assert.equal(Candidate.findVisibleToCompanies(), query);
-  assert.deepEqual(find.mock.calls[0].arguments, [{ status: 'active' }]);
+  assert.deepEqual(find.mock.calls[0].arguments, [{
+    status: 'active',
+    availableForOpportunities: true,
+    'eligibility.status': 'approved',
+    deletedAt: null,
+  }]);
+});
+
+test('stores opportunity availability audit and cache metadata privately', () => {
+  const changedAt = new Date('2026-09-23T14:00:00.000Z');
+  const candidate = new Candidate({
+    ...input,
+    availableForOpportunities: true,
+    opportunityAvailabilityChangedAt: changedAt,
+    opportunitySearchCacheVersion: 2,
+    opportunitySearchCacheInvalidatedAt: changedAt,
+    opportunityAvailabilityHistory: [{
+      availableForOpportunities: true, actor: input.user, changedAt,
+    }],
+  });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(Candidate.schema.path('opportunityAvailabilityHistory').options.select, false);
+  assert.equal(Candidate.schema.path('opportunitySearchCacheVersion').options.select, false);
+  assert.equal(Candidate.schema.path('opportunitySearchCacheInvalidatedAt').options.select, false);
+  const json = candidate.toJSON();
+  assert.equal(json.availableForOpportunities, true);
+  assert.equal(json.opportunityAvailabilityHistory, undefined);
+  assert.equal(json.opportunitySearchCacheVersion, undefined);
+  assert.equal(json.opportunitySearchCacheInvalidatedAt, undefined);
 });
 
 test('does not persist client verification flags or student proofs', () => {

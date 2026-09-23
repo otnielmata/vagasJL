@@ -42,6 +42,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   const rankingThreshold = await getPublishedRankingThreshold();
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
+    availableForOpportunities: true, 'eligibility.status': 'approved',
     deletedAt: null }).select('_id name city state country');
   const profiles = candidates.length ? await CandidateMatchProfile.find({
     candidate: { $in: candidates.map((candidate) => candidate._id) }, deletedAt: null,

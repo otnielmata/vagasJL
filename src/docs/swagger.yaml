@@ -1146,6 +1146,43 @@ paths:
         '409': { description: Candidato nao ativo ou alterado concorrentemente }
         '503': { description: Banco de dados indisponivel }
 
+  /candidatos/me/disponibilidade:
+    patch:
+      tags: [Candidates]
+      summary: Controla aparicao do candidato nas oportunidades empresariais (VJ-75)
+      description: >
+        Registra a escolha explicita do candidato autenticado sem alterar status cadastral,
+        disponibilidade descritiva, perfil publico ou permissoes de contato/formacao. O estado
+        inicial e false. Para habilitar, exige candidato ativo, elegibilidade aprovada e Perfil
+        de Match atual. Desabilitar remove o candidato das proximas consultas, totais e rankings
+        empresariais e invalida a versao de cache, mas nao impede pesquisa de vagas pelo candidato.
+        A rota /me nao aceita identificador de outro candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateOpportunityAvailabilityRequest'
+      responses:
+        '200':
+          description: Preferencia atualizada ou escolha repetida de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [availability]
+                properties:
+                  availability:
+                    $ref: '#/components/schemas/CandidateOpportunityAvailabilityState'
+        '400': { description: Corpo invalido, valor nao booleano ou campo adicional }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate ou tentativa de alterar outro titular }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Candidato nao ativo/validado, Perfil de Match ausente ou concorrencia }
+        '503': { description: Banco de dados indisponivel }
+
   /candidatos/me/perfil-match:
     get:
       tags: [Match Profile]
@@ -2681,6 +2718,25 @@ components:
         revokedAt: { type: string, format: date-time, nullable: true }
         cacheVersion: { type: integer, minimum: 1 }
         cacheInvalidatedAt: { type: string, format: date-time, nullable: true }
+    CandidateOpportunityAvailabilityRequest:
+      type: object
+      required: [availableForOpportunities]
+      additionalProperties: false
+      properties:
+        availableForOpportunities:
+          type: boolean
+          description: Escolha explicita e separada da disponibilidade descritiva do cadastro
+    CandidateOpportunityAvailabilityState:
+      type: object
+      required: [availableForOpportunities, changedAt, candidateStatus, visibleToCompanies]
+      additionalProperties: false
+      properties:
+        availableForOpportunities: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
+        candidateStatus: { $ref: '#/components/schemas/CandidateStatus' }
+        visibleToCompanies:
+          type: boolean
+          description: true somente quando status e active e a preferencia esta habilitada
     CandidateRegistrationRequest:
       type: object
       required: [name, email]
@@ -2795,7 +2851,7 @@ components:
       description: URL HTTP/HTTPS absoluta ou UNKNOWN; null remove a informacao
     Candidate:
       type: object
-      required: [_id, user, name, email, status, eligibility, visibleToCompanies]
+      required: [_id, user, name, email, availableForOpportunities, status, eligibility, visibleToCompanies]
       properties:
         _id:
           type: string
@@ -2828,6 +2884,16 @@ components:
         availability:
           type: string
           enum: [available, unavailable, UNKNOWN]
+        availableForOpportunities:
+          type: boolean
+          default: false
+          readOnly: true
+          description: Opt-in independente controlado por PATCH /candidatos/me/disponibilidade
+        opportunityAvailabilityChangedAt:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         status:
           $ref: '#/components/schemas/CandidateStatus'
         eligibility:
@@ -2835,7 +2901,7 @@ components:
         visibleToCompanies:
           type: boolean
           readOnly: true
-          description: Derivado exclusivamente de status active; sempre false no cadastro
+          description: Exige status active e availableForOpportunities true; sempre false no cadastro
         createdAt:
           type: string
           format: date-time
@@ -2858,6 +2924,7 @@ components:
         - portfolioUrl
         - professionalSummary
         - availability
+        - availableForOpportunities
       additionalProperties: false
       properties:
         _id:
@@ -2896,6 +2963,9 @@ components:
         availability:
           type: string
           enum: [available, unavailable, UNKNOWN]
+        availableForOpportunities:
+          type: boolean
+          readOnly: true
         status:
           allOf:
             - $ref: '#/components/schemas/CandidateStatus'

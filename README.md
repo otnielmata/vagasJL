@@ -195,6 +195,8 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
 | GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
+| PATCH  | `/candidatos/me/perfil-publico` | Candidato ativo (Bearer) | Controla consentimento da futura publicação (VJ-74) |
+| PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
@@ -1058,7 +1060,7 @@ versão de configuração, vínculo com o usuário e status não são aceitos do
 
 Resposta **201** inclui `{ "profile": { "_id", "candidate", "configurationVersion", "values", "answers", "completion", "pendingFields", "createdAt", "updatedAt" } }`.
 `pendingFields` lista as chaves não preenchidas. O registro não ativa o candidato nem o torna
-visível a empresas: essa visibilidade continua dependente do status `active` do cadastro.
+visível a empresas: essa visibilidade exige status `active` e opt-in em `availableForOpportunities`.
 Candidatos `pending_validation` ou `incomplete_profile` podem criar rascunho; `inactive` ou
 `blocked` recebem **409**. Somente um perfil atual é permitido por candidato; repetição ou
 criação concorrente retorna **409**. Conta sem papel de candidato recebe **403**, cadastro
@@ -1133,7 +1135,7 @@ metadados como peso, status ou versão retornam **400**, sem gravação parcial.
 ou bloqueado recebe **403**; cadastro ou perfil atual ausente recebe **404**. A edição não altera
 o status cadastral. `matchEligible` na resposta indica apenas a aptidão técnica inicial: candidato
 `active` com ao menos um valor informado; não habilita por si só acesso de empresas. O cadastro
-continua visível a empresas somente quando seu status é `active`.
+continua visível a empresas somente quando seu status é `active` e o opt-in está habilitado.
 
 ### Estados e completude do Perfil de Match — VJ-72
 
@@ -1209,11 +1211,42 @@ campos atualmente efetivos e uma versão de cache incrementada; a revogação e 
 marcam a invalidação de cache. O histórico não é retornado. A exclusão do candidato força a
 revogação na mesma atualização atômica.
 
-A publicação é independente de `availability`: habilitar o perfil não torna o candidato
-disponível para empresas, e indisponibilidade não revoga por si só a autorização pública. Esta
+A publicação é independente de `availableForOpportunities`: habilitar o perfil não torna o candidato
+disponível para empresas, e desabilitar buscas empresariais não revoga por si só a autorização pública. Esta
 história deliberadamente **não cria endpoint público de leitura, página, slug, URL indexável nem
 política de retenção de link**. Esses itens devem ser definidos pelo produto antes da exposição;
 até lá, a API oferece apenas o controle autenticado de consentimento.
+
+### Disponibilidade para oportunidades — VJ-75
+
+`PATCH /candidatos/me/disponibilidade` controla se o candidato pode aparecer nas consultas e
+rankings das empresas. O campo `availableForOpportunities` é booleano, nasce como `false` e é
+independente de `availability`, que continua sendo o texto cadastral `available`, `unavailable`
+ou `UNKNOWN`. Para habilitar:
+
+```json
+{ "availableForOpportunities": true }
+```
+
+O opt-in exige candidato `active`, elegibilidade aprovada e Perfil de Match atual. Mesmo com a
+preferência habilitada, candidatos pendentes, incompletos, inativos, bloqueados, excluídos ou sem
+perfil técnico apto não entram em buscas empresariais. Para desabilitar e sair das próximas
+consultas, totais e rankings:
+
+```json
+{ "availableForOpportunities": false }
+```
+
+Desabilitar não muda `status`, elegibilidade, Perfil de Match ou cadastro e não impede
+`GET /candidatos/me/vagas/ranking`: o candidato continua pesquisando oportunidades e editando o
+perfil normalmente. Cada alteração registra data e auditoria privada e incrementa a versão de
+invalidação de cache; repetir uma escolha já registrada é idempotente. A exclusão lógica também
+força `false`.
+
+A rota usa somente a identidade do JWT e não aceita ID de candidato no caminho ou corpo. Ativar
+esta preferência não habilita o perfil público da VJ-74, não cria página pública e não libera
+automaticamente e-mail, telefone ou dados oficiais da formação. Esses dados continuam sujeitos
+a seus controles próprios.
 
 ### Cadastro de candidato — VJ-22
 
@@ -1263,13 +1296,13 @@ cria uma nova conta de usuário.
 | --- | --- | --- |
 | `pending_validation` | Pendente de validação | Não |
 | `incomplete_profile` | Perfil incompleto | Não |
-| `active` | Ativo | Sim |
+| `active` | Ativo | Somente com `availableForOpportunities: true` |
 | `inactive` | Inativo | Não |
 | `blocked` | Bloqueado | Não |
 
 O cadastro nunca retorna `active`: validação pendente mantém `pending_validation` e validação
-concluída muda para `incomplete_profile`. `visibleToCompanies` é calculado exclusivamente pelo
-status. O model oferece `Candidate.findVisibleToCompanies()` com filtro obrigatório `active`
+concluída muda para `incomplete_profile`. `visibleToCompanies` exige status `active` e opt-in
+explícito. O model oferece `Candidate.findVisibleToCompanies()` com filtros de status, validação e disponibilidade
 para as futuras buscas de empresas. Esta história não cria busca de empresas nem fluxo de ativação.
 
 #### Base confiável de alunos
@@ -1629,6 +1662,17 @@ Após `npm install`, execute `npm test`. A suíte usa `node:test` e mocks das de
 persistência, sem iniciar a API, abrir portas HTTP ou conectar a um MongoDB. Não depende de
 um `.env`: os testes que precisam de configuração usam valores temporários de teste.
 
+| Critério da VJ-75 | Cobertura unitária |
+| --- | --- |
+| Estado inicial conservador e separado de `availability` | Model e serialização |
+| Opt-in exige candidato ativo, validado e com Perfil de Match | Service e dependências simuladas |
+| Opt-out remove consultas, totais e rankings empresariais | Filtros de leitura direta e ranking |
+| Pesquisa de vagas do candidato continua disponível | Ranking do candidato sem filtro pelo opt-in |
+| Status pendente, inativo ou bloqueado prevalece | Virtual, filtro estático e service |
+| Candidato não altera preferência alheia | Rota `/me`, vínculo do service e erro 403 |
+| Perfil público e contato permanecem independentes | Services separados e snapshot privado |
+| Alteração possui data, auditoria e invalidação de cache | Schema privado e atualização atômica |
+
 | Critério da VJ-74 | Cobertura unitária |
 | --- | --- |
 | Perfil privado por padrão e sem rota pública de leitura | Model, serialização e inspeção das rotas |
@@ -1638,7 +1682,7 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | Permissão da formação prevalece sobre o consentimento | Filtro de campos efetivos e snapshot com fonte restritiva |
 | Revogação limpa campos e invalida cache | Atualização atômica, versão e data de invalidação |
 | Exclusão revoga a exposição | Operação atômica do service de exclusão |
-| Publicação e disponibilidade empresarial são independentes | Service sem alteração de `availability` |
+| Publicação e disponibilidade empresarial são independentes | Service sem alteração de `availableForOpportunities` |
 | Consentimento e mudanças possuem auditoria privada | Schema com `select: false` e operação `$push` |
 
 | Critério da VJ-1 | Cobertura unitária |
@@ -1699,7 +1743,7 @@ um `.env`: os testes que precisam de configuração usam valores temporários de
 | --- | --- |
 | Titular consulta o próprio perfil em qualquer status | Service com todos os status controlados e controller HTTP 200 |
 | Papel `company` não obtém acesso sem vínculo autorizado (VJ-38) | Service exige conta, associação e empresa ativas antes da busca |
-| Status não ativo permanece oculto para empresa | Busca empresarial filtra somente candidatos `active` |
+| Status não ativo ou opt-out permanece oculto para empresa | Busca filtra `active` e `availableForOpportunities: true` |
 | Candidato não consulta outro candidato | Verificação de titularidade e erro 403 |
 | Campos opcionais desconhecidos usam `UNKNOWN` | Normalização explícita, inclusive contra valores legados `false` |
 | Dados sensíveis e internos nunca são expostos | Projeção fechada no banco e DTO público com lista permitida |

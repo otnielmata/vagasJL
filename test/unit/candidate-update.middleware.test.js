@@ -80,6 +80,7 @@ for (const [id, body] of [
   [candidateId, { eligibility: { status: 'approved' } }],
   [candidateId, { eligibilityHistory: [] }],
   [candidateId, { visibleToCompanies: true }],
+  [candidateId, { availableForOpportunities: true }],
   [candidateId, { createdAt: '2026-01-01' }],
   [candidateId, { updatedAt: '2026-01-01' }],
   [candidateId, { __v: 1 }],
