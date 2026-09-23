@@ -186,6 +186,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
 | DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
 | PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
+| PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
@@ -356,6 +357,33 @@ privado. Repetir o status atual retorna **200** com `changed: false`, sem novo h
 Alteração concorrente retorna **409**. Candidatos e recrutadores recebem **403**, e o endpoint
 `PATCH /empresas/{id}/cadastro` não aceita mais status ou campos de auditoria. Reativar uma empresa
 não recupera permissões individuais que tenham sido revogadas em outros processos.
+
+## Administração do status de candidatos — VJ-78
+
+`PATCH /admin/candidatos/{id}/status` exige JWT de administrador ativo e corpo contendo exatamente
+`status` e `reason`. Os estados controlados são `pending_validation`, `incomplete_profile`, `active`,
+`inactive` e `blocked`; as ações administrativas suportadas ativam, inativam ou bloqueiam sem alterar
+dados profissionais.
+
+```json
+{
+  "status": "active",
+  "reason": "Elegibilidade e perfil mínimo revisados"
+}
+```
+
+Ativação exige elegibilidade `approved`, cadastro mínimo completo, ausência de outro candidato ativo
+com o mesmo e-mail e, quando publicado, atendimento ao limiar de completude do Perfil de Match.
+Candidato ainda pendente não pode ser ativado diretamente. Violações retornam **409** sem mutação.
+
+Ao inativar, o candidato deixa imediatamente de aparecer para empresas porque buscas e rankings
+consultam somente status `active`. O bloqueio também desliga disponibilidade e perfil público, limpa
+permissões de exibição e incrementa a versão de autenticação da conta na mesma transação, revogando
+todos os JWTs já emitidos. Uma reativação posterior não restaura automaticamente esses consentimentos.
+
+Cada mudança registra candidato, estado anterior, novo estado, administrador, data/hora e motivo em
+histórico privado. Repetir o status atual retorna **200** com `changed: false`, sem auditoria duplicada.
+Usuários não administradores recebem **403** e campos adicionais no corpo recebem **400**.
 
 ## Cadastro de vaga própria — VJ-42
 

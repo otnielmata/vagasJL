@@ -10,7 +10,7 @@ info:
     logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
     de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
-    administracao auditada do status empresarial (VJ-77),
+    administracao auditada do status empresarial (VJ-77) e de candidatos (VJ-78),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -768,6 +768,49 @@ paths:
         '403': { description: Papel diferente de admin }
         '404': { description: Empresa inexistente ou excluida }
         '409': { description: Empresa inapta, transicao proibida ou alteracao concorrente }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /admin/candidatos/{id}/status:
+    patch:
+      tags: [Candidates]
+      summary: Administra o status do candidato com auditoria (VJ-78)
+      description: >
+        Exige conta admin ativa e altera somente o status controlado. Ativacao requer
+        elegibilidade aprovada, cadastro minimo completo, email ativo unico e, quando
+        configurada, completude minima do Perfil de Match. Inativacao e bloqueio retiram o
+        candidato imediatamente das consultas empresariais. Bloqueio tambem revoga tokens,
+        disponibilidade, perfil publico e permissoes de exibicao; a reativacao nao recupera
+        esses consentimentos. Cada mudanca registra estado anterior, novo estado,
+        administrador, data e motivo. Repetir o estado atual e idempotente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do candidato atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateStatusUpdateRequest'
+      responses:
+        '200':
+          description: Estado atual e indicador de mudanca idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateStatusUpdateResponse'
+        '400': { description: Identificador, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '404': { description: Candidato inexistente ou excluido }
+        '409': { description: Candidato inapto, transicao proibida ou alteracao concorrente }
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -2695,6 +2738,28 @@ components:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
       description: Pendente de validacao, Perfil incompleto, Ativo, Inativo ou Bloqueado
+    CandidateStatusUpdateRequest:
+      type: object
+      required: [status, reason]
+      additionalProperties: false
+      properties:
+        status: { $ref: '#/components/schemas/CandidateStatus' }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CandidateStatusUpdateResponse:
+      type: object
+      required: [candidate, previousStatus, changed, changedAt]
+      additionalProperties: false
+      properties:
+        candidate:
+          type: object
+          required: [_id, status]
+          additionalProperties: false
+          properties:
+            _id: { type: string }
+            status: { $ref: '#/components/schemas/CandidateStatus' }
+        previousStatus: { $ref: '#/components/schemas/CandidateStatus' }
+        changed: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
     CandidateEligibilityRequest:
       type: object
       additionalProperties: false

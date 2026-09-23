@@ -88,6 +88,14 @@ const enterpriseDisplayPermissionHistorySchema = new mongoose.Schema({
   changedAt: { type: Date, required: true },
 }, { _id: false });
 
+const statusHistorySchema = new mongoose.Schema({
+  from: { type: String, enum: Object.values(CANDIDATE_STATUS), required: true },
+  to: { type: String, enum: Object.values(CANDIDATE_STATUS), required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+  reason: { type: String, required: true, trim: true, maxlength: 500 },
+}, { _id: false });
+
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
@@ -123,6 +131,7 @@ const candidateSchema = new mongoose.Schema({
     default: CANDIDATE_STATUS.PENDING_VALIDATION,
     required: true,
   },
+  statusHistory: { type: [statusHistorySchema], default: () => [], select: false },
   eligibility: { type: eligibilitySchema, default: () => ({}) },
   eligibilityHistory: { type: [eligibilityHistorySchema], default: () => [], select: false },
   publicProfile: { type: publicProfileSchema, default: () => ({}), select: false },
@@ -171,6 +180,7 @@ candidateSchema.set('toJSON', {
     delete result.__v;
     delete result.id;
     delete result.eligibilityHistory;
+    delete result.statusHistory;
     delete result.publicProfile;
     delete result.publicProfileConsentHistory;
     delete result.opportunityAvailabilityHistory;

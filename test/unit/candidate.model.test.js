@@ -199,6 +199,20 @@ test('stores invalidated eligibility as private audit history', () => {
   assert.equal(candidate.toJSON().eligibilityHistory, undefined);
 });
 
+test('stores administrative status history privately', () => {
+  const changedAt = new Date('2026-09-23T19:00:00.000Z');
+  const candidate = new Candidate({ ...input, statusHistory: [{
+    from: CANDIDATE_STATUS.INCOMPLETE_PROFILE,
+    to: CANDIDATE_STATUS.ACTIVE,
+    actor: input.user,
+    changedAt,
+    reason: 'Perfil revisado',
+  }] });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(Candidate.schema.path('statusHistory').options.select, false);
+  assert.equal(candidate.toJSON().statusHistory, undefined);
+});
+
 test('stores logical deletion date privately and releases only the current-user index', () => {
   const deletedAt = new Date('2026-09-15T12:00:00.000Z');
   const candidate = new Candidate({ ...input, status: CANDIDATE_STATUS.INACTIVE, deletedAt });

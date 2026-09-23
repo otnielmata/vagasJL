@@ -18,6 +18,7 @@ test('existing registration delegates to shared user creation and still issues J
   assert.deepEqual(create.mock.calls[0].arguments, [{ ...input, role: 'candidate' }]);
   const decoded = jwt.verify(result.token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
   assert.equal(decoded.sub, user.id);
+  assert.equal(decoded.version, 0);
   assert.equal(decoded.exp - decoded.iat, 3600);
 });
 
@@ -46,11 +47,12 @@ for (const [expiresIn, seconds] of [['1h', 3600], ['15m', 900]]) {
     }));
     const result = await authService.login({ email: ' MARIA@Example.COM ', password });
     assert.deepEqual(find.mock.calls[0].arguments, [{ email: 'maria@example.com' }]);
-    assert.equal(selection, '+password');
+    assert.equal(selection, '+password +tokenVersion');
     assert.equal(result.user, user);
     const decoded = jwt.verify(result.token, config.jwt.secret, { algorithms: ['HS256'] });
     assert.equal(decoded.sub, user.id);
     assert.equal(decoded.role, user.role);
+    assert.equal(decoded.version, 0);
     assert.equal(decoded.exp - decoded.iat, seconds);
     assert.equal(decoded.password, undefined);
     assert.equal(decoded.email, undefined);

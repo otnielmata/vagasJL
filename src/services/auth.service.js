@@ -8,7 +8,7 @@ const userService = require('./user.service');
  * Gera um token JWT assinado para o usuario informado.
  */
 function generateToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, config.jwt.secret, {
+  return jwt.sign({ sub: user.id, role: user.role, version: user.tokenVersion ?? 0 }, config.jwt.secret, {
     algorithm: 'HS256',
     expiresIn: config.jwt.expiresIn,
   });
@@ -33,7 +33,7 @@ async function register({ name, email, password, role = 'candidate' }) {
  */
 async function login({ email, password }) {
   email = email.trim().toLowerCase();
-  const user = await User.findOne({ email }).select('+password');
+  const user = await User.findOne({ email }).select('+password +tokenVersion');
   if (!user || user.status !== 'active') {
     throw new ApiError(401, 'Credenciais invalidas');
   }

@@ -21,7 +21,11 @@ function verifyToken(req, res, next) {
     if (typeof decoded.sub !== 'string' || !/^[a-f\d]{24}$/i.test(decoded.sub)) {
       return res.status(401).json({ message: 'Token invalido ou expirado' });
     }
-    req.user = { id: decoded.sub.toLowerCase(), role: decoded.role };
+    if (decoded.version !== undefined && (!Number.isSafeInteger(decoded.version) || decoded.version < 0)) {
+      return res.status(401).json({ message: 'Token invalido ou expirado' });
+    }
+    req.user = { id: decoded.sub.toLowerCase(), role: decoded.role,
+      tokenVersion: decoded.version ?? 0 };
   } catch (error) {
     return res.status(401).json({ message: 'Token invalido ou expirado' });
   }
@@ -31,7 +35,7 @@ function verifyToken(req, res, next) {
 async function authenticateAccount(req, res, next, deleting = false) {
   try {
     await connectDB();
-    const user = await User.findById(req.user.id).select('status role');
+    const user = await User.findById(req.user.id).select('status role +tokenVersion');
     if (!user) {
       const repeatedDeletion = deleting && req.params.id.toLowerCase() === req.user.id;
       return res.status(repeatedDeletion ? 404 : 401).json({
@@ -41,7 +45,10 @@ async function authenticateAccount(req, res, next, deleting = false) {
     if (user.status !== 'active') {
       return res.status(401).json({ message: 'Token invalido ou usuario inativo' });
     }
-    req.user.role = user.role;
+    if ((user.tokenVersion ?? 0) !== req.user.tokenVersion) {
+      return res.status(401).json({ message: 'Token invalido ou sessao revogada' });
+    }
+    req.user = { id: req.user.id, role: user.role };
     return next();
   } catch (error) {
     return next(error);
