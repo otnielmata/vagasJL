@@ -44,7 +44,8 @@ function normalizeRestrictions(value) {
   }));
 }
 
-function normalizeVacancyInput(input, { allowUnidentified = false, allowLegacyAi = false } = {}) {
+function normalizeVacancyInput(input, { allowUnidentified = false, allowLegacyAi = false,
+  allowExpired = false } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).length < 4 || Object.keys(input).some((key) => !BODY_FIELDS.has(key))) invalid();
   const reference = text(input.reference, 100).toLowerCase();
@@ -58,7 +59,7 @@ function normalizeVacancyInput(input, { allowUnidentified = false, allowLegacyAi
     if (typeof input.expiresAt !== 'string' ||
         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(input.expiresAt)) invalid();
     expiresAt = new Date(input.expiresAt);
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) invalid();
+    if (Number.isNaN(expiresAt.getTime()) || (!allowExpired && expiresAt <= new Date())) invalid();
   }
   const matchProfile = input.matchProfile;
   if (!matchProfile || typeof matchProfile !== 'object' || Array.isArray(matchProfile) ||

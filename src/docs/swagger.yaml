@@ -12,6 +12,7 @@ info:
     protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
     administracao auditada do status empresarial (VJ-77) e de candidatos (VJ-78),
     configuracao consolidada e versionada do Motor de Match (VJ-79),
+    cadastro e revisao administrativa de vagas com auditoria (VJ-80),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -36,6 +37,49 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /admin/vagas/{id}:
+    put:
+      tags: [Vacancies]
+      summary: Cadastra ou revisa uma vaga pela administracao (VJ-80)
+      description: >
+        Operacao idempotente e exclusiva de administrador ativo. Um identificador inexistente
+        cria a vaga na versao 1, origem ADMIN e status pending. Uma vaga existente pode ter
+        conteudo e status revisados sem alterar sua origem IMPORTED, COMPANY ou ADMIN.
+        Ativacao exige Perfil de Match canonico completo e requisitos validos. Alteracoes sao
+        auditadas com antes/depois e agendam recalculo conforme a configuracao vigente. Estados
+        nao ativos saem dos rankings sem exclusao fisica; resultados historicos permanecem.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId prescrito ou existente da vaga
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminVacancyRequest' }
+      responses:
+        '200':
+          description: Vaga revisada ou repeticao idempotente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminVacancyResponse' }
+        '201':
+          description: Vaga administrativa criada como pending
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminVacancyResponse' }
+        '400': { description: Identificador de vaga malformado }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin ou conta administrativa inexistente }
+        '409': { description: Origem, versao, transicao ou alteracao concorrente em conflito }
+        '422': { description: Representacao invalida ou vaga sem requisitos para o estado solicitado }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /admin/configuracoes/match/{version}:
     put:
       tags: [Match Profile]
@@ -2470,6 +2514,58 @@ components:
                 items:
                   $ref: '#/components/schemas/MatchProfileOption'
         createdAt: { type: string, format: date-time }
+    AdminVacancyRequest:
+      type: object
+      required: [version, reason, origin, status, reference, title, description, matchProfile]
+      additionalProperties: false
+      properties:
+        version: { type: integer, minimum: 1, description: Revisao administrativa otimista }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
+        status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 10000 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        location:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            country: { $ref: '#/components/schemas/GeographicRestriction' }
+            state: { $ref: '#/components/schemas/GeographicRestriction' }
+            city: { $ref: '#/components/schemas/GeographicRestriction' }
+        matchProfile:
+          type: object
+          required: [values]
+          additionalProperties: false
+          properties:
+            values:
+              type: object
+              minProperties: 1
+              additionalProperties: true
+            requirements:
+              type: array
+              maxItems: 200
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+    AdminVacancyResponse:
+      type: object
+      required: [vacancy, created, changed]
+      additionalProperties: false
+      properties:
+        vacancy: { $ref: '#/components/schemas/Vacancy' }
+        created: { type: boolean }
+        changed: { type: boolean }
     CompanyVacancyRequest:
       type: object
       required: [reference, title, description, matchProfile]
@@ -2567,6 +2663,7 @@ components:
               items: { $ref: '#/components/schemas/VacancyRequirement' }
         origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
         status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        adminRevision: { type: integer, minimum: 0 }
         requirementsRevision: { type: integer, minimum: 0 }
         expiresAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }

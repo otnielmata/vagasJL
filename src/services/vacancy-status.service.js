@@ -149,4 +149,5 @@ async function expireOverdueVacancies(now = new Date()) {
   return expired;
 }
 
-module.exports = { updateStatus, expireOverdueVacancies, ensureCompanyAuthorized };
+module.exports = { updateStatus, expireOverdueVacancies, ensureCompanyAuthorized,
+  ensurePublishable, TRANSITIONS };

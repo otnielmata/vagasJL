@@ -47,6 +47,22 @@ const importMappingAuditSchema = new mongoose.Schema({
     value: { type: Boolean, required: true, enum: [false] },
   }], default: [] },
 }, { _id: false });
+const adminRecalculationSchema = new mongoose.Schema({
+  policy: { type: String, enum: ['none', 'affected_matches'], required: true },
+  status: { type: String, enum: ['not_required', 'scheduled'], required: true },
+  scheduledFor: { type: Date, default: null },
+  engineVersion: { type: String, default: null, match: /^MATCH_V[1-9]\d*$/ },
+}, { _id: false });
+const adminReviewSchema = new mongoose.Schema({
+  revision: { type: Number, required: true, min: 1 },
+  at: { type: Date, required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  reason: { type: String, required: true, maxlength: 500 },
+  before: { type: mongoose.Schema.Types.Mixed, default: null },
+  after: { type: mongoose.Schema.Types.Mixed, required: true },
+  changedFields: { type: [String], required: true },
+  recalculation: { type: adminRecalculationSchema, required: true },
+}, { _id: false });
 
 const vacancySchema = new mongoose.Schema({
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, immutable: true },
@@ -108,6 +124,9 @@ const vacancySchema = new mongoose.Schema({
     revision: { type: Number, required: true },
     requirements: { type: [requirementSchema], required: true },
   }],
+  adminRevision: { type: Number, default: 0, min: 0 },
+  adminContentFingerprint: { type: String, default: null, select: false },
+  adminHistory: { type: [adminReviewSchema], default: [], select: false },
   importContentFingerprint: { type: String, default: null, select: false },
   importSourceVersion: { type: String, default: null, maxlength: 200, select: false },
   importScope: { type: String, default: null, maxlength: 200, select: false },
@@ -138,6 +157,8 @@ vacancySchema.set('toJSON', {
     delete result.importMappingAudit;
     delete result.statusHistory;
     delete result.requirementsHistory;
+    delete result.adminContentFingerprint;
+    delete result.adminHistory;
     delete result.importContentFingerprint;
     delete result.importSourceVersion;
     delete result.importScope;

@@ -188,6 +188,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
 | PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
 | PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
+| PUT    | `/admin/vagas/{id}` | Admin (Bearer) | Cadastra ou revisa vaga com versão e auditoria (VJ-80) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
@@ -636,6 +637,25 @@ reprocessamento solicitado sem reescrever avaliações anteriores.
 
 Os endpoints administrativos anteriores permanecem disponíveis para compatibilidade enquanto não
 existir configuração consolidada vigente.
+
+## Administração de vagas — VJ-80
+
+`PUT /admin/vagas/{id}` permite somente a uma conta administrativa ativa cadastrar uma vaga de
+origem `ADMIN` com o identificador informado ou revisar uma vaga existente. O corpo representa a vaga
+completa e inclui `version`, `reason`, `origin`, `status`, dados da oportunidade e o Perfil de Match.
+Novas vagas devem começar com `version: 1`, origem `ADMIN` e status `pending`.
+
+Revisões usam o catálogo técnico publicado, preservam a origem `ADMIN`, `COMPANY` ou `IMPORTED` e
+nunca alteram a procedência armazenada. Uma vaga só pode ficar `active` quando seus dados mínimos,
+Perfil de Match e classificação de requisitos estiverem completos e válidos. Conteúdo inválido para
+ativação retorna **422** sem escrita parcial; tentativa de trocar a origem, usar versão desatualizada
+ou executar uma transição proibida retorna **409**.
+
+Cada alteração registra privadamente autor, data, motivo, versão, representação anterior e nova,
+campos alterados e política de recálculo. Mudanças relevantes de Match, disponibilidade ou prazo
+agendam o reprocessamento conforme a configuração vigente, sem apagar avaliações históricas.
+Repetir a mesma versão com a mesma representação retorna **200** com `changed: false`. Os estados
+`paused`, `removed` e `rejected` retiram a vaga dos rankings sem exclusão física.
 
 ## Multiplicadores do Match — VJ-52
 
