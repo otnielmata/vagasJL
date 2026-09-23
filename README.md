@@ -190,6 +190,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
+| GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
 | GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
@@ -1054,7 +1055,7 @@ competência aceita um valor ou lista de até 50 valores; duplicatas são consol
 `yearsOfExperience` é numérico, entre 0 e 100, com no máximo uma casa decimal. Pesos,
 versão de configuração, vínculo com o usuário e status não são aceitos do cliente.
 
-Resposta **201** inclui `{ "profile": { "_id", "candidate", "configurationVersion", "values", "pendingFields", "createdAt", "updatedAt" } }`.
+Resposta **201** inclui `{ "profile": { "_id", "candidate", "configurationVersion", "values", "answers", "completion", "pendingFields", "createdAt", "updatedAt" } }`.
 `pendingFields` lista as chaves não preenchidas. O registro não ativa o candidato nem o torna
 visível a empresas: essa visibilidade continua dependente do status `active` do cadastro.
 Candidatos `pending_validation` ou `incomplete_profile` podem criar rascunho; `inactive` ou
@@ -1123,14 +1124,31 @@ concorrentes. A resposta **200** traz a nova `revision` e o cabeçalho `ETag` co
 }
 ```
 
-`null` (ou lista vazia nos campos de catálogo) remove explicitamente o valor e torna o campo
-pendente; os outros não mudam. Valores novos seguem o catálogo da configuração mais recente e
+`null` remove explicitamente o valor e torna o campo `UNKNOWN`; lista vazia registra que o
+candidato respondeu “nenhuma opção” e conta como respondida. Os outros campos não mudam.
+Valores novos seguem o catálogo da configuração mais recente e
 são salvos pelos IDs canônicos. Chave desconhecida, valor fora do catálogo, corpo vazio e
 metadados como peso, status ou versão retornam **400**, sem gravação parcial. Candidato inativo
 ou bloqueado recebe **403**; cadastro ou perfil atual ausente recebe **404**. A edição não altera
 o status cadastral. `matchEligible` na resposta indica apenas a aptidão técnica inicial: candidato
 `active` com ao menos um valor informado; não habilita por si só acesso de empresas. O cadastro
 continua visível a empresas somente quando seu status é `active`.
+
+### Estados e completude do Perfil de Match — VJ-72
+
+`GET /candidatos/me/perfil-match` retorna somente ao próprio candidato o perfil técnico atual,
+o `ETag` da revisão, os campos pendentes e a completude calculada com a versão de catálogo
+gravada no perfil. Em `answers`, campo omitido ou removido aparece como
+`{"state":"UNKNOWN","value":null}`; uma resposta booleana negativa aparece como
+`{"state":"ANSWERED","value":false}`. Para listas, `[]` é a representação canônica de
+“nenhuma opção”, diferente de `UNKNOWN`.
+
+`completion.percentage` é `answeredFields / totalEligibleFields × 100`, sem usar os pesos do
+Match. Somente campos técnicos com preenchimento disponível naquela versão entram no total;
+campos derivados ou internos como `hasGenAI` e `amountOfGenAITools` não entram nem aparecem
+como pendência. `false`, zero e lista vazia contam como respondidos, mas não inventam uma
+competência. A completude não modifica o score técnico e 100% preenchido não significa Match
+de 100%. Empresas não recebem respostas desconhecidas por esse endpoint.
 
 ### Cadastro de candidato — VJ-22
 

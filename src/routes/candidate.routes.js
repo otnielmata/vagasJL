@@ -21,6 +21,7 @@ router.get('/me/engajamento', authenticate, authorize('candidate'), ensureDataba
   engagementController.show);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
+router.get('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.show);
 router.patch('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.update);
 
 router.post('/', authenticate, authorize('candidate'), candidateRules(),

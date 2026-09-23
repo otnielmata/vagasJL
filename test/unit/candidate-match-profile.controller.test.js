@@ -26,15 +26,41 @@ test('route is mounted and authenticates candidates before storage', () => {
 });
 
 test('controller returns 201 with safe profile and authenticated identity', async (context) => {
-  const registration = context.mock.method(service, 'registerMatchProfile', async () => ({
-    toJSON: () => ({ _id: 'profile', candidate: 'candidate', values: { yearsOfExperience: 2 } }),
-  }));
+  const stored = { _id: 'profile' };
+  const registration = context.mock.method(service, 'registerMatchProfile', async () => stored);
+  context.mock.method(service, 'serializeMatchProfile', (profile) => {
+    assert.equal(profile, stored);
+    return { _id: 'profile', candidate: 'candidate', values: { yearsOfExperience: 2 } };
+  });
   const req = { user: { id: 'owner', role: 'candidate' }, body: { values: { yearsOfExperience: 2 } } };
   const res = { status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
   await controller.register(req, res, () => assert.fail('unexpected error'));
   assert.equal(res.code, 201);
   assert.deepEqual(res.body.profile.values, { yearsOfExperience: 2 });
   assert.deepEqual(registration.mock.calls[0].arguments, [req.user, req.body]);
+});
+
+test('GET route returns current profile completeness only to its candidate', async (context) => {
+  const route = router.stack.find((layer) => layer.route?.path === '/me/perfil-match' &&
+    layer.route.methods.get).route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  assert.equal(handlers[0], authenticate);
+  assert.equal(handlers[2], ensureDatabase);
+  assert.equal(handlers[3], controller.show);
+
+  const stored = { revision: 4 };
+  const read = context.mock.method(service, 'getMatchProfile', async () => stored);
+  context.mock.method(service, 'serializeMatchProfile', () => ({ revision: 4,
+    completion: { percentage: 50, answeredFields: 2, totalEligibleFields: 4 },
+    pendingFields: ['apiTesting', 'level'] }));
+  const req = { user: { id: 'owner', role: 'candidate' } };
+  const res = { set(name, value) { this[name] = value; return this; },
+    status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
+  await controller.show(req, res, () => assert.fail('unexpected error'));
+  assert.equal(res.code, 200);
+  assert.equal(res.ETag, '"4"');
+  assert.equal(res.body.profile.completion.percentage, 50);
+  assert.deepEqual(read.mock.calls[0].arguments, [req.user]);
 });
 
 test('controller forwards registration error without success', async (context) => {
@@ -58,6 +84,7 @@ test('PATCH route reuses candidate authentication and owner-only controller', ()
 });
 
 test('update returns 200, new ETag and eligibility only for active candidate', async (context) => {
+  context.mock.method(service, 'serializeMatchProfile', (profile) => profile.toJSON());
   const edit = context.mock.method(service, 'updateMatchProfile', async () => ({
     profile: { revision: 3, toJSON: () => ({ revision: 3, values: { agile: ['scrum'] } }) },
     candidateStatus: 'active',

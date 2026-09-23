@@ -6,7 +6,8 @@ const Candidate = require('../../src/models/candidate.model');
 const Configuration = require('../../src/models/match-profile-configuration.model');
 const MatchProfile = require('../../src/models/candidate-match-profile.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
-const { registerMatchProfile } = require('../../src/services/candidate-match-profile.service');
+const { registerMatchProfile, getMatchProfile, serializeMatchProfile,
+  completionFor } = require('../../src/services/candidate-match-profile.service');
 
 const user = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'candidate' };
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b6';
@@ -82,6 +83,63 @@ test('normalizes boolean skill answers without treating explicit false as unansw
   assert.equal(denied.toJSON().pendingFields.includes('apiTesting'), false);
   const unknown = await registerMatchProfile(user, { values: {} });
   assert.equal(unknown.toJSON().pendingFields.includes('apiTesting'), true);
+});
+
+test('calculates unweighted completion and exposes UNKNOWN separately from explicit false', async (context) => {
+  const { configuration } = isolate(context);
+  configuration.fields.find((field) => field.key === 'testAutomationTechnologies').options = [];
+  const profile = await registerMatchProfile(user, { values: { apiTesting: false, type: [] } });
+  const result = serializeMatchProfile(profile);
+  assert.deepEqual(result.completion, { percentage: 50, answeredFields: 2, totalEligibleFields: 4 });
+  assert.deepEqual(result.pendingFields, ['yearsOfExperience', 'level']);
+  assert.deepEqual(result.answers.apiTesting, { state: 'ANSWERED', value: false });
+  assert.deepEqual(result.answers.type, { state: 'ANSWERED', value: [] });
+  assert.deepEqual(result.answers.level, { state: 'UNKNOWN', value: null });
+  assert.equal(result.values.apiTesting.length, 0);
+});
+
+test('completion ignores derived fields and weights and never changes technical values', () => {
+  const configuration = { fields: [
+    { key: 'apiTesting', weight: 100, options: [{ id: 'api-testing' }] },
+    { key: 'yearsOfExperience', weight: 1, options: [] },
+    { key: 'hasGenAI', weight: 1000, options: [{ id: 'yes' }] },
+    { key: 'amountOfGenAITools', weight: 1000, options: [{ id: 'one' }] },
+  ] };
+  const profile = { values: { apiTesting: [], hasGenAI: true } };
+  const completion = completionFor(profile, configuration);
+  assert.equal(completion.percentage, 50);
+  assert.equal(completion.totalEligibleFields, 2);
+  assert.deepEqual(completion.pendingFields, ['yearsOfExperience']);
+  assert.equal(completion.answers.hasGenAI, undefined);
+  assert.deepEqual(profile.values, { apiTesting: [], hasGenAI: true });
+});
+
+test('persists an explicitly empty catalog list as answered instead of UNKNOWN', async (context) => {
+  isolate(context);
+  const profile = await registerMatchProfile(user, { values: { type: [] } });
+  assert.deepEqual(profile.values.type, []);
+  assert.equal(profile.toJSON().pendingFields.includes('type'), false);
+});
+
+test('reads completeness using the exact catalog version stored by the profile', async (context) => {
+  const { configuration, findProfile, findConfiguration } = isolate(context);
+  configuration.fields.find((field) => field.key === 'testAutomationTechnologies').options = [];
+  const stored = new MatchProfile({ candidate: candidateId, user: user.id,
+    configurationVersion: 3, revision: 2, values: { apiTesting: [] } });
+  findProfile.mock.mockImplementation(async (filter) => {
+    assert.equal(filter.candidate.toString(), candidateId);
+    assert.equal(filter.deletedAt, null);
+    return stored;
+  });
+  findConfiguration.mock.mockImplementation(async (filter) => {
+    assert.deepEqual(filter, { version: 3 });
+    return configuration;
+  });
+  const profile = await getMatchProfile(user);
+  const result = serializeMatchProfile(profile);
+  assert.equal(result.configurationVersion, 3);
+  assert.equal(result.answers.apiTesting.value, false);
+  assert.equal(result.completion.percentage, 25);
 });
 
 test('rejects ambiguous boolean true when the published field has multiple options', async (context) => {

@@ -30,8 +30,8 @@ function normalizeChoices(value, field) {
   if (!Array.isArray(value) && typeof value !== 'string') invalid();
   const submitted = Array.isArray(value) ? value : [value];
   if (submitted.length > 50) invalid();
-  if (submitted.length === 0) return undefined;
   if (!field.options.length) invalid('Catalogo do campo ainda nao publicado');
+  if (submitted.length === 0) return [];
 
   const canonical = new Map();
   for (const option of field.options) {
@@ -69,7 +69,7 @@ function normalizeValues(input, configuration, allowRemoval = false) {
   const migration = migrateLegacyAiValues(submitted, configuration);
   const values = {};
   for (const [key, value] of Object.entries(migration.values)) {
-    if (allowRemoval && (value === null || (Array.isArray(value) && value.length === 0))) {
+    if (allowRemoval && value === null) {
       values[key] = null;
       continue;
     }
@@ -103,13 +103,15 @@ async function registerMatchProfile(user, input) {
   const { values, legacyAiAudit } = normalizeValues(input, configuration);
 
   try {
-    return await MatchProfile.create({
+    const profile = await MatchProfile.create({
       candidate: candidate._id,
       user: user.id,
       configurationVersion: configuration.version,
       values,
       ...(legacyAiAudit ? { legacyAiMigrationHistory: [legacyAiAudit] } : {}),
     });
+    profile.$locals.completionConfiguration = configuration;
+    return profile;
   } catch (error) {
     if (error.code === 11000) throw new ApiError(409, 'Perfil de Match ja cadastrado');
     throw error;
@@ -160,7 +162,72 @@ async function updateMatchProfile(user, input, ifMatch) {
   const updated = await MatchProfile.findOneAndUpdate({ ...filter, ...revisionFilter }, operation,
     { new: true, runValidators: true });
   if (!updated) throw new ApiError(409, 'Perfil de Match alterado por outra requisicao');
+  updated.$locals.completionConfiguration = configuration;
   return { profile: updated, candidateStatus: candidate.status };
 }
 
-module.exports = { registerMatchProfile, updateMatchProfile };
+function plain(value) {
+  return value && typeof value.toObject === 'function' ? value.toObject() : value;
+}
+
+function eligibleFields(configuration) {
+  if (!configuration || !Array.isArray(configuration.fields)) {
+    throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel para completude');
+  }
+  return configuration.fields.filter((field) => KEYS.includes(field.key) &&
+    (field.key === 'yearsOfExperience' || Array.isArray(field.options) && field.options.length > 0));
+}
+
+function completionFor(profile, configuration) {
+  const values = plain(profile.values) || {};
+  const fields = eligibleFields(configuration);
+  const answers = {};
+  const pendingFields = [];
+  let answeredFields = 0;
+  for (const field of fields) {
+    if (!Object.prototype.hasOwnProperty.call(values, field.key) || values[field.key] == null) {
+      answers[field.key] = { state: 'UNKNOWN', value: null };
+      pendingFields.push(field.key);
+      continue;
+    }
+    answeredFields += 1;
+    answers[field.key] = { state: 'ANSWERED', value: BOOLEAN_MATCH_FIELDS.includes(field.key)
+      ? values[field.key].length > 0 : values[field.key] };
+  }
+  const totalEligibleFields = fields.length;
+  const percentage = totalEligibleFields === 0 ? 0 :
+    Math.round(answeredFields / totalEligibleFields * 10000) / 100;
+  return { percentage, answeredFields, totalEligibleFields, pendingFields, answers };
+}
+
+function serializeMatchProfile(profile) {
+  const configuration = profile?.$locals?.completionConfiguration;
+  if (!configuration || configuration.version !== profile.configurationVersion) {
+    throw new ApiError(503, 'Versao do Perfil de Match indisponivel para completude');
+  }
+  const result = profile.toJSON();
+  const completion = completionFor(profile, configuration);
+  result.pendingFields = completion.pendingFields;
+  result.answers = completion.answers;
+  result.completion = {
+    percentage: completion.percentage,
+    answeredFields: completion.answeredFields,
+    totalEligibleFields: completion.totalEligibleFields,
+  };
+  return result;
+}
+
+async function getMatchProfile(user) {
+  if (user?.role !== 'candidate') throw new ApiError(403, 'Apenas candidatos podem consultar Perfil de Match');
+  const candidate = await Candidate.findOne({ user: user.id, deletedAt: null }).select('_id');
+  if (!candidate) throw new ApiError(404, 'Cadastro de candidato atual nao encontrado');
+  const profile = await MatchProfile.findOne({ candidate: candidate._id, deletedAt: null });
+  if (!profile) throw new ApiError(404, 'Perfil de Match atual nao encontrado');
+  const configuration = await Configuration.findOne({ version: profile.configurationVersion });
+  if (!configuration) throw new ApiError(503, 'Versao do Perfil de Match indisponivel para completude');
+  profile.$locals.completionConfiguration = configuration;
+  return profile;
+}
+
+module.exports = { registerMatchProfile, updateMatchProfile, getMatchProfile,
+  completionFor, serializeMatchProfile };

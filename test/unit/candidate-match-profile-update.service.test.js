@@ -59,6 +59,8 @@ test('edits only submitted field with canonical alias and advances revision atom
   assert.deepEqual(result.profile.values.testAutomationTechnologies, ['cypress']);
   assert.deepEqual(result.profile.values.agile, ['scrum']);
   assert.equal(result.profile.values.yearsOfExperience, 3);
+  assert.equal(result.profile.values.apiTesting, undefined);
+  assert.ok(result.profile.toJSON().pendingFields.includes('apiTesting'));
   assert.equal(result.profile.revision, 3);
   assert.equal(result.profile.configurationVersion, 3);
   assert.equal(result.candidateStatus, 'active');
@@ -74,6 +76,16 @@ test('explicit null removes only one value and returns it as pending', async (co
   assert.ok(result.profile.toJSON().pendingFields.includes('yearsOfExperience'));
   assert.deepEqual(result.profile.values.agile, ['scrum']);
   assert.deepEqual(update.mock.calls[0].arguments[1].$unset, { 'values.yearsOfExperience': 1 });
+});
+
+test('explicit empty list means answered none while omitted fields remain unchanged', async (context) => {
+  const { update } = isolate(context);
+  const result = await updateMatchProfile(user, { values: { testAutomationTechnologies: [] } }, '"2"');
+  assert.deepEqual(result.profile.values.testAutomationTechnologies, []);
+  assert.equal(result.profile.toJSON().pendingFields.includes('testAutomationTechnologies'), false);
+  assert.deepEqual(result.profile.values.agile, ['scrum']);
+  assert.equal(update.mock.calls[0].arguments[1].$unset, undefined);
+  assert.deepEqual(update.mock.calls[0].arguments[1].$set['values.testAutomationTechnologies'], []);
 });
 
 test('candidate edits accepted modalities without affecting other profile fields', async (context) => {

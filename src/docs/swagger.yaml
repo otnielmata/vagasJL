@@ -1053,6 +1053,50 @@ paths:
           $ref: '#/components/responses/Unavailable'
 
   /candidatos/me/perfil-match:
+    get:
+      tags: [Match Profile]
+      summary: Consulta estados e completude do proprio Perfil de Match (VJ-72)
+      description: >
+        Retorna o perfil atual usando a versao de catalogo gravada nele. UNKNOWN representa
+        campo nao respondido; false e lista vazia representam respostas explicitas. A completude
+        usa somente campos tecnicos elegiveis, sem pesos e sem alterar o score do Match.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil, estados das respostas, completude e campos pendentes
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro ou Perfil de Match atual nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     post:
       tags: [Match Profile]
       summary: Cadastra o Perfil de Match do proprio candidato (VJ-29)
@@ -1117,7 +1161,8 @@ paths:
       summary: Edita parcialmente o Perfil de Match do proprio candidato (VJ-30)
       description: >
         Somente o titular ativo da conta, com cadastro e perfil atuais, pode editar.
-        Campos omitidos permanecem iguais; null ou lista vazia remove o valor informado.
+        Campos omitidos permanecem iguais; null volta o campo para UNKNOWN e lista vazia
+        registra a resposta explicita de que nenhuma opcao se aplica.
         Valores de catalogo sao normalizados aos IDs canonicos da ultima configuracao.
         Exige If-Match com a revisao atual. A atualizacao e atomica e eleva revision.
         Nao altera o status do candidato nem os pesos da configuracao.
@@ -2313,7 +2358,7 @@ components:
           type: object
           minProperties: 1
           additionalProperties: false
-          description: Campos omitidos permanecem iguais; null ou lista vazia remove valor.
+          description: Campos omitidos permanecem iguais; null remove para UNKNOWN; [] significa nenhuma opcao.
           properties:
             type: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
             agile: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
@@ -2363,7 +2408,7 @@ components:
             maxLength: 100
     CandidateMatchProfile:
       type: object
-      required: [_id, candidate, configurationVersion, revision, values, pendingFields, createdAt, updatedAt]
+      required: [_id, candidate, configurationVersion, revision, values, answers, completion, pendingFields, createdAt, updatedAt]
       additionalProperties: false
       properties:
         _id: { type: string }
@@ -2373,8 +2418,16 @@ components:
         values:
           type: object
           description: Somente valores canonicos preenchidos
+        answers:
+          type: object
+          description: Estado e valor de cada campo elegivel na versao do catalogo do perfil.
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileAnswer'
+        completion:
+          $ref: '#/components/schemas/MatchProfileCompletion'
         pendingFields:
           type: array
+          description: Campos elegiveis com estado UNKNOWN.
           items: { type: string }
         matchEligible:
           type: boolean
@@ -2382,6 +2435,27 @@ components:
           description: Retornado pela edicao; true somente para candidato active com algum valor informado
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    MatchProfileAnswer:
+      type: object
+      required: [state, value]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [UNKNOWN, ANSWERED] }
+        value:
+          nullable: true
+          oneOf:
+            - type: boolean
+            - type: number
+            - type: array
+              items: { type: string }
+    MatchProfileCompletion:
+      type: object
+      required: [percentage, answeredFields, totalEligibleFields]
+      additionalProperties: false
+      properties:
+        percentage: { type: number, minimum: 0, maximum: 100 }
+        answeredFields: { type: integer, minimum: 0 }
+        totalEligibleFields: { type: integer, minimum: 0 }
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]

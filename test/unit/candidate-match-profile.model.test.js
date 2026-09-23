@@ -24,3 +24,16 @@ test('stores canonical values separately and hides owner and deletion audit', ()
   assert.ok(indexes.some(([keys, options]) => keys.candidate === 1 && options.unique &&
     options.partialFilterExpression.deletedAt === null));
 });
+
+test('keeps an explicitly empty list distinct from an unanswered field', () => {
+  const profile = new MatchProfile({
+    candidate: '6512f1e2b3a1c2d3e4f5a6b6',
+    user: '6512f1e2b3a1c2d3e4f5a6b7',
+    configurationVersion: 1,
+    values: { testAutomationTechnologies: [] },
+  });
+  const result = profile.toJSON();
+  assert.deepEqual(result.values.testAutomationTechnologies, []);
+  assert.equal(result.pendingFields.includes('testAutomationTechnologies'), false);
+  assert.equal(result.pendingFields.includes('apiTesting'), true);
+});
