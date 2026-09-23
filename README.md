@@ -871,6 +871,28 @@ Um futuro reprocessamento deverá ser explícito e auditado. `desirable` usa o f
 reduzido do Match; `indifferent` não pontua. Ausências e campos derivados nunca
 geram pontos adicionais.
 
+## Conciliação de vagas importadas — VJ-69
+
+O serviço interno `reconcileImportBatch` processa lotes confiáveis sem criar endpoint público.
+Cada execução informa `source`, `batchId`, `collectionType` (`incremental` ou `snapshot`),
+`referenceAt`, `scope` e até 1000 itens. A identidade externa é sempre o par normalizado
+`source` + `sourceId`; título nunca é usado para deduplicar. Item sem ID estável vira pendência
+segura `MISSING_STABLE_SOURCE_ID` no resultado persistido do lote.
+
+Conteúdo normalizado idêntico é classificado como `unchanged`, inclusive quando muda apenas
+`sourceVersion` ou metadado de coleta. Mudanças relevantes preservam `_id`, `origin` e procedência,
+atualizam a vaga com controle otimista e criam uma revisão com antes/depois, campos alterados,
+fonte, lote, data, versão externa, versão do catálogo e fingerprint SHA-256. Decisões manuais de
+requisitos não são sobrescritas: uma mudança técnica fica marcada para revisão explícita.
+
+Lotes repetidos são idempotentes pelos índices únicos de lote e item. Coleta incremental nunca
+infere remoção por ausência. Um snapshot só encerra ausentes quando recebe política explícita com
+`enabled`, `complete` e `trusted` verdadeiros, status aprovado, escopo e `absentBefore` dentro da
+data de referência. Qualquer falha de item bloqueia o encerramento por ausência naquele lote.
+Encerramentos são lógicos (`expired` ou `removed`), entram no histórico e retiram vagas dos rankings
+ativos. O resultado informa contagens de criadas, inalteradas, atualizadas, encerradas, pendentes e
+falhas, sem expor detalhes técnicos internos.
+
 ## Cadastro de usuários — VJ-1
 
 `POST /usuarios` recebe JSON com os mesmos nomes de campos do scaffold:

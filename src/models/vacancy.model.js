@@ -59,7 +59,7 @@ const vacancySchema = new mongoose.Schema({
     version: { type: Number, required: true, min: 1 },
     importance: { type: String, required: true, enum: ['required', 'desirable', 'indifferent'] },
     appliedAt: { type: Date, required: true },
-  }, { _id: false }), default: null, immutable: true },
+  }, { _id: false }), default: null },
   reference: { type: String, trim: true, lowercase: true, maxlength: 100, default: null },
   title: { type: String, required: true, trim: true, maxlength: 200 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },
@@ -95,7 +95,7 @@ const vacancySchema = new mongoose.Schema({
     to: { type: String, required: true },
     at: { type: Date, required: true },
     actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    process: { type: String, enum: ['api', 'deadline'], required: true },
+    process: { type: String, enum: ['api', 'deadline', 'import'], required: true },
     reason: { type: String, required: true, maxlength: 500 },
   }],
   requirementsRevision: { type: Number, default: 0, min: 0 },
@@ -107,6 +107,12 @@ const vacancySchema = new mongoose.Schema({
     revision: { type: Number, required: true },
     requirements: { type: [requirementSchema], required: true },
   }],
+  importContentFingerprint: { type: String, default: null, select: false },
+  importSourceVersion: { type: String, default: null, maxlength: 200, select: false },
+  importScope: { type: String, default: null, maxlength: 200, select: false },
+  lastSeenImportAt: { type: Date, default: null, select: false },
+  lastSeenImportBatchId: { type: String, default: null, maxlength: 200, select: false },
+  importReconciliationReviewRequired: { type: Boolean, default: false, select: false },
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
@@ -131,6 +137,12 @@ vacancySchema.set('toJSON', {
     delete result.importMappingAudit;
     delete result.statusHistory;
     delete result.requirementsHistory;
+    delete result.importContentFingerprint;
+    delete result.importSourceVersion;
+    delete result.importScope;
+    delete result.lastSeenImportAt;
+    delete result.lastSeenImportBatchId;
+    delete result.importReconciliationReviewRequired;
     return result;
   },
 });

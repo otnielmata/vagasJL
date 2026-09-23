@@ -12,7 +12,7 @@ function invalid() {
   throw new ApiError(400, 'Procedencia da vaga invalida');
 }
 
-async function registerImportedVacancy(provenance, input) {
+async function prepareImportedVacancyData(provenance, input) {
   if (input?.matchProfile?.requirements !== undefined) invalid();
   if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance) ||
       Object.keys(provenance).length !== 2 ||
@@ -93,13 +93,8 @@ async function registerImportedVacancy(provenance, input) {
     importImportance = { version: configuration.version, importance: configuration.importance,
       appliedAt };
   }
-  await Vacancy.init();
-  if (await Vacancy.findOne({ origin: 'IMPORTED', importSource, importSourceId })) {
-    throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');
-  }
-  try {
-    return await Vacancy.create({
-      ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
+  return {
+    ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
       importImportance,
       ...(importImportance ? { requirementsRevision: 1, requirementsHistory: [{
         at: importImportance.appliedAt, actor: null, process: 'import',
@@ -109,7 +104,18 @@ async function registerImportedVacancy(provenance, input) {
       importMappingAudit: { unknownLevel, legacyAi: legacyAiMigrationAudit,
         rawLocation: typeof input.location === 'string' ? input.location.slice(0, 2000) : null,
         rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
-    });
+  };
+}
+
+async function registerImportedVacancy(provenance, input) {
+  const data = await prepareImportedVacancyData(provenance, input);
+  await Vacancy.init();
+  if (await Vacancy.findOne({ origin: 'IMPORTED', importSource: data.importSource,
+    importSourceId: data.importSourceId })) {
+    throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');
+  }
+  try {
+    return await Vacancy.create(data);
   } catch (error) {
     if (error.code === 11000) throw new ApiError(409, 'Vaga importada ja registrada para esta fonte');
     if (error.name === 'ValidationError' || error.name === 'CastError' || error.name === 'StrictModeError') {
@@ -165,4 +171,5 @@ function assessVacancyForMatch(vacancy, now = new Date()) {
   };
 }
 
-module.exports = { registerImportedVacancy, registerAdminVacancy, assessVacancyForMatch };
+module.exports = { registerImportedVacancy, prepareImportedVacancyData,
+  registerAdminVacancy, assessVacancyForMatch };
