@@ -697,6 +697,31 @@ de validação ou persistência não confirma uma vaga sem auditoria. Os diagnó
 sem propagar o JSON bruto. Esta história não cria endpoint agregado nem transforma o JSON legado;
 ela estabelece as fronteiras consumidas pela camada de compatibilidade da VJ-83.
 
+## Compatibilidade com JSON legado — VJ-83
+
+A importação existente aplica o transformador versionado `LEGACY_V1` antes de chamar os serviços
+do domínio. Não existe endpoint, modelo ou coleção paralela para o formato antigo. O mapeamento
+temporário aceito exclusivamente nessa fronteira é:
+
+| Campo legado | Campo canônico |
+| --- | --- |
+| `testAutomationTecnologies` | `testAutomationTechnologies` |
+| `tecnologies` | `qaTools` |
+| `technologies` | `qaTools` |
+| `especialization` | `specialization` |
+
+Os valores passam pelo Catálogo Mestre publicado e são convertidos para IDs canônicos antes da
+persistência. Se campos canônico e legado estiverem presentes com o mesmo conjunto, os valores são
+consolidados sem duplicação; conjuntos divergentes retornam erro de validação e não são escolhidos
+silenciosamente. Campos técnicos desconhecidos continuam rejeitados e aparecem apenas como código
+e etapa seguros no diagnóstico do lote.
+
+A auditoria privada da vaga registra versão da transformação, aliases encontrados, origem e
+identificador externo. Ela não guarda os valores recebidos nem aparece nas respostas. Modelos,
+configurações, banco, Match, Swagger e respostas utilizam somente `testAutomationTechnologies`,
+`qaTools` e `specialization`. Reprocessar o mesmo conteúdo e versão produz a mesma representação e
+a conciliação existente impede vagas ou competências duplicadas.
+
 ## Multiplicadores do Match — VJ-52
 
 Antes de calcular novos rankings, um administrador ativo deve publicar os
@@ -796,11 +821,10 @@ evento de migração é anexado ao histórico de auditoria.
 
 ## Ferramentas de QA e Gestão de Testes — VJ-61
 
-O campo técnico continua persistido como `tecnologies` para preservar perfis,
-vagas e configurações existentes. Sua configuração agora aceita o metadado
-opcional `label`; a proposta usa **“Ferramentas de QA e Gestão de Testes”**.
-Esse nome é somente de apresentação e não renomeia a chave no MongoDB nem no
-contrato atual. Para gerar **uma proposta sem publicar automaticamente**,
+O campo técnico é persistido como `qaTools`; `tecnologies` e `technologies` são aceitos somente
+na fronteira temporária de importação para preservar a compatibilidade do JSON legado. Sua
+configuração aceita o metadado opcional `label`; a proposta usa **“Ferramentas de QA e Gestão de
+Testes”**. Esse nome é somente de apresentação. Para gerar **uma proposta sem publicar automaticamente**,
 execute `npm run match:qa-management-proposal`.
 
 A proposta contém TestRail, Xray, Zephyr, Azure DevOps, TestLink, qTest e HP
@@ -817,7 +841,7 @@ label do campo cria uma nova configuração, mas não regrava perfis anteriores
 nem modifica seus IDs ou sua versão. Alias ambíguo é recusado (**409**) e
 texto livre não publicado retorna **400** sem criar competência.
 
-`tecnologies` e `testAutomationTechnologies` permanecem catálogos separados.
+`qaTools` e `testAutomationTechnologies` permanecem catálogos separados.
 A configuração recusa nomes, labels ou aliases sobrepostos entre eles, para
 evitar pontuação dupla sem decisão explícita de produto e migração. Nenhuma
 rota nova foi adicionada.
@@ -1154,13 +1178,13 @@ diferença de caixa, acento ou espaços. Por exemplo, `Cypress`, `cypress`, `Cyp
 | `higherEducationDegree` | 3 | `english` | 7 |
 | `spanish` | 3 | `yearsOfExperience` | 9 |
 | `continuousIntegration` | 6 | `certification` | 2 |
-| `testAutomationTechnologies` | 10 | `tecnologies` | 5 |
+| `testAutomationTechnologies` | 10 | `qaTools` | 5 |
 | `programmingLanguages` | 9 | `genAITools` | 5 |
 | `level` | 10 | `classification` | 3 |
 | `role` | 5 | `specialization` | 7 |
 
-A grafia `tecnologies` segue o anexo original; alterá-la depois exige migração deliberada. O
-objeto de pesos iniciais está em `src/config/match-profile.js`. Para gerar um corpo inicial sem
+A grafia canônica `qaTools` substitui o nome legado `tecnologies`. O objeto de pesos iniciais está
+em `src/config/match-profile.js`. Para gerar um corpo inicial sem
 inventar opções de catálogo:
 
 ```bash

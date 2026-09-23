@@ -7,6 +7,7 @@ const { INITIAL_MATCH_WEIGHTS, isUnknownSeniority, isUnidentifiedModality } = re
 const ApiError = require('../errors/api.error');
 const { getEffectiveMatchEngineConfiguration } =
   require('./match-engine-configuration.service');
+const { transformLegacyVacancyInput } = require('./legacy-vacancy-compatibility.service');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
@@ -26,6 +27,8 @@ async function prepareImportedVacancyData(provenance, input) {
       provenance.sourceId.trim().length > 200) invalid();
   const importSource = provenance.source.trim().toLowerCase();
   const importSourceId = provenance.sourceId.trim();
+  const transformation = await transformLegacyVacancyInput(input);
+  input = transformation.content;
   const rawValues = input?.matchProfile?.values;
   const identified = [];
   let unknownLevel = false;
@@ -71,7 +74,7 @@ async function prepareImportedVacancyData(provenance, input) {
             (value === undefined || Array.isArray(value) && !value.length))))
       : preparedValues } };
   const preparedContent = await prepareVacancyContent(mappedInput,
-    { allowUnidentified: true, allowLegacyAi: true });
+    { allowUnidentified: true, allowLegacyAi: true }, transformation.configuration);
   const { legacyAiMigrationAudit, ...content } = preparedContent;
   for (const entry of legacyAiMigrationAudit?.entries || []) {
     if (entry.status === 'mapped') identified.push({ field: 'genAITools', id: entry.canonicalId });
@@ -111,6 +114,7 @@ async function prepareImportedVacancyData(provenance, input) {
         revision: 1, requirements: content.matchProfile.requirements,
       }] } : {}),
       importMappingAudit: { unknownLevel, legacyAi: legacyAiMigrationAudit,
+        compatibility: transformation.audit,
         rawLocation: typeof input.location === 'string' ? input.location.slice(0, 2000) : null,
         rawFalseValues: rawFalseFields.map((field) => ({ field, value: false })) },
   };

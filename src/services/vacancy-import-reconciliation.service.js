@@ -47,7 +47,14 @@ function comparableField(field, value) {
     return { version: comparable.version, importance: comparable.importance };
   }
   if (field === 'importMappingAudit' && comparable?.legacyAi) {
-    return { ...comparable, legacyAi: { ...comparable.legacyAi, at: undefined } };
+    const normalized = { ...comparable, legacyAi: { ...comparable.legacyAi, at: undefined } };
+    if (normalized.compatibility == null) delete normalized.compatibility;
+    return normalized;
+  }
+  if (field === 'importMappingAudit' && comparable?.compatibility == null) {
+    const normalized = { ...comparable };
+    delete normalized.compatibility;
+    return normalized;
   }
   return comparable;
 }

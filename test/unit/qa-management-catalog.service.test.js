@@ -17,7 +17,7 @@ const { calculateCompetencyMatch } = require('../../src/services/match-scoring.s
 const admin = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'admin' };
 const candidate = { id: '6512f1e2b3a1c2d3e4f5a6b8', role: 'candidate' };
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b9';
-const field = 'tecnologies';
+const field = 'qaTools';
 
 function proposal() {
   return { fields: Object.fromEntries(Object.entries(INITIAL_MATCH_WEIGHTS).map(([key, weight]) =>
@@ -38,7 +38,7 @@ function setup(context) {
   return { create, get current() { return current; } };
 }
 
-test('existing tecnologies key exposes the clear presentation label without renaming storage', async (context) => {
+test('canonical qaTools key exposes the clear presentation label', async (context) => {
   setup(context);
   const response = { status(code) { this.code = code; return this; },
     json(body) { this.body = body; return this; } };
@@ -46,8 +46,9 @@ test('existing tecnologies key exposes the clear presentation label without rena
     () => assert.fail('Publicacao valida nao deve falhar'));
   assert.equal(response.code, 200);
   const metadata = response.body.configuration.fields.find((item) => item.key === field);
-  assert.equal(metadata.key, 'tecnologies');
+  assert.equal(metadata.key, 'qaTools');
   assert.equal(metadata.label, QA_MANAGEMENT_FIELD_LABEL);
+  assert.equal(Object.hasOwn(response.body.configuration.fields[0], 'tecnologies'), false);
   assert.equal(Object.hasOwn(response.body.configuration.fields[0], 'technologies'), false);
 });
 

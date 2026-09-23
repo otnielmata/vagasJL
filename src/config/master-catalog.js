@@ -1,7 +1,7 @@
 const CATEGORY_FIELDS = Object.freeze({
   competency: 'classification',
   test_automation: 'testAutomationTechnologies',
-  qa_tool: 'tecnologies',
+  qa_tool: 'qaTools',
   ai_tool: 'genAITools',
   programming_language: 'programmingLanguages',
   role: 'role',

@@ -33,6 +33,18 @@ const geographicRestrictionSchema = new mongoose.Schema(Object.fromEntries(DIMEN
 const importMappingAuditSchema = new mongoose.Schema({
   unknownLevel: { type: Boolean, default: false },
   rawLocation: { type: String, default: null, maxlength: 2000 },
+  compatibility: { type: new mongoose.Schema({
+    version: { type: String, required: true, enum: ['LEGACY_V1'] },
+    sourceFields: { type: [String], required: true,
+      enum: ['testAutomationTecnologies', 'tecnologies', 'technologies', 'especialization'] },
+    warnings: { type: [{
+      code: { type: String, required: true, enum: ['DEPRECATED_FIELD'] },
+      sourceField: { type: String, required: true,
+        enum: ['testAutomationTecnologies', 'tecnologies', 'technologies', 'especialization'] },
+      targetField: { type: String, required: true,
+        enum: ['testAutomationTechnologies', 'qaTools', 'specialization'] },
+    }], required: true },
+  }, { _id: false }), default: null },
   legacyAi: { type: new mongoose.Schema({
     at: { type: Date, required: true },
     sourceField: { type: String, required: true, enum: ['genAITecnologies'] },

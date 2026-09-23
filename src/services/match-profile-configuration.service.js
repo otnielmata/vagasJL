@@ -86,7 +86,7 @@ function assertSeparateQaCatalogs(fields) {
   const byKey = new Map(fields.map((field) => [field.key, field]));
   const automationNames = new Set(byKey.get('testAutomationTechnologies').options.flatMap((option) =>
     [option.id, option.label, ...option.aliases].map(normalizeAlias)));
-  const overlap = byKey.get('tecnologies').options.some((option) =>
+  const overlap = byKey.get('qaTools').options.some((option) =>
     [option.id, option.label, ...option.aliases].some((name) => automationNames.has(normalizeAlias(name))));
   if (overlap) {
     throw new ApiError(409, 'Ferramenta exige decisao de catalogo antes da publicacao');

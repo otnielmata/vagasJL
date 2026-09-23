@@ -14,7 +14,7 @@ const INITIAL_MATCH_WEIGHTS = Object.freeze({
   continuousIntegration: 6,
   certification: 2,
   testAutomationTechnologies: 10,
-  tecnologies: 5,
+  qaTools: 5,
   programmingLanguages: 9,
   genAITools: 5,
   level: 10,

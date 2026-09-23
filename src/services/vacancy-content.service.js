@@ -118,9 +118,9 @@ function normalizeValues(input, configuration) {
   return values;
 }
 
-async function prepareVacancyContent(input, options) {
+async function prepareVacancyContent(input, options, publishedConfiguration = null) {
   const data = normalizeVacancyInput(input, options);
-  const configuration = await Configuration.findOne().sort({ version: -1 });
+  const configuration = publishedConfiguration || await Configuration.findOne().sort({ version: -1 });
   if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match nao publicada');
   const migration = options?.allowLegacyAi
     ? migrateLegacyAiValues(data.values, configuration) : { values: data.values, audit: null };
