@@ -12,6 +12,7 @@ const matchEvaluationSchema = new mongoose.Schema({
     profileCatalog: { type: Number, required: true, min: 1, immutable: true },
     multipliers: { type: Number, required: true, min: 1, immutable: true },
     rankingThreshold: { type: Number, default: null, min: 1, immutable: true },
+    completionThreshold: { type: Number, default: null, min: 1, immutable: true },
   },
   inputRevisions: {
     vacancyRequirements: { type: Number, required: true, min: 0, immutable: true },

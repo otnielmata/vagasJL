@@ -16,6 +16,8 @@ const matchProfileConfigurationRoutes = require('./routes/match-profile-configur
 const importImportanceConfigurationRoutes = require('./routes/import-importance-configuration.routes');
 const matchMultipliersConfigurationRoutes = require('./routes/match-multipliers-configuration.routes');
 const rankingThresholdConfigurationRoutes = require('./routes/ranking-threshold-configuration.routes');
+const profileCompletionThresholdConfigurationRoutes =
+  require('./routes/profile-completion-threshold-configuration.routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
@@ -47,6 +49,7 @@ app.use('/perfil-match', matchProfileConfigurationRoutes);
 app.use('/configuracoes', importImportanceConfigurationRoutes);
 app.use('/configuracoes', matchMultipliersConfigurationRoutes);
 app.use('/configuracoes', rankingThresholdConfigurationRoutes);
+app.use('/configuracoes', profileCompletionThresholdConfigurationRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({

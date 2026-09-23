@@ -31,6 +31,7 @@ function auditData(input) {
   const profileCatalog = input.versions?.profileCatalog;
   const multipliers = input.versions?.multipliers;
   const rankingThreshold = input.versions?.rankingThreshold ?? null;
+  const completionThreshold = input.versions?.completionThreshold ?? null;
   const vacancyRequirements = input.vacancy?.requirementsRevision ?? 0;
   const candidateProfile = input.profile ? input.profile.revision ?? 1 : null;
   const status = input.score?.calculationStatus;
@@ -46,6 +47,7 @@ function auditData(input) {
       !Number.isSafeInteger(profileCatalog) || profileCatalog < 1 ||
       !Number.isSafeInteger(multipliers) || multipliers < 1 ||
       (rankingThreshold !== null && (!Number.isSafeInteger(rankingThreshold) || rankingThreshold < 1)) ||
+      (completionThreshold !== null && (!Number.isSafeInteger(completionThreshold) || completionThreshold < 1)) ||
       !Number.isSafeInteger(vacancyRequirements) || vacancyRequirements < 0 ||
       (candidateProfile !== null && (!Number.isSafeInteger(candidateProfile) || candidateProfile < 1)) ||
       !['calculable', 'not_calculable'].includes(status) || !validCalculatedScore) {
@@ -53,7 +55,8 @@ function auditData(input) {
   }
   const eligibility = input.eligibility || input.score.eligibility || { eligible: null, reason: null };
   return { candidate, vacancy, executionId: executionId.trim(), cause: input.cause, calculatedAt,
-    algorithmVersion, configurationVersions: { profileCatalog, multipliers, rankingThreshold },
+    algorithmVersion, configurationVersions: { profileCatalog, multipliers, rankingThreshold,
+      completionThreshold },
     inputRevisions: { vacancyRequirements, vacancyUpdatedAt, candidateProfile,
       candidateProfileUpdatedAt: profileUpdatedAt }, calculationStatus: status,
     percentage: calculable ? input.score.percentage : null,

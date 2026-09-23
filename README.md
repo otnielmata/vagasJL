@@ -188,6 +188,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
+| PUT    | `/configuracoes/match/completude-minima` | Admin (Bearer) | Publica completude mínima para recomendações (VJ-73) |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |
@@ -1149,6 +1150,26 @@ campos derivados ou internos como `hasGenAI` e `amountOfGenAITools` não entram 
 como pendência. `false`, zero e lista vazia contam como respondidos, mas não inventam uma
 competência. A completude não modifica o score técnico e 100% preenchido não significa Match
 de 100%. Empresas não recebem respostas desconhecidas por esse endpoint.
+
+### Completude mínima para recomendações — VJ-73
+
+`PUT /configuracoes/match/completude-minima` permite ao administrador publicar
+`{"minimumPercentage":70}`. O percentual aceita valores de 0 a 100, inclusive, com até duas
+casas decimais. A resposta informa `version`, `author` e `effectiveAt`; repetir o valor vigente
+é idempotente. A publicação é atômica e valores inválidos ou atores sem permissão não alteram
+a configuração anterior. Sem configuração publicada, nenhum bloqueio implícito é aplicado.
+
+Antes de consultar e pontuar vagas, `GET /candidatos/me/vagas/ranking` compara a completude
+atual com o mínimo vigente. Abaixo dele, retorna
+`recommendationStatus: "insufficient_profile_completeness"`, a completude atual, o mínimo,
+a versão e `pendingFields`; `items` não é enviado, evitando confundir perfil insuficiente com
+zero vagas encontradas. No mínimo ou acima, retorna `recommendationStatus: "available"` e
+calcula o ranking normalmente. `false` e lista vazia continuam respostas válidas; `UNKNOWN`
+continua pendente.
+
+O limiar não muda score, pesos, critérios eliminatórios, status cadastral nem a possibilidade
+de editar o perfil. Cálculos liberados registram a versão de completude vigente na auditoria;
+resultados históricos não são reinterpretados quando uma nova versão é publicada.
 
 ### Cadastro de candidato — VJ-22
 

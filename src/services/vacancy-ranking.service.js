@@ -10,6 +10,9 @@ const { scorePair, compareRankingRows } = require('./match-ranking.service');
 const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
 const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
+const { completionFor } = require('./candidate-match-profile.service');
+const { getPublishedProfileCompletionThreshold, meetsProfileCompletionThreshold } =
+  require('./profile-completion-threshold-configuration.service');
 const ApiError = require('../errors/api.error');
 
 function pagination(query = {}) {
@@ -35,6 +38,21 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
   const profile = await CandidateMatchProfile.findOne({ candidate: candidate._id,
     deletedAt: null }).select('values configurationVersion revision updatedAt');
   if (!profile) throw new ApiError(409, 'Cadastre o Perfil de Match antes de consultar o ranking');
+  const completionConfiguration = await Configuration.findOne({ version: profile.configurationVersion });
+  if (!completionConfiguration) {
+    throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel para completude');
+  }
+  const completion = completionFor(profile, completionConfiguration);
+  const completionThreshold = await getPublishedProfileCompletionThreshold();
+  if (!meetsProfileCompletionThreshold(completion, completionThreshold)) {
+    return { recommendationStatus: 'insufficient_profile_completeness',
+      profileCompletion: { percentage: completion.percentage,
+        answeredFields: completion.answeredFields,
+        totalEligibleFields: completion.totalEligibleFields,
+        pendingFields: completion.pendingFields },
+      minimumProfileCompletionPercentage: completionThreshold.minimumPercentage,
+      completionThresholdVersion: completionThreshold.version };
+  }
 
   const vacancies = await Vacancy.find({ status: 'active', deletedAt: null,
     $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
@@ -67,7 +85,8 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
       cause: 'candidate_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
       versions: { profileCatalog: vacancy.matchProfile.configurationVersion,
         multipliers: matchConfiguration.version,
-        rankingThreshold: rankingThreshold?.version ?? null } });
+        rankingThreshold: rankingThreshold?.version ?? null,
+        completionThreshold: completionThreshold?.version ?? null } });
     const item = { vacancy: vacancy.toJSON(), percentage: score.percentage,
       earnedPoints: score.earnedPoints, possiblePoints: score.possiblePoints,
       matchedRequiredCount: score.matchedRequiredCount,
@@ -79,9 +98,16 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
   }))).filter((row) => row.eligible);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
-  return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
+  return { recommendationStatus: 'available',
+    profileCompletion: { percentage: completion.percentage,
+      answeredFields: completion.answeredFields,
+      totalEligibleFields: completion.totalEligibleFields,
+      pendingFields: completion.pendingFields },
+    items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
     total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
     rankingThresholdVersion: rankingThreshold?.version ?? null,
+    minimumProfileCompletionPercentage: completionThreshold?.minimumPercentage ?? null,
+    completionThresholdVersion: completionThreshold?.version ?? null,
     pages: Math.ceil(total / limit) };
 }
 

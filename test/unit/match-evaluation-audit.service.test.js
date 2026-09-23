@@ -34,7 +34,7 @@ test('records calculable result with algorithm, configuration versions and input
   assert.equal(audit.algorithmVersion, 'MATCH_V1');
   assert.equal(MATCH_ALGORITHM_VERSION, 'MATCH_V1');
   assert.deepEqual(audit.configurationVersions,
-    { profileCatalog: 7, multipliers: 2, rankingThreshold: 3 });
+    { profileCatalog: 7, multipliers: 2, rankingThreshold: 3, completionThreshold: null });
   const [filter, update, options] = writes.mock.calls[0].arguments;
   assert.equal(filter.executionId, 'run-123');
   assert.equal(filter['inputRevisions.vacancyRequirements'], 4);

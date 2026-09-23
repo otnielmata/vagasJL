@@ -131,6 +131,52 @@ paths:
         '401': { description: JWT ausente ou invalido }
         '403': { description: Sem permissao administrativa }
         '409': { description: Publicacao concorrente de outro limiar }
+  /configuracoes/match/completude-minima:
+    put:
+      tags: [Match Profile]
+      summary: Publica completude minima versionada para recomendacoes (VJ-73)
+      description: >
+        Apenas administrador autenticado. Aceita percentual de 0 a 100 com ate duas
+        casas decimais. Repetir o valor vigente nao cria versao. Sem publicacao, a
+        recomendacao nao recebe bloqueio arbitrario de completude.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minimumPercentage]
+              additionalProperties: false
+              properties:
+                minimumPercentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  multipleOf: 0.01
+                  example: 70
+      responses:
+        '200':
+          description: Completude minima publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, minimumPercentage, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      minimumPercentage: { type: number, minimum: 0, maximum: 100 }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Percentual ou corpo invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra configuracao }
   /configuracoes/importacao/importancia-padrao:
     put:
       tags: [Match Profile]
@@ -183,7 +229,9 @@ paths:
         limit aceita Top 3, Top 5 e Top 10. Depois dos filtros, ordena por percentual,
         requisitos obrigatorios atendidos, atualizacao da vaga e ID estavel. Engajamento
         nao altera o ranking tecnico. Se houver limiar publicado, aplica corte inclusivo
-        sobre o percentual bruto antes da ordenacao, total e paginacao.
+        sobre o percentual bruto antes da ordenacao, total e paginacao. Antes de consultar
+        vagas, aplica a completude minima vigente. Perfil insuficiente recebe estado e
+        pendencias explicitos, sem lista vazia ambigua e sem calcular novos Matches.
       security:
         - bearerAuth: []
       parameters:
@@ -200,10 +248,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, page, limit, pages, minimumMatchPercentage, rankingThresholdVersion]
+                required: [recommendationStatus, profileCompletion, minimumProfileCompletionPercentage, completionThresholdVersion]
                 properties:
+                  recommendationStatus:
+                    type: string
+                    enum: [available, insufficient_profile_completeness]
+                  profileCompletion:
+                    $ref: '#/components/schemas/RecommendationProfileCompletion'
                   items:
                     type: array
+                    description: Presente somente quando recommendationStatus e available.
                     items:
                       type: object
                       required: [vacancy, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion, audit]
@@ -222,12 +276,14 @@ paths:
                   pages: { type: integer, minimum: 0 }
                   minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
                   rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
+                  minimumProfileCompletionPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  completionThresholdVersion: { type: integer, minimum: 1, nullable: true }
         '400': { description: Paginacao invalida }
         '401': { description: JWT ausente ou invalido }
         '403': { description: Conta nao e candidata }
         '404': { description: Cadastro de candidato inexistente }
         '409': { description: Perfil de Match nao cadastrado }
-        '503': { description: Configuracao tecnica indisponivel }
+        '503': { description: Configuracao tecnica ou de completude indisponivel }
   /candidatos/me/vagas/{id}/match:
     get:
       tags: [Vacancies]
@@ -1980,12 +2036,13 @@ components:
         calculatedAt: { type: string, format: date-time }
         configurationVersions:
           type: object
-          required: [profileCatalog, multipliers, rankingThreshold]
+          required: [profileCatalog, multipliers, rankingThreshold, completionThreshold]
           additionalProperties: false
           properties:
             profileCatalog: { type: integer, minimum: 1, example: 3 }
             multipliers: { type: integer, minimum: 1, example: 2 }
             rankingThreshold: { type: integer, minimum: 1, nullable: true, example: 4 }
+            completionThreshold: { type: integer, minimum: 1, nullable: true, example: 2 }
         inputRevisions:
           type: object
           required: [vacancyRequirements, vacancyUpdatedAt, candidateProfile, candidateProfileUpdatedAt]
@@ -2456,6 +2513,17 @@ components:
         percentage: { type: number, minimum: 0, maximum: 100 }
         answeredFields: { type: integer, minimum: 0 }
         totalEligibleFields: { type: integer, minimum: 0 }
+    RecommendationProfileCompletion:
+      type: object
+      required: [percentage, answeredFields, totalEligibleFields, pendingFields]
+      additionalProperties: false
+      properties:
+        percentage: { type: number, minimum: 0, maximum: 100 }
+        answeredFields: { type: integer, minimum: 0 }
+        totalEligibleFields: { type: integer, minimum: 0 }
+        pendingFields:
+          type: array
+          items: { type: string }
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]

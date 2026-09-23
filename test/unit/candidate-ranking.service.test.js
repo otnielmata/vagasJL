@@ -10,6 +10,8 @@ const Configuration = require('../../src/models/match-profile-configuration.mode
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
+const ProfileCompletionThresholdConfiguration =
+  require('../../src/models/profile-completion-threshold-configuration.model');
 const User = require('../../src/models/user.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
@@ -55,6 +57,9 @@ function setup(context, currentVacancy = vacancy()) {
   const thresholdState = { current: null };
   context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
     sort: async () => thresholdState.current,
+  }));
+  context.mock.method(ProfileCompletionThresholdConfiguration, 'findOne', () => ({
+    sort: async () => null,
   }));
   const vacancyLookup = { select: async () => currentVacancy };
   context.mock.method(Vacancy, 'findById', () => vacancyLookup);

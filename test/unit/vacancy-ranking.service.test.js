@@ -9,6 +9,8 @@ const Configuration = require('../../src/models/match-profile-configuration.mode
 const MatchMultipliersConfiguration = require('../../src/models/match-multipliers-configuration.model');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
 const RankingThresholdConfiguration = require('../../src/models/ranking-threshold-configuration.model');
+const ProfileCompletionThresholdConfiguration =
+  require('../../src/models/profile-completion-threshold-configuration.model');
 const Vacancy = require('../../src/models/vacancy.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { rankVacancies } = require('../../src/services/vacancy-ranking.service');
@@ -43,6 +45,10 @@ function setup(context, vacancies) {
   context.mock.method(RankingThresholdConfiguration, 'findOne', () => ({
     sort: async () => thresholdState.current,
   }));
+  const completionThresholdState = { current: null };
+  context.mock.method(ProfileCompletionThresholdConfiguration, 'findOne', () => ({
+    sort: async () => completionThresholdState.current,
+  }));
   const candidateQuery = { select: async () => ({ _id: actor.id }) };
   context.mock.method(Candidate, 'findOne', () => candidateQuery);
   const profileQuery = { select: async () => ({ values: { type: ['remote'] },
@@ -59,8 +65,12 @@ function setup(context, vacancies) {
         { id: 'hybrid', label: 'Hibrido', aliases: [] }] : [],
   })) };
   const findConfigurations = context.mock.method(Configuration, 'find', async () => [configuration]);
+  const findCompletionConfiguration = context.mock.method(Configuration, 'findOne', async (filter) => {
+    assert.deepEqual(filter, { version: 1 });
+    return configuration;
+  });
   return { findVacancies, findCompanies, findConfigurations, candidateQuery, profileQuery,
-    companyQuery, thresholdState };
+    companyQuery, thresholdState, completionThresholdState, findCompletionConfiguration };
 }
 
 test('filters active unexpired vacancies before scoring and paginates only eligible rows', async (context) => {
@@ -74,11 +84,43 @@ test('filters active unexpired vacancies before scoring and paginates only eligi
   assert.equal(result.pages, 2);
   assert.equal(result.minimumMatchPercentage, null);
   assert.equal(result.rankingThresholdVersion, null);
+  assert.equal(result.recommendationStatus, 'available');
+  assert.equal(result.profileCompletion.percentage, 50);
+  assert.equal(result.minimumProfileCompletionPercentage, null);
   assert.equal(result.items.length, 1);
   assert.deepEqual(result.items.map((item) => item.vacancy._id), ['c']);
   assert.equal(findVacancies.mock.calls[0].arguments[0].status, 'active');
   assert.deepEqual(findVacancies.mock.calls[0].arguments[0].$or,
     [{ expiresAt: null }, { expiresAt: { $gt: now } }]);
+});
+
+test('returns explicit insufficient profile state before querying or scoring vacancies', async (context) => {
+  const { completionThresholdState, findVacancies } = setup(context, [vacancy('a', 'ADMIN')]);
+  completionThresholdState.current = { version: 2, minimumPercentage: 70,
+    effectiveAt: new Date('2026-09-17T10:00:00Z') };
+  const result = await rankVacancies(actor, {}, now);
+  assert.deepEqual(result, {
+    recommendationStatus: 'insufficient_profile_completeness',
+    profileCompletion: { percentage: 50, answeredFields: 1, totalEligibleFields: 2,
+      pendingFields: ['yearsOfExperience'] },
+    minimumProfileCompletionPercentage: 70,
+    completionThresholdVersion: 2,
+  });
+  assert.equal(Object.hasOwn(result, 'items'), false);
+  assert.equal(findVacancies.mock.callCount(), 0);
+});
+
+test('profile exactly at minimum proceeds without changing technical score', async (context) => {
+  const { completionThresholdState } = setup(context, [vacancy('a', 'ADMIN')]);
+  completionThresholdState.current = { version: 3, minimumPercentage: 50,
+    effectiveAt: new Date('2026-09-17T10:00:00Z') };
+  const result = await rankVacancies(actor, {}, now);
+  assert.equal(result.recommendationStatus, 'available');
+  assert.equal(result.profileCompletion.percentage, 50);
+  assert.equal(result.minimumProfileCompletionPercentage, 50);
+  assert.equal(result.completionThresholdVersion, 3);
+  assert.equal(result.items[0].percentage, 100);
+  assert.equal(result.items[0].audit.configurationVersions.completionThreshold, 3);
 });
 
 test('equivalent technical requirements score identically across all three origins', async (context) => {
