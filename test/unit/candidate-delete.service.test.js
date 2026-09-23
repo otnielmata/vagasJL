@@ -67,6 +67,12 @@ for (const status of [
     const [filter, operation, options] = update.mock.calls[0].arguments;
     assert.equal(operation.$set.status, CANDIDATE_STATUS.INACTIVE);
     assert.equal(operation.$set.deletedAt, state.candidate.deletedAt);
+    assert.equal(operation.$set['publicProfile.enabled'], false);
+    assert.deepEqual(operation.$set['publicProfile.fields'], []);
+    assert.equal(operation.$set['publicProfile.revokedAt'], state.candidate.deletedAt);
+    assert.equal(operation.$inc['publicProfile.cacheVersion'], 1);
+    assert.equal(operation.$push.publicProfileConsentHistory.action, 'candidate_deleted');
+    assert.equal(operation.$push.publicProfileConsentHistory.actor, ownerId.toUpperCase());
     assert.deepEqual(options, { new: true, runValidators: true });
     assert.equal(Object.prototype.hasOwnProperty.call(filter, 'email'), false);
     assert.deepEqual(state.user, { _id: ownerId, email: 'maria@example.com', status: 'active' });

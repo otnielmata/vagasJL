@@ -475,7 +475,22 @@ async function deleteCandidate(candidateId, requesterId, requesterRole) {
       status: { $in: DELETABLE_CANDIDATE_STATUSES },
       deletedAt: null,
     },
-    { $set: { status: CANDIDATE_STATUS.INACTIVE, deletedAt } },
+    {
+      $set: {
+        status: CANDIDATE_STATUS.INACTIVE,
+        deletedAt,
+        'publicProfile.enabled': false,
+        'publicProfile.fields': [],
+        'publicProfile.revokedAt': deletedAt,
+        'publicProfile.cacheInvalidatedAt': deletedAt,
+      },
+      $inc: { 'publicProfile.cacheVersion': 1 },
+      $push: {
+        publicProfileConsentHistory: {
+          action: 'candidate_deleted', fields: [], actor: requesterId, changedAt: deletedAt,
+        },
+      },
+    },
     { new: true, runValidators: true }
   );
   if (!deleted) throw new ApiError(404, 'Candidato nao encontrado');

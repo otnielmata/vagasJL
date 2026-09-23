@@ -1171,6 +1171,50 @@ O limiar não muda score, pesos, critérios eliminatórios, status cadastral nem
 de editar o perfil. Cálculos liberados registram a versão de completude vigente na auditoria;
 resultados históricos não são reinterpretados quando uma nova versão é publicada.
 
+### Consentimento do perfil profissional público — VJ-74
+
+`PATCH /candidatos/me/perfil-publico` permite ao candidato ativo registrar ou revogar o
+consentimento para uma futura publicação do perfil. O cadastro nasce privado e nenhum cadastro,
+validação, ativação ou preenchimento do Perfil de Match implica autorização automática. Para
+habilitar, envie uma lista sem duplicidades com cada campo autorizado:
+
+```json
+{
+  "enabled": true,
+  "fields": [
+    "name",
+    "professionalSummary",
+    "githubUrl",
+    "matchProfile.apiTesting",
+    "formation.projects"
+  ]
+}
+```
+
+Dados cadastrais permitidos são nome, foto, localização, apresentação e links profissionais.
+Competências podem ser autorizadas individualmente com o prefixo `matchProfile.`. Dados oficiais
+da formação usam o prefixo `formation.` e ainda são filtrados pelas permissões da fonte VJ-67;
+o consentimento do candidato nunca amplia essa autorização. E-mail, telefone, comprovantes de
+compra, identificadores sensíveis e históricos internos não pertencem à lista permitida.
+
+Para revogar imediatamente a exposição futura, envie:
+
+```json
+{ "enabled": false }
+```
+
+Cada opt-in, alteração de campos, revogação e exclusão lógica gera um registro privado de
+auditoria. A resposta informa as datas de consentimento/revogação, os campos selecionados, os
+campos atualmente efetivos e uma versão de cache incrementada; a revogação e a exclusão também
+marcam a invalidação de cache. O histórico não é retornado. A exclusão do candidato força a
+revogação na mesma atualização atômica.
+
+A publicação é independente de `availability`: habilitar o perfil não torna o candidato
+disponível para empresas, e indisponibilidade não revoga por si só a autorização pública. Esta
+história deliberadamente **não cria endpoint público de leitura, página, slug, URL indexável nem
+política de retenção de link**. Esses itens devem ser definidos pelo produto antes da exposição;
+até lá, a API oferece apenas o controle autenticado de consentimento.
+
 ### Cadastro de candidato — VJ-22
 
 `POST /candidatos` exige JWT válido e uma conta existente, ativa e com papel `candidate`.
@@ -1413,7 +1457,8 @@ ObjectId e não precisa de corpo. O titular pode excluir somente o próprio cada
 `deletedAt` na mesma atualização atômica e retorna **204 sem corpo**. O campo de auditoria é
 privado e não aparece nas respostas.
 
-A exclusão remove imediatamente o candidato das consultas de empresas e dos futuros fluxos de
+A exclusão remove imediatamente o candidato das consultas de empresas, revoga qualquer
+consentimento de perfil público e o remove dos futuros fluxos de
 busca e match, pois todos usam apenas `status: active`. A conta em `users`, suas credenciais e o
 registro administrativo em `authorized_students` são preservados. O e-mail deixa de contar para
 a unicidade de candidato ativo e o índice do cadastro atual é liberado; um novo cadastro recebe
@@ -1583,6 +1628,18 @@ Confira também e-mail duplicado, senha incorreta, tentativa de `role: admin` e 
 Após `npm install`, execute `npm test`. A suíte usa `node:test` e mocks das dependências de
 persistência, sem iniciar a API, abrir portas HTTP ou conectar a um MongoDB. Não depende de
 um `.env`: os testes que precisam de configuração usam valores temporários de teste.
+
+| Critério da VJ-74 | Cobertura unitária |
+| --- | --- |
+| Perfil privado por padrão e sem rota pública de leitura | Model, serialização e inspeção das rotas |
+| Opt-in explícito somente por candidato ativo | Middleware, autorização da rota e service |
+| Seleção individual por lista permitida | Configuração, validação defensiva e snapshot interno |
+| E-mail, telefone e dados sensíveis nunca são selecionáveis | Middleware, service e teste de não exposição |
+| Permissão da formação prevalece sobre o consentimento | Filtro de campos efetivos e snapshot com fonte restritiva |
+| Revogação limpa campos e invalida cache | Atualização atômica, versão e data de invalidação |
+| Exclusão revoga a exposição | Operação atômica do service de exclusão |
+| Publicação e disponibilidade empresarial são independentes | Service sem alteração de `availability` |
+| Consentimento e mudanças possuem auditoria privada | Schema com `select: false` e operação `$push` |
 
 | Critério da VJ-1 | Cobertura unitária |
 | --- | --- |

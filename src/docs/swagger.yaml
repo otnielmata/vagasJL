@@ -1108,6 +1108,44 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /candidatos/me/perfil-publico:
+    patch:
+      tags: [Candidates]
+      summary: Registra ou revoga o consentimento do perfil profissional publico (VJ-74)
+      description: >
+        Permite somente ao candidato ativo optar explicitamente pela futura publicacao e
+        selecionar cada campo autorizado. O perfil permanece privado por padrao. Email,
+        telefone, comprovantes, auditoria e identificadores sensiveis nao pertencem a lista.
+        Campos da formacao continuam sujeitos a permissao da fonte oficial. Toda mudanca e
+        auditada internamente e invalida a versao de cache. A publicacao e independente da
+        disponibilidade para buscas empresariais. Esta historia nao cria URL, slug, indexacao
+        nem endpoint publico de leitura.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidatePublicProfileRequest'
+      responses:
+        '200':
+          description: Consentimento atualizado ou revogado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicProfile]
+                properties:
+                  publicProfile:
+                    $ref: '#/components/schemas/CandidatePublicProfileState'
+        '400': { description: Corpo, campo, duplicidade ou combinacao de consentimento invalida }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Candidato nao ativo ou alterado concorrentemente }
+        '503': { description: Banco de dados indisponivel }
+
   /candidatos/me/perfil-match:
     get:
       tags: [Match Profile]
@@ -2570,6 +2608,79 @@ components:
       properties:
         value: { type: string, minLength: 1, maxLength: 200 }
         importance: { type: string, enum: [required, desirable, indifferent] }
+    CandidatePublicProfileField:
+      type: string
+      enum:
+        - name
+        - photoUrl
+        - city
+        - state
+        - country
+        - linkedinUrl
+        - githubUrl
+        - portfolioUrl
+        - professionalSummary
+        - matchProfile.type
+        - matchProfile.agile
+        - matchProfile.programming
+        - matchProfile.automation
+        - matchProfile.webTesting
+        - matchProfile.apiTesting
+        - matchProfile.mobileTesting
+        - matchProfile.desktopTesting
+        - matchProfile.higherEducationDegree
+        - matchProfile.english
+        - matchProfile.spanish
+        - matchProfile.yearsOfExperience
+        - matchProfile.continuousIntegration
+        - matchProfile.certification
+        - matchProfile.testAutomationTechnologies
+        - matchProfile.tecnologies
+        - matchProfile.programmingLanguages
+        - matchProfile.genAITools
+        - matchProfile.level
+        - matchProfile.classification
+        - matchProfile.role
+        - matchProfile.specialization
+        - formation.engagementLevel
+        - formation.cohort
+        - formation.challengesCompleted
+        - formation.totalChallenges
+        - formation.score
+        - formation.participation
+        - formation.history
+        - formation.projects
+    CandidatePublicProfileRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          description: true registra opt-in; false revoga imediatamente a futura exposicao
+        fields:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/CandidatePublicProfileField'
+          description: Obrigatorio e nao vazio ao habilitar; ausente ou vazio ao revogar
+    CandidatePublicProfileState:
+      type: object
+      additionalProperties: false
+      required: [enabled, fields, effectiveFields, consentedAt, revokedAt, cacheVersion, cacheInvalidatedAt]
+      properties:
+        enabled: { type: boolean }
+        fields:
+          type: array
+          items: { $ref: '#/components/schemas/CandidatePublicProfileField' }
+        effectiveFields:
+          type: array
+          description: Selecao apos aplicar permissoes vigentes da fonte oficial de formacao
+          items: { $ref: '#/components/schemas/CandidatePublicProfileField' }
+        consentedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        cacheVersion: { type: integer, minimum: 1 }
+        cacheInvalidatedAt: { type: string, format: date-time, nullable: true }
     CandidateRegistrationRequest:
       type: object
       required: [name, email]

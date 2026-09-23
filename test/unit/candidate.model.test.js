@@ -21,9 +21,36 @@ test('defaults to pending and persists every omitted profile field as UNKNOWN', 
   assert.equal(candidate.eligibility.lastAttemptAt, null);
   assert.equal(candidate.eligibility.approvedAt, null);
   assert.equal(candidate.deletedAt, null);
+  assert.equal(candidate.publicProfile.enabled, false);
+  assert.deepEqual(candidate.publicProfile.fields, []);
+  assert.equal(candidate.publicProfile.cacheVersion, 1);
   assert.equal(candidate.visibleToCompanies, false);
   for (const field of PROFILE_FIELDS) assert.equal(candidate[field], UNKNOWN);
   assert.equal(candidate.validateSync(), undefined);
+});
+
+test('stores public-profile consent and its audit privately with a controlled whitelist', () => {
+  const changedAt = new Date('2026-09-23T12:00:00.000Z');
+  const candidate = new Candidate({
+    ...input,
+    publicProfile: {
+      enabled: true,
+      fields: ['name', 'matchProfile.apiTesting', 'formation.projects'],
+      consentedAt: changedAt,
+      cacheVersion: 2,
+      cacheInvalidatedAt: changedAt,
+    },
+    publicProfileConsentHistory: [{
+      action: 'opt_in', fields: ['name'], actor: input.user, changedAt,
+    }],
+  });
+  assert.equal(candidate.validateSync(), undefined);
+  assert.equal(Candidate.schema.path('publicProfile').options.select, false);
+  assert.equal(Candidate.schema.path('publicProfileConsentHistory').options.select, false);
+  assert.equal(candidate.toJSON().publicProfile, undefined);
+  assert.equal(candidate.toJSON().publicProfileConsentHistory, undefined);
+  const invalid = new Candidate({ ...input, publicProfile: { enabled: true, fields: ['email'] } });
+  assert.ok(invalid.validateSync().errors['publicProfile.fields.0']);
 });
 
 for (const status of Object.values(CANDIDATE_STATUS)) {

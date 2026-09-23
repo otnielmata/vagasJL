@@ -7,6 +7,7 @@ const {
   ELIGIBILITY_SOURCE,
   PROFILE_FIELDS,
 } = require('../config/candidate');
+const { PUBLIC_PROFILE_FIELDS } = require('../config/candidate-public-profile');
 
 const optionalProfile = Object.fromEntries(PROFILE_FIELDS.map((field) => [field, {
   type: String,
@@ -48,6 +49,22 @@ const eligibilityHistorySchema = new mongoose.Schema({
   invalidatedAt: { type: Date, required: true },
 }, { _id: false });
 
+const publicProfileSchema = new mongoose.Schema({
+  enabled: { type: Boolean, default: false, required: true },
+  fields: [{ type: String, enum: PUBLIC_PROFILE_FIELDS }],
+  consentedAt: { type: Date, default: null },
+  revokedAt: { type: Date, default: null },
+  cacheVersion: { type: Number, default: 1, min: 1, required: true },
+  cacheInvalidatedAt: { type: Date, default: null },
+}, { _id: false });
+
+const publicProfileConsentHistorySchema = new mongoose.Schema({
+  action: { type: String, enum: ['opt_in', 'fields_updated', 'revoked', 'candidate_deleted'], required: true },
+  fields: [{ type: String, enum: PUBLIC_PROFILE_FIELDS }],
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
@@ -66,6 +83,12 @@ const candidateSchema = new mongoose.Schema({
   },
   eligibility: { type: eligibilitySchema, default: () => ({}) },
   eligibilityHistory: { type: [eligibilityHistorySchema], default: () => [], select: false },
+  publicProfile: { type: publicProfileSchema, default: () => ({}), select: false },
+  publicProfileConsentHistory: {
+    type: [publicProfileConsentHistorySchema],
+    default: () => [],
+    select: false,
+  },
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
@@ -101,6 +124,8 @@ candidateSchema.set('toJSON', {
     delete result.__v;
     delete result.id;
     delete result.eligibilityHistory;
+    delete result.publicProfile;
+    delete result.publicProfileConsentHistory;
     delete result.deletedAt;
     if (result.eligibility) delete result.eligibility.source;
     return result;

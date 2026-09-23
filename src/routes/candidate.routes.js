@@ -5,11 +5,13 @@ const candidateValidationRules = require('../middleware/candidate-validation.mid
 const candidateReadRules = require('../middleware/candidate-read.middleware');
 const candidateUpdateRules = require('../middleware/candidate-update.middleware');
 const candidateDeleteRules = require('../middleware/candidate-delete.middleware');
+const candidatePublicProfileRules = require('../middleware/candidate-public-profile.middleware');
 const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
 const matchProfileController = require('../controllers/candidate-match-profile.controller');
 const engagementController = require('../controllers/candidate-engagement.controller');
+const publicProfileController = require('../controllers/candidate-public-profile.controller');
 
 const router = Router();
 
@@ -19,6 +21,8 @@ router.get('/me/vagas/:id/match', authenticate, authorize('candidate'), ensureDa
   candidateController.showMatchDetail);
 router.get('/me/engajamento', authenticate, authorize('candidate'), ensureDatabase,
   engagementController.show);
+router.patch('/me/perfil-publico', authenticate, authorize('candidate'), candidatePublicProfileRules(),
+  (req, res, next) => validate(req, res, next, 400), ensureDatabase, publicProfileController.update);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.get('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.show);
