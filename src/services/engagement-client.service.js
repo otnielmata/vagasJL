@@ -2,6 +2,7 @@ const config = require('../config/env');
 
 const cache = new Map();
 const ROOT_FIELDS = Object.freeze({
+  engagementLevel: 'string',
   cohort: 'string',
   challengesCompleted: 'number',
   totalChallenges: 'number',
@@ -46,8 +47,22 @@ function validReferenceAt(value) {
   return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
+function engagementIndicator(status, data) {
+  const officialCategory = typeof data?.engagementLevel === 'string' && data.engagementLevel.trim()
+    ? data.engagementLevel.trim() : null;
+  return {
+    dimension: 'training_engagement',
+    label: 'Engajamento na formacao',
+    category: officialCategory,
+    displayValue: officialCategory || 'Nao disponivel',
+    categorySource: officialCategory ? 'official' : null,
+    availability: status,
+  };
+}
+
 function response(status, data, referenceAt, retrievedAt, cacheHit, ttlMs, reason = null) {
-  return { status, readOnly: true, data, referenceAt, retrievedAt,
+  return { status, readOnly: true, indicator: engagementIndicator(status, data),
+    data, referenceAt, retrievedAt,
     cache: { hit: cacheHit, ttlSeconds: ttlMs / 1000 }, ...(reason ? { reason } : {}) };
 }
 
@@ -110,4 +125,4 @@ function clearEngagementCache() {
   cache.clear();
 }
 
-module.exports = { fetchOfficialEngagement, clearEngagementCache, authorizedData };
+module.exports = { fetchOfficialEngagement, clearEngagementCache, authorizedData, engagementIndicator };

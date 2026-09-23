@@ -238,7 +238,8 @@ paths:
         identificados nao viram gaps. Perfil incompleto ou denominador zero produz estado
         not_calculable e percentual nulo. Distingue eligible, below_threshold, ineligible e
         not_calculable, avaliando eliminacao antes do limiar. Nao gera plano de estudos nem
-        expoe dados privados.
+        expoe dados privados. O indicador identifica esta resposta como dimensao technical_match
+        e nao consulta nem incorpora engajamento.
       security:
         - bearerAuth: []
       parameters:
@@ -253,7 +254,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vacancy, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
+                required: [vacancy, indicator, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
                 properties:
                   vacancy:
                     type: object
@@ -261,6 +262,14 @@ paths:
                     properties:
                       _id: { type: string }
                       title: { type: string }
+                  indicator:
+                    type: object
+                    required: [dimension, label, percentage, status]
+                    properties:
+                      dimension: { type: string, enum: [technical_match] }
+                      label: { type: string, enum: [Match tecnico] }
+                      percentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                      status: { type: string, enum: [eligible, below_threshold, ineligible, not_calculable] }
                   resultState:
                     type: string
                     enum: [eligible, below_threshold, ineligible, not_calculable]
@@ -300,13 +309,14 @@ paths:
   /candidatos/me/engajamento:
     get:
       tags: [Candidates]
-      summary: Consulta engajamento oficial do proprio candidato (VJ-67)
+      summary: Consulta engajamento oficial separado do Match tecnico (VJ-67/VJ-68)
       description: >
         Somente candidato ativo e validado. Usa a identidade vinculada a conta e rejeita
         identificadores externos na query. Consulta a origem com credenciais do servidor,
         aplica timeout e cache apenas em memoria, filtra campos autorizados e nunca persiste
         copia editavel. Retorna estado explicito sem inventar zeros quando nao ha dados ou a
-        origem esta indisponivel.
+        origem esta indisponivel. Categoria e exibida somente quando recebida oficialmente;
+        dados brutos nunca geram classificacao implicita e nao alteram Match ou ranking.
       security:
         - bearerAuth: []
       responses:
@@ -320,17 +330,28 @@ paths:
                 properties:
                   engagement:
                     type: object
-                    required: [status, readOnly, data, referenceAt, retrievedAt, cache]
+                    required: [status, readOnly, indicator, data, referenceAt, retrievedAt, cache]
                     properties:
                       status:
                         type: string
                         enum: [available, no_data, unavailable]
                       readOnly: { type: boolean, enum: [true] }
+                      indicator:
+                        type: object
+                        required: [dimension, label, category, displayValue, categorySource, availability]
+                        properties:
+                          dimension: { type: string, enum: [training_engagement] }
+                          label: { type: string, enum: [Engajamento na formacao] }
+                          category: { type: string, nullable: true }
+                          displayValue: { type: string }
+                          categorySource: { type: string, enum: [official], nullable: true }
+                          availability: { type: string, enum: [available, no_data, unavailable] }
                       data:
                         type: object
                         nullable: true
                         additionalProperties: false
                         properties:
+                          engagementLevel: { type: string }
                           cohort: { type: string }
                           challengesCompleted: { type: number }
                           totalChallenges: { type: number }

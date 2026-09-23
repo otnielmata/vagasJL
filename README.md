@@ -502,6 +502,20 @@ vínculo são mantidas somente em memória pelo período de `ENGAGEMENT_CACHE_TT
 minutos); falhas não são armazenadas. Defina TTL zero para desabilitar cache. Em ambientes
 serverless, o cache é oportunista por instância e nunca é fonte oficial.
 
+## Match técnico e engajamento separados — VJ-68
+
+Os endpoints existentes representam dimensões independentes: o detalhe de Match inclui
+`indicator.dimension: "technical_match"`, enquanto a consulta de engajamento inclui
+`indicator.dimension: "training_engagement"`. A interface pode apresentar os dois resultados
+lado a lado, mas nenhum dado de turma, desafios, pontuação, participação, histórico ou projetos
+entra no numerador, denominador, elegibilidade, gaps, filtro ou desempate do Match técnico.
+
+`engagementLevel` é aceito somente quando fornecido pela origem oficial e aparece como categoria
+do indicador. Quando a origem retorna apenas dados brutos, a API mantém esses dados e informa a
+categoria como `null`/`Nao disponivel`; não deriva Alto, Médio ou Baixo por limiar implícito.
+Falha ou ausência na origem de engajamento também não indisponibiliza nem modifica o Match técnico.
+Os rankings continuam sem dados de engajamento e sem compartilhamento com empresas no MVP.
+
 ## Match explicável — VJ-64
 
 `GET /candidatos/me/vagas/{id}/match` permite que somente o candidato autenticado consulte

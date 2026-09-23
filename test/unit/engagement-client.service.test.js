@@ -16,7 +16,7 @@ test('fetches official data with server credentials and exposes only authorized 
   const fetchImpl = async (url, options) => {
     request = { url, options };
     return { ok: true, status: 200, json: async () => ({ data: {
-      cohort: 'Turma 10', challengesCompleted: 8, totalChallenges: 10, score: 920,
+      engagementLevel: 'Alto', cohort: 'Turma 10', challengesCompleted: 8, totalChallenges: 10, score: 920,
       participation: 'high', privateEmail: 'student@example.com', missing: null,
       history: [{ type: 'challenge', title: 'API', status: 'completed', secret: 'hidden' }],
       projects: [{ name: 'VagasJL', url: 'https://example.com/project', private: true }],
@@ -25,8 +25,11 @@ test('fetches official data with server credentials and exposes only authorized 
   const result = await fetchOfficialEngagement(' Student@Example.com ', { settings, fetchImpl, now });
   assert.equal(result.status, 'available');
   assert.equal(result.readOnly, true);
+  assert.deepEqual(result.indicator, { dimension: 'training_engagement',
+    label: 'Engajamento na formacao', category: 'Alto', displayValue: 'Alto',
+    categorySource: 'official', availability: 'available' });
   assert.equal(result.referenceAt, '2026-09-22T23:59:59Z');
-  assert.deepEqual(result.data, { cohort: 'Turma 10', challengesCompleted: 8,
+  assert.deepEqual(result.data, { engagementLevel: 'Alto', cohort: 'Turma 10', challengesCompleted: 8,
     totalChallenges: 10, score: 920, participation: 'high',
     history: [{ type: 'challenge', title: 'API', status: 'completed' }],
     projects: [{ name: 'VagasJL', url: 'https://example.com/project' }] });
@@ -58,6 +61,9 @@ test('returns explicit no data without invented zero values', async () => {
   assert.deepEqual(result.data, null);
   assert.equal(result.status, 'no_data');
   assert.equal(result.reason, 'student_not_found');
+  assert.deepEqual(result.indicator, { dimension: 'training_engagement',
+    label: 'Engajamento na formacao', category: null, displayValue: 'Nao disponivel',
+    categorySource: null, availability: 'no_data' });
   assert.equal(Object.hasOwn(result, 'score'), false);
 });
 
@@ -81,4 +87,14 @@ test('sanitizer never fabricates absent engagement fields', () => {
   assert.deepEqual(authorizedData({ cohort: 'A' }), { cohort: 'A' });
   assert.equal(authorizedData({ challengesCompleted: '8', secret: 10 }), null);
   assert.deepEqual(authorizedData({ history: [] }), { history: [] });
+});
+
+test('does not infer an engagement category from score or participation', async () => {
+  const result = await fetchOfficialEngagement('student@example.com', { settings, now,
+    fetchImpl: async () => ({ ok: true, status: 200,
+      json: async () => ({ score: 1000, participation: 100 }) }) });
+  assert.equal(result.status, 'available');
+  assert.equal(result.indicator.category, null);
+  assert.equal(result.indicator.displayValue, 'Nao disponivel');
+  assert.deepEqual(result.data, { score: 1000, participation: 100 });
 });

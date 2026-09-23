@@ -108,13 +108,16 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date()) {
     criteria.every((criterion) => criterion.status !== 'unknown');
   const eligibility = calculable ? score.eligibility : { eligible: null, reason: null };
   const classification = classifyMatchResult(score, calculable, rankingThreshold);
+  const percentage = calculable ? score.percentage : null;
 
   return {
     vacancy: { _id: vacancy._id, title: vacancy.title },
+    indicator: { dimension: 'technical_match', label: 'Match tecnico',
+      percentage, status: classification.state },
     resultState: classification.state,
     resultLabel: classification.label,
     calculationStatus: calculable ? 'calculable' : 'not_calculable',
-    percentage: calculable ? score.percentage : null,
+    percentage,
     earnedPoints: calculable ? score.earnedPoints : null,
     possiblePoints: calculable ? score.possiblePoints : null,
     configurationVersion: vacancy.matchProfile.configurationVersion,

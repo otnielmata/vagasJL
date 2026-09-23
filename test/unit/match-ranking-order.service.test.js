@@ -33,8 +33,10 @@ test('ranking resolves ties by required matches, update date and stable id', () 
 
 test('engagement metadata does not affect technical ranking order', () => {
   const rows = [
-    { stableId: 'a', percentage: 90, matchedRequiredCount: 1, engagement: 0 },
-    { stableId: 'b', percentage: 70, matchedRequiredCount: 1, engagement: 100 },
+    { stableId: 'a', percentage: 90, matchedRequiredCount: 1,
+      updatedAt: new Date('2026-09-20T00:00:00Z'), engagement: 0 },
+    { stableId: 'b', percentage: 90, matchedRequiredCount: 1,
+      updatedAt: new Date('2026-09-20T00:00:00Z'), engagement: 100 },
   ];
   assert.deepEqual(orderedIds(rows), ['a', 'b']);
 });

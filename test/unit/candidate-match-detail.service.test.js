@@ -67,6 +67,8 @@ test('returns reconciled strengths and canonical gaps without penalizing extra s
   setup(context);
   const result = await getCandidateMatchDetail(actor, vacancyId, now);
   assert.equal(result.calculationStatus, 'calculable');
+  assert.deepEqual(result.indicator, { dimension: 'technical_match', label: 'Match tecnico',
+    percentage: 79.17, status: 'eligible' });
   assert.deepEqual([result.resultState, result.resultLabel], ['eligible', 'Compatível']);
   assert.deepEqual([result.earnedPoints, result.possiblePoints, result.percentage], [19, 24, 79.17]);
   assert.deepEqual(result.metCriteria.map((criterion) => criterion.id), ['cypress', 'javascript']);
@@ -76,6 +78,7 @@ test('returns reconciled strengths and canonical gaps without penalizing extra s
     possiblePoints: 5, lostPoints: 5 });
   assert.equal(result.availableCriteria.some((criterion) => criterion.id === 'selenium'), false);
   assert.equal(Object.hasOwn(result, 'studyPlan'), false);
+  assert.equal(Object.hasOwn(result, 'engagement'), false);
   assert.deepEqual([result.configurationVersion, result.multipliersVersion], [1, 3]);
 });
 
