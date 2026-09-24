@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+/* Dark mode controlado por classe (next-themes aplica .dark no <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens — Vagas JL
+ * Todas as cores sao semanticas. Componentes usam apenas os tokens
+ * (bg-surface, text-muted, border-border...), nunca cores cruas, para que
+ * claro/escuro funcionem sem condicionais.
+ */
+:root {
+  --background: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #f0f3f8;
+  --surface-3: #e6ebf2;
+  --border: #dde3ec;
+  --border-strong: #c6cfdc;
+
+  --foreground: #0f1b2d;
+  --muted: #5b6b82;
+  --subtle: #8593a8;
+
+  --primary: #0f766e;          /* teal — acao principal */
+  --primary-hover: #0d6560;
+  --primary-soft: #e3f4f2;
+  --primary-foreground: #ffffff;
+
+  --accent: #1e3a5f;           /* navy — marca */
+  --accent-soft: #e7eef7;
+
+  --success: #15803d;
+  --success-soft: #e6f5ec;
+  --warning: #b45309;
+  --warning-soft: #fdf2e2;
+  --danger: #b91c1c;
+  --danger-soft: #fdeaea;
+  --info: #1d4ed8;
+  --info-soft: #e8efff;
+
+  --ring: rgba(15, 118, 110, 0.35);
+  --shadow-color: 15 27 45;
+}
+
+.dark {
+  --background: #0a111c;
+  --surface: #101a28;
+  --surface-2: #152235;
+  --surface-3: #1c2c43;
+  --border: #22324a;
+  --border-strong: #2f4461;
+
+  --foreground: #e7edf6;
+  --muted: #9aabc3;
+  --subtle: #6f829e;
+
+  --primary: #2dd4bf;
+  --primary-hover: #5eead4;
+  --primary-soft: rgba(45, 212, 191, 0.12);
+  --primary-foreground: #04201d;
+
+  --accent: #93b4dd;
+  --accent-soft: rgba(147, 180, 221, 0.12);
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --info: #7aa2ff;
+  --info-soft: rgba(122, 162, 255, 0.12);
+
+  --ring: rgba(45, 212, 191, 0.4);
+  --shadow-color: 0 0 0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+
+  --shadow-card: 0 1px 2px rgb(var(--shadow-color) / 0.04), 0 4px 16px -6px rgb(var(--shadow-color) / 0.08);
+  --shadow-pop: 0 12px 32px -8px rgb(var(--shadow-color) / 0.25);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--primary-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
