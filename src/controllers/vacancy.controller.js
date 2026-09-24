@@ -2,6 +2,8 @@ const service = require('../services/vacancy.service');
 const statusService = require('../services/vacancy-status.service');
 const requirementsService = require('../services/vacancy-requirements.service');
 const candidateRankingService = require('../services/candidate-ranking.service');
+const descriptionNormalizationService =
+  require('../services/vacancy-description-normalization.service');
 
 async function registerCompany(req, res, next) {
   try {
@@ -39,4 +41,16 @@ async function rankCandidates(req, res, next) {
   }
 }
 
-module.exports = { registerCompany, updateStatus, updateRequirements, rankCandidates };
+async function normalizeDescription(req, res, next) {
+  try {
+    const normalization = await descriptionNormalizationService.normalizeVacancyDescription(
+      req.user, req.params.id, req.body,
+    );
+    return res.status(200).json({ normalization });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { registerCompany, updateStatus, updateRequirements, rankCandidates,
+  normalizeDescription };

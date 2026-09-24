@@ -204,6 +204,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
 | PATCH  | `/candidatos/me/permissoes-exibicao` | Candidato (Bearer) | Controla contato e formação exibidos às empresas (VJ-76) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
+| POST   | `/vagas/{id}/normalizacao` | Admin/recrutador da vaga (Bearer) | Extrai, revisa ou publica requisitos descobertos na descrição (VJ-84) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |
 | GET    | `/candidatos/{id}` | Sim (Bearer) | Consulta candidato conforme o papel (VJ-25) |
@@ -721,6 +722,31 @@ identificador externo. Ela não guarda os valores recebidos nem aparece nas resp
 configurações, banco, Match, Swagger e respostas utilizam somente `testAutomationTechnologies`,
 `qaTools` e `specialization`. Reprocessar o mesmo conteúdo e versão produz a mesma representação e
 a conciliação existente impede vagas ou competências duplicadas.
+
+## Normalização da descrição da vaga — VJ-84
+
+`POST /vagas/{id}/normalizacao` transforma menções da descrição em um rascunho técnico revisável.
+O endpoint exige JWT de administrador ou recrutador ativo vinculado à empresa proprietária. Vagas
+`IMPORTED` só podem ser tratadas pela administração. O corpo `{"action":"extract"}` executa o
+extrator determinístico `DESCRIPTION_EXTRACTOR_V1`; repetir a mesma descrição e versão devolve o
+mesmo rascunho sem duplicar sugestões. Alterar a descrição ou a versão gera nova revisão e preserva
+o histórico privado.
+
+Cada sugestão informa campo, valor encontrado, ID canônico quando houver, confiança, posição de
+origem, versão do extrator, estado de revisão e situação no catálogo. Alias inequívoco como
+`Cypress Framework` sugere `cypress`. Termos sem item publicado ficam com `catalogStatus=pending`,
+não podem ser aceitos e nunca são aproximados silenciosamente. A extração não define importância,
+caráter eliminatório, experiência ou senioridade sem decisão humana e não altera o Perfil de Match.
+Aliases ambíguos também ficam pendentes, mas expõem somente os candidatos canônicos publicados para
+que a revisão escolha explicitamente `field` e `canonicalId` sem aproximação automática.
+
+A revisão usa `{"action":"review","revision":1,"decisions":[...]}`. Uma decisão `accepted` deve
+informar explicitamente `importance` e `eliminatory`; `rejected` informa apenas ID e estado. A
+publicação usa `{"action":"publish","revision":2,"reason":"Revisão técnica aprovada"}` e incorpora
+somente sugestões aceitas que ainda existam no Catálogo Mestre publicado. A alteração é auditada
+no histórico de requisitos, atualiza a versão canônica do Perfil de Match e agenda o recálculo dos
+Matches afetados conforme a política vigente. Rascunhos e históricos não aparecem nas respostas
+comuns de vaga.
 
 ## Multiplicadores do Match — VJ-52
 

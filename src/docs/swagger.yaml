@@ -16,6 +16,7 @@ info:
     Catalogo Mestre canonico, versionado e com sinonimos (VJ-81),
     separacao conceitual dos dados importados (VJ-82) e contratos canonicos
     compativeis com o JSON legado apenas na fronteira de importacao (VJ-83),
+    extracao revisavel da descricao para requisitos estruturados (VJ-84),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -709,6 +710,46 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /vagas/{id}/normalizacao:
+    post:
+      tags: [Vacancies]
+      summary: Extrai e revisa requisitos estruturados da descricao (VJ-84)
+      description: >
+        A descricao serve apenas para descobrir sugestoes; nunca pontua diretamente.
+        extract cria um rascunho idempotente com proveniencia e versao do extrator,
+        review aceita ou rejeita sugestoes com classificacao humana explicita e publish
+        incorpora somente IDs aceitos ainda publicados no Catalogo Mestre. Termos
+        desconhecidos permanecem pendentes. Alteracoes preservam historico privado e
+        a publicacao agenda o recalculo conforme a politica vigente. Admin pode operar
+        qualquer origem; recrutador vinculado somente vaga COMPANY da propria empresa.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VacancyNormalizationRequest' }
+      responses:
+        '200':
+          description: Rascunho extraido, revisado ou publicado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [normalization]
+                properties:
+                  normalization: { $ref: '#/components/schemas/VacancyNormalization' }
+        '400': { description: ID, acao, revisao ou decisao invalida }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao sobre a vaga }
+        '404': { description: Vaga inexistente }
+        '409': { description: Termo pendente, vaga encerrada ou revisao concorrente }
+        '503': { description: Catalogo Mestre publicado indisponivel }
   /vagas/{id}/status:
     patch:
       tags: [Vacancies]
@@ -2726,6 +2767,89 @@ components:
           type: boolean
           default: false
           description: Criterio eliminatorio explicito; invalido com importance indifferent
+    VacancyNormalizationRequest:
+      oneOf:
+        - type: object
+          required: [action]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [extract] }
+        - type: object
+          required: [action, revision, decisions]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [review] }
+            revision: { type: integer, minimum: 1 }
+            decisions:
+              type: array
+              minItems: 1
+              maxItems: 200
+              items:
+                type: object
+                required: [id, state]
+                additionalProperties: false
+                properties:
+                  id: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+                  state: { type: string, enum: [accepted, rejected] }
+                  field: { type: string, description: Obrigatorio apenas ao escolher alias ambiguo }
+                  canonicalId: { type: string, description: Obrigatorio apenas ao escolher alias ambiguo }
+                  importance: { type: string, enum: [required, desirable, indifferent] }
+                  eliminatory: { type: boolean }
+        - type: object
+          required: [action, revision, reason]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [publish] }
+            revision: { type: integer, minimum: 1 }
+            reason: { type: string, minLength: 1, maxLength: 500 }
+    VacancyNormalizationSuggestion:
+      type: object
+      required: [id, originalValue, confidence, origin, sourceStart, sourceEnd, extractorVersion, catalogStatus, state]
+      properties:
+        id: { type: string }
+        field: { type: string, nullable: true }
+        originalValue: { type: string }
+        canonicalId: { type: string, nullable: true }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        origin: { type: string, enum: [description] }
+        sourceStart: { type: integer, minimum: 0 }
+        sourceEnd: { type: integer, minimum: 1 }
+        extractorVersion: { type: string, enum: [DESCRIPTION_EXTRACTOR_V1] }
+        catalogStatus: { type: string, enum: [matched, pending] }
+        candidates:
+          type: array
+          description: Opcoes publicadas para decisao humana quando o alias e ambiguo.
+          items:
+            type: object
+            required: [field, canonicalId]
+            properties:
+              field: { type: string }
+              canonicalId: { type: string }
+        state: { type: string, enum: [suggested, accepted, rejected] }
+        importance: { type: string, enum: [required, desirable, indifferent], nullable: true }
+        eliminatory: { type: boolean, nullable: true }
+    VacancyNormalization:
+      type: object
+      required: [revision, extractorVersion, configurationVersion, status, suggestions, createdAt, updatedAt]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        extractorVersion: { type: string, enum: [DESCRIPTION_EXTRACTOR_V1] }
+        configurationVersion: { type: integer, minimum: 1 }
+        status: { type: string, enum: [draft, published] }
+        suggestions:
+          type: array
+          items: { $ref: '#/components/schemas/VacancyNormalizationSuggestion' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        recalculation:
+          type: object
+          nullable: true
+          properties:
+            policy: { type: string, enum: [none, affected_matches] }
+            status: { type: string, enum: [not_required, scheduled] }
+            scheduledFor: { type: string, format: date-time, nullable: true }
+            engineVersion: { type: string, nullable: true }
     Vacancy:
       type: object
       required: [_id, reference, title, description, matchProfile, origin, status]

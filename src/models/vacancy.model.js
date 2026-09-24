@@ -75,6 +75,39 @@ const adminReviewSchema = new mongoose.Schema({
   changedFields: { type: [String], required: true },
   recalculation: { type: adminRecalculationSchema, required: true },
 }, { _id: false });
+const normalizationCandidateSchema = new mongoose.Schema({
+  field: { type: String, enum: Object.keys(INITIAL_MATCH_WEIGHTS), required: true },
+  canonicalId: { type: String, required: true, maxlength: 100 },
+}, { _id: false });
+const normalizationSuggestionSchema = new mongoose.Schema({
+  id: { type: String, required: true, match: /^[a-f\d]{24}$/ },
+  field: { type: String, enum: Object.keys(INITIAL_MATCH_WEIGHTS), default: null },
+  originalValue: { type: String, required: true, maxlength: 100 },
+  canonicalId: { type: String, default: null, maxlength: 100 },
+  confidence: { type: Number, required: true, min: 0, max: 1 },
+  origin: { type: String, required: true, enum: ['description'] },
+  sourceStart: { type: Number, required: true, min: 0 },
+  sourceEnd: { type: Number, required: true, min: 1 },
+  extractorVersion: { type: String, required: true, enum: ['DESCRIPTION_EXTRACTOR_V1'] },
+  catalogStatus: { type: String, required: true, enum: ['matched', 'pending'] },
+  candidates: { type: [normalizationCandidateSchema], default: [] },
+  state: { type: String, required: true, enum: ['suggested', 'accepted', 'rejected'] },
+  importance: { type: String, enum: ['required', 'desirable', 'indifferent'], default: null },
+  eliminatory: { type: Boolean, default: null },
+}, { _id: false });
+const normalizationDraftSchema = new mongoose.Schema({
+  revision: { type: Number, required: true, min: 1 },
+  descriptionFingerprint: { type: String, required: true, match: /^[a-f\d]{64}$/ },
+  extractorVersion: { type: String, required: true, enum: ['DESCRIPTION_EXTRACTOR_V1'] },
+  configurationVersion: { type: Number, required: true, min: 1 },
+  status: { type: String, required: true, enum: ['draft', 'published'] },
+  suggestions: { type: [normalizationSuggestionSchema], required: true },
+  createdAt: { type: Date, required: true },
+  updatedAt: { type: Date, required: true },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  publishedAt: { type: Date, default: null },
+  recalculation: { type: adminRecalculationSchema, default: null },
+}, { _id: false });
 
 const vacancySchema = new mongoose.Schema({
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, immutable: true },
@@ -136,6 +169,9 @@ const vacancySchema = new mongoose.Schema({
     revision: { type: Number, required: true },
     requirements: { type: [requirementSchema], required: true },
   }],
+  normalizationRevision: { type: Number, default: 0, min: 0, select: false },
+  normalizationDraft: { type: normalizationDraftSchema, default: null, select: false },
+  normalizationHistory: { type: [normalizationDraftSchema], default: [], select: false },
   adminRevision: { type: Number, default: 0, min: 0 },
   adminContentFingerprint: { type: String, default: null, select: false },
   adminHistory: { type: [adminReviewSchema], default: [], select: false },
@@ -169,6 +205,9 @@ vacancySchema.set('toJSON', {
     delete result.importMappingAudit;
     delete result.statusHistory;
     delete result.requirementsHistory;
+    delete result.normalizationRevision;
+    delete result.normalizationDraft;
+    delete result.normalizationHistory;
     delete result.adminContentFingerprint;
     delete result.adminHistory;
     delete result.importContentFingerprint;
