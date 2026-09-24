@@ -13,6 +13,7 @@ test('stores canonical values separately and hides owner and deletion audit', ()
   });
   assert.equal(profile.validateSync(), undefined);
   assert.equal(profile.deletedAt, null);
+  assert.equal(profile.revision, 1);
   const result = profile.toJSON();
   assert.equal(result.user, undefined);
   assert.equal(result.deletedAt, undefined);
