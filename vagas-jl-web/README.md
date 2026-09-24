@@ -73,6 +73,9 @@ No modo demonstração qualquer senha funciona; e-mails começando com `empresa@
 
 ## Deploy na Vercel
 
+**Produção atual:** https://vagas-jl-web.vercel.app — projeto `vagas-jl-web` (time `otnielmata-6292's projects`), publicado por upload direto, ainda sem vínculo com o GitHub. Para deploy automático a cada push, conecte o repositório conforme abaixo.
+
+
 1. Na Vercel: Add New → Project → importar `otnielmata/vagasJL` e definir **Root Directory = `vagas-jl-web`**.
 2. Framework: Next.js (detectado automaticamente).
 3. `.env.production` já define o proxy `/backend` → `https://vagas-jl.vercel.app`. Para outra API, defina `API_PROXY_TARGET` na Vercel.
