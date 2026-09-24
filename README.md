@@ -199,6 +199,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
 | GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
+| POST   | `/candidatos/me/vagas/{id}/candidatura` | Candidato não bloqueado (Bearer) | Retorna o canal oficial seguro e audita o encaminhamento (VJ-86) |
 | GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
 | PATCH  | `/candidatos/me/perfil-publico` | Candidato ativo (Bearer) | Controla consentimento da futura publicação (VJ-74) |
 | PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
@@ -772,6 +773,28 @@ do algoritmo, configuração consolidada, catálogo, multiplicadores e limiares.
 mesmas versões, o resultado técnico é reproduzível nos dois sentidos. Pesos, multiplicadores,
 limiares e política eliminatória são lidos da configuração administrativa vigente; os controles
 legados permanecem apenas como compatibilidade quando ainda não existe configuração consolidada.
+
+## Encaminhamento para candidatura — VJ-86
+
+`POST /candidatos/me/vagas/{id}/candidatura` recebe corpo vazio e exige JWT de candidato não
+bloqueado. A vaga precisa estar `active`, com prazo vigente e `applicationChannel` previamente
+normalizado. O canal pode ser uma URL `https_url` cujo host esteja em
+`APPLICATION_ALLOWED_HOSTS` ou um `email` cujo domínio esteja em
+`APPLICATION_ALLOWED_EMAIL_DOMAINS`. Credenciais na URL, fragmentos, esquemas inseguros, hosts não
+permitidos e parâmetros típicos de redirecionamento aberto são recusados. O canal nunca é extraído
+da descrição no momento do clique.
+
+A resposta usa sempre `state: "redirect_ready"` e `applicationConfirmed: false`: a API entrega o
+canal, mas não afirma que o sistema externo concluiu a candidatura. Match abaixo do limiar não
+bloqueia esse fluxo; a última inelegibilidade conhecida, quando existe, aparece separadamente em
+`matchAdvisory`. Vagas pausadas ou expiradas retornam **409**; removidas, rejeitadas ou inexistentes
+retornam **404**; canal ausente retorna **409** e configuração insegura retorna **503**, sempre sem
+URL ou e-mail na resposta de erro.
+
+O MongoDB mantém um único evento em `applicationreferrals` para cada candidato, vaga e canal. Repetições
+devolvem o mesmo registro e não multiplicam a telemetria. A auditoria contém apenas IDs internos,
+origem da vaga, tipo do canal, host/domínio, fingerprint e data; nome, e-mail, telefone, credenciais
+e conteúdo preenchido em terceiros não são copiados nem compartilhados com a empresa.
 
 ## Multiplicadores do Match — VJ-52
 

@@ -6,10 +6,11 @@ const { validateRequirements } = require('./vacancy-requirements.service');
 const { DIMENSIONS, normalizePlace, validGeographyWeights } = require('../config/geography');
 const { migrateLegacyAiValues, LEGACY_AI_FIELD } = require('./legacy-ai-migration.service');
 const { normalizeCatalogAlias } = require('../config/master-catalog');
+const { normalizeApplicationChannel } = require('../config/application-channel');
 
 const FIELD_KEYS = Object.keys(INITIAL_MATCH_WEIGHTS);
 const BODY_FIELDS = new Set(['reference', 'title', 'description', 'location',
-  'geographicRestrictions', 'matchProfile', 'expiresAt']);
+  'geographicRestrictions', 'matchProfile', 'expiresAt', 'applicationChannel']);
 
 function invalid(message = 'Dados da vaga invalidos') {
   throw new ApiError(400, message);
@@ -53,6 +54,8 @@ function normalizeVacancyInput(input, { allowUnidentified = false, allowLegacyAi
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(reference)) invalid();
   const title = text(input.title, 200);
   const description = text(input.description, 10000);
+  const applicationChannel = input.applicationChannel === undefined || input.applicationChannel === null
+    ? null : normalizeApplicationChannel(input.applicationChannel);
   const location = normalizeLocation(input.location);
   const geographicRestrictions = normalizeRestrictions(input.geographicRestrictions);
   let expiresAt = null;
@@ -72,8 +75,8 @@ function normalizeVacancyInput(input, { allowUnidentified = false, allowLegacyAi
         !Object.hasOwn(matchProfile.values, 'type'))) ||
       Object.keys(matchProfile.values).some((key) =>
         !FIELD_KEYS.includes(key) && !(allowLegacyAi && key === LEGACY_AI_FIELD))) invalid();
-  return { reference, title, description, location, geographicRestrictions, expiresAt, values: matchProfile.values,
-    requirements: matchProfile.requirements };
+  return { reference, title, description, applicationChannel, location, geographicRestrictions,
+    expiresAt, values: matchProfile.values, requirements: matchProfile.requirements };
 }
 
 function normalizeValues(input, configuration) {
@@ -132,6 +135,7 @@ async function prepareVacancyContent(input, options, publishedConfiguration = nu
     reference: data.reference,
     title: data.title,
     description: data.description,
+    applicationChannel: data.applicationChannel,
     location: data.location,
     geographicRestrictions: data.geographicRestrictions,
     ...(migration.audit ? { legacyAiMigrationAudit: migration.audit } : {}),

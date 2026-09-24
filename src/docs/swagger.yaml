@@ -18,6 +18,7 @@ info:
     compativeis com o JSON legado apenas na fronteira de importacao (VJ-83),
     extracao revisavel da descricao para requisitos estruturados (VJ-84),
     Match exclusivamente sobre dados estruturados, normalizados e versionados (VJ-85),
+    encaminhamento seguro ao canal oficial de candidatura (VJ-86),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -511,6 +512,42 @@ paths:
         '403': { description: Conta nao e candidata }
         '404': { description: Candidato inexistente ou vaga indisponivel }
         '503': { description: Configuracao tecnica indisponivel }
+  /candidatos/me/vagas/{id}/candidatura:
+    post:
+      tags: [Vacancies]
+      summary: Encaminha o candidato ao canal oficial da vaga (VJ-86)
+      description: >
+        Exige JWT de candidato nao bloqueado e corpo vazio. A vaga deve estar ativa,
+        vigente e possuir URL HTTPS ou e-mail institucional normalizado e autorizado
+        pela politica do servidor. Registra uma unica telemetria minima por candidato
+        e vaga, sem contato, credenciais ou conteudo externo. Match baixo nao bloqueia
+        o encaminhamento e eventual inelegibilidade aparece separadamente. O estado
+        redirect_ready nao confirma que a candidatura externa foi concluida.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: Canal oficial pronto para uso, sem confirmacao de candidatura externa
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [application]
+                properties:
+                  application: { $ref: '#/components/schemas/ApplicationReferralResponse' }
+        '400': { description: Identificador invalido ou corpo nao vazio }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel diferente de candidato ou candidato bloqueado }
+        '404': { description: Candidato ou vaga nao encontrados }
+        '409': { description: Vaga pausada, expirada ou sem canal oficial }
+        '503': { description: Canal viola a politica de seguranca ou auditoria indisponivel }
   /candidatos/me/engajamento:
     get:
       tags: [Candidates]
@@ -2692,6 +2729,7 @@ components:
         reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
         title: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, minLength: 1, maxLength: 10000 }
+        applicationChannel: { $ref: '#/components/schemas/ApplicationChannel' }
         expiresAt: { type: string, format: date-time, nullable: true }
         location:
           type: object
@@ -2740,6 +2778,7 @@ components:
         reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
         title: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, minLength: 1, maxLength: 10000 }
+        applicationChannel: { $ref: '#/components/schemas/ApplicationChannel' }
         expiresAt: { type: string, format: date-time, nullable: true, description: Prazo futuro em UTC }
         location:
           type: object
@@ -2897,6 +2936,10 @@ components:
         reference: { type: string }
         title: { type: string }
         description: { type: string }
+        applicationChannel:
+          allOf:
+            - $ref: '#/components/schemas/ApplicationChannel'
+          nullable: true
         location: { type: object, nullable: true }
         geographicRestrictions:
           type: object
@@ -2917,6 +2960,58 @@ components:
         expiresAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ApplicationChannel:
+      type: object
+      required: [type, value]
+      additionalProperties: false
+      description: Canal oficial normalizado; nunca inferido da descricao da vaga.
+      properties:
+        type: { type: string, enum: [https_url, email] }
+        value:
+          type: string
+          maxLength: 2000
+          description: URL HTTPS em host permitido ou e-mail em dominio institucional permitido.
+    ApplicationReferralResponse:
+      type: object
+      required: [state, applicationConfirmed, channel, referral, matchAdvisory]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [redirect_ready] }
+        applicationConfirmed: { type: boolean, enum: [false] }
+        channel:
+          oneOf:
+            - type: object
+              required: [type, url]
+              additionalProperties: false
+              properties:
+                type: { type: string, enum: [https_url] }
+                url: { type: string, format: uri }
+            - type: object
+              required: [type, address, uri]
+              additionalProperties: false
+              properties:
+                type: { type: string, enum: [email] }
+                address: { type: string, format: email }
+                uri: { type: string, pattern: '^mailto:' }
+        referral:
+          type: object
+          required: [id, recordedAt]
+          additionalProperties: false
+          properties:
+            id: { type: string }
+            recordedAt: { type: string, format: date-time }
+        matchAdvisory:
+          type: object
+          required: [blocksApplication, eligibility]
+          additionalProperties: false
+          properties:
+            blocksApplication: { type: boolean, enum: [false] }
+            eligibility:
+              type: object
+              nullable: true
+              properties:
+                eligible: { type: boolean, nullable: true }
+                reason: { type: object, nullable: true, additionalProperties: true }
     CompanyRegistrationUpdateRequest:
       type: object
       minProperties: 1

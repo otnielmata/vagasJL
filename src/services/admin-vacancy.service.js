@@ -12,9 +12,9 @@ const STATUSES = new Set(Object.keys(TRANSITIONS));
 const REQUIRED_FIELDS = Object.freeze([
   'description', 'matchProfile', 'origin', 'reason', 'reference', 'status', 'title', 'version',
 ]);
-const OPTIONAL_FIELDS = Object.freeze(['expiresAt', 'geographicRestrictions', 'location']);
+const OPTIONAL_FIELDS = Object.freeze(['applicationChannel', 'expiresAt', 'geographicRestrictions', 'location']);
 const SNAPSHOT_FIELDS = Object.freeze([
-  'origin', 'reference', 'title', 'description', 'location', 'geographicRestrictions',
+  'origin', 'reference', 'title', 'description', 'applicationChannel', 'location', 'geographicRestrictions',
   'matchProfile', 'expiresAt', 'status',
 ]);
 

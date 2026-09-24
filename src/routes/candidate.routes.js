@@ -9,6 +9,7 @@ const candidatePublicProfileRules = require('../middleware/candidate-public-prof
 const candidateOpportunityAvailabilityRules =
   require('../middleware/candidate-opportunity-availability.middleware');
 const candidateDisplayPermissionsRules = require('../middleware/candidate-display-permissions.middleware');
+const candidateApplicationRules = require('../middleware/candidate-application.middleware');
 const validate = require('../middleware/validate.middleware');
 const ensureDatabase = require('../middleware/database.middleware');
 const candidateController = require('../controllers/candidate.controller');
@@ -25,6 +26,9 @@ router.get('/me/vagas/ranking', authenticate, authorize('candidate'), ensureData
   candidateController.rankVacancies);
 router.get('/me/vagas/:id/match', authenticate, authorize('candidate'), ensureDatabase,
   candidateController.showMatchDetail);
+router.post('/me/vagas/:id/candidatura', authenticate, authorize('candidate'),
+  candidateApplicationRules(), (req, res, next) => validate(req, res, next, 400), ensureDatabase,
+  candidateController.referToApplication);
 router.get('/me/engajamento', authenticate, authorize('candidate'), ensureDatabase,
   engagementController.show);
 router.patch('/me/perfil-publico', authenticate, authorize('candidate'), candidatePublicProfileRules(),

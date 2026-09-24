@@ -9,4 +9,6 @@ Object.assign(process.env, {
   JWT_EXPIRES_IN: '1h',
   CORS_ORIGIN: '*',
   STUDENT_VALIDATION_SOURCE: 'pending',
+  APPLICATION_ALLOWED_HOSTS: 'jobs.example.com,careers.example.org',
+  APPLICATION_ALLOWED_EMAIL_DOMAINS: 'example.com,example.org',
 });

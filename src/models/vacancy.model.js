@@ -108,6 +108,10 @@ const normalizationDraftSchema = new mongoose.Schema({
   publishedAt: { type: Date, default: null },
   recalculation: { type: adminRecalculationSchema, default: null },
 }, { _id: false });
+const applicationChannelSchema = new mongoose.Schema({
+  type: { type: String, enum: ['https_url', 'email'], required: true },
+  value: { type: String, required: true, trim: true, maxlength: 2000 },
+}, { _id: false });
 
 const vacancySchema = new mongoose.Schema({
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, immutable: true },
@@ -125,6 +129,7 @@ const vacancySchema = new mongoose.Schema({
   reference: { type: String, trim: true, lowercase: true, maxlength: 100, default: null },
   title: { type: String, required: true, trim: true, maxlength: 200 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },
+  applicationChannel: { type: applicationChannelSchema, default: null },
   location: { type: locationSchema, default: null },
   geographicRestrictions: { type: geographicRestrictionSchema, default: null },
   matchProfile: { type: matchProfileSchema, required: true },

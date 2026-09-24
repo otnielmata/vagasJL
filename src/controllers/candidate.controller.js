@@ -1,6 +1,7 @@
 const candidateService = require('../services/candidate.service');
 const vacancyRankingService = require('../services/vacancy-ranking.service');
 const candidateMatchDetailService = require('../services/candidate-match-detail.service');
+const candidateApplicationService = require('../services/candidate-application.service');
 
 async function register(req, res, next) {
   try {
@@ -74,5 +75,16 @@ async function showMatchDetail(req, res, next) {
   }
 }
 
+async function referToApplication(req, res, next) {
+  try {
+    const application = await candidateApplicationService.referCandidateToApplication(
+      req.user, req.params.id,
+    );
+    return res.status(200).json({ application });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = { register, validateEligibility, show, update, remove, rankVacancies,
-  showMatchDetail };
+  showMatchDetail, referToApplication };

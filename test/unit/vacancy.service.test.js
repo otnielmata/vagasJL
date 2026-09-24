@@ -99,6 +99,17 @@ test('location and numeric experience are accepted without Match score', async (
   assert.equal(vacancy.toJSON().score, undefined);
 });
 
+test('official application channel is normalized during company vacancy registration', async (context) => {
+  setup(context);
+  const vacancy = await registerCompanyVacancy(actor, companyId, {
+    ...minimum,
+    applicationChannel: { type: 'https_url', value: ' https://jobs.example.com/vagas/qa-1 ' },
+  });
+  assert.deepEqual(vacancy.applicationChannel.toObject(), {
+    type: 'https_url', value: 'https://jobs.example.com/vagas/qa-1',
+  });
+});
+
 test('company vacancy registration rejects unknown seniority and accepts a canonical level', async (context) => {
   const { createVacancy } = setup(context);
   for (const level of ['unknown', 'Desconhecido', ['junior', 'UNKNOWN']]) {

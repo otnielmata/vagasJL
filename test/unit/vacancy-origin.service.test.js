@@ -57,6 +57,20 @@ test('trusted import persists IMPORTED and identifiable source with shared canon
   assert.equal(findUser.mock.callCount(), 0);
 });
 
+test('import accepts only a normalized and allowlisted official application channel', async (context) => {
+  const { createVacancy } = setup(context);
+  const vacancy = await registerImportedVacancy({ source: 'board', sourceId: 'safe-channel' }, {
+    ...input, applicationChannel: { type: 'email', value: ' Jobs@Example.org ' },
+  });
+  assert.deepEqual(vacancy.applicationChannel.toObject(), {
+    type: 'email', value: 'jobs@example.org',
+  });
+  await assert.rejects(registerImportedVacancy({ source: 'board', sourceId: 'unsafe-channel' }, {
+    ...input, applicationChannel: { type: 'https_url', value: 'https://evil.example.net/apply' },
+  }), { statusCode: 400 });
+  assert.equal(createVacancy.mock.callCount(), 1);
+});
+
 test('active admin persists ADMIN with author and the same canonical profile', async (context) => {
   const { findUser } = setup(context);
   const vacancy = await registerAdminVacancy({ id: authorId, role: 'admin' }, {

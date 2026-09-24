@@ -6,8 +6,8 @@ const { prepareImportedVacancyData } = require('./vacancy-origin.service');
 const ApiError = require('../errors/api.error');
 
 const SOURCE_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
-const EDITABLE_FIELDS = ['reference', 'title', 'description', 'location', 'geographicRestrictions',
-  'matchProfile', 'expiresAt', 'importMappingAudit', 'importImportance'];
+const EDITABLE_FIELDS = ['reference', 'title', 'description', 'applicationChannel', 'location',
+  'geographicRestrictions', 'matchProfile', 'expiresAt', 'importMappingAudit', 'importImportance'];
 const AUDIT_FIELDS = ['origin', 'status', ...EDITABLE_FIELDS];
 const CLOSE_TRANSITIONS = Object.freeze({
   pending: ['removed'], active: ['expired', 'removed'], paused: ['expired', 'removed'],
@@ -31,8 +31,8 @@ function stable(value) {
 
 function relevantSnapshot(vacancy) {
   const source = plain(vacancy);
-  return Object.fromEntries(EDITABLE_FIELDS.filter((field) => source[field] !== undefined)
-    .map((field) => [field, source[field]]));
+  return Object.fromEntries(EDITABLE_FIELDS.filter((field) => source[field] !== undefined ||
+    field === 'applicationChannel').map((field) => [field, source[field] ?? null]));
 }
 
 function auditSnapshot(vacancy) {
