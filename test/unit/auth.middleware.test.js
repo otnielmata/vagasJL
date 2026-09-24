@@ -71,6 +71,19 @@ test('authorizes roles from current account, not stale token claims', async (con
   assert.equal(response.statusCode, 403);
 });
 
+test('rejects a valid signed token after its account token version is revoked', async (context) => {
+  context.mock.method(mongoose, 'connect', async () => mongoose);
+  context.mock.method(User, 'findById', () => ({
+    select: async () => ({ status: 'active', role: 'candidate', tokenVersion: 2 }),
+  }));
+  const token = jwt.sign({ sub: userId, role: 'candidate', version: 1 }, process.env.JWT_SECRET);
+  const response = responseMock();
+  await authenticate({ headers: { authorization: `Bearer ${token}` } }, response,
+    () => assert.fail('revoked token must not continue'));
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.body.message, 'Token invalido ou sessao revogada');
+});
+
 for (const [target, statusCode] of [[userId.toUpperCase(), 404], ['6512f1e2b3a1c2d3e4f5a6b8', 401]]) {
   test(`deleted actor receives ${statusCode} deleting target ${target}`, async (context) => {
     context.mock.method(mongoose, 'connect', async () => mongoose);

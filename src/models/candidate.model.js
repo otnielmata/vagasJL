@@ -7,6 +7,9 @@ const {
   ELIGIBILITY_SOURCE,
   PROFILE_FIELDS,
 } = require('../config/candidate');
+const { PUBLIC_PROFILE_FIELDS } = require('../config/candidate-public-profile');
+const { CONTACT_DISPLAY_FIELDS, FORMATION_DISPLAY_FIELDS } =
+  require('../config/candidate-display-permissions');
 
 const optionalProfile = Object.fromEntries(PROFILE_FIELDS.map((field) => [field, {
   type: String,
@@ -48,6 +51,51 @@ const eligibilityHistorySchema = new mongoose.Schema({
   invalidatedAt: { type: Date, required: true },
 }, { _id: false });
 
+const publicProfileSchema = new mongoose.Schema({
+  enabled: { type: Boolean, default: false, required: true },
+  fields: [{ type: String, enum: PUBLIC_PROFILE_FIELDS }],
+  consentedAt: { type: Date, default: null },
+  revokedAt: { type: Date, default: null },
+  cacheVersion: { type: Number, default: 1, min: 1, required: true },
+  cacheInvalidatedAt: { type: Date, default: null },
+}, { _id: false });
+
+const publicProfileConsentHistorySchema = new mongoose.Schema({
+  action: { type: String, enum: ['opt_in', 'fields_updated', 'revoked', 'candidate_deleted'], required: true },
+  fields: [{ type: String, enum: PUBLIC_PROFILE_FIELDS }],
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
+const opportunityAvailabilityHistorySchema = new mongoose.Schema({
+  availableForOpportunities: { type: Boolean, required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
+const enterpriseDisplayPermissionsSchema = new mongoose.Schema({
+  contact: [{ type: String, enum: CONTACT_DISPLAY_FIELDS }],
+  formation: [{ type: String, enum: FORMATION_DISPLAY_FIELDS }],
+  changedAt: { type: Date, default: null },
+  cacheVersion: { type: Number, default: 1, min: 1, required: true },
+  cacheInvalidatedAt: { type: Date, default: null },
+}, { _id: false });
+
+const enterpriseDisplayPermissionHistorySchema = new mongoose.Schema({
+  contact: [{ type: String, enum: CONTACT_DISPLAY_FIELDS }],
+  formation: [{ type: String, enum: FORMATION_DISPLAY_FIELDS }],
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+}, { _id: false });
+
+const statusHistorySchema = new mongoose.Schema({
+  from: { type: String, enum: Object.values(CANDIDATE_STATUS), required: true },
+  to: { type: String, enum: Object.values(CANDIDATE_STATUS), required: true },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  changedAt: { type: Date, required: true },
+  reason: { type: String, required: true, trim: true, maxlength: 500 },
+}, { _id: false });
+
 const candidateSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true, trim: true, maxlength: 200 },
@@ -58,14 +106,40 @@ const candidateSchema = new mongoose.Schema({
     enum: ['available', 'unavailable', UNKNOWN],
     default: UNKNOWN,
   },
+  availableForOpportunities: { type: Boolean, default: false, required: true },
+  opportunityAvailabilityChangedAt: { type: Date, default: null },
+  opportunitySearchCacheVersion: { type: Number, default: 1, min: 1, required: true, select: false },
+  opportunitySearchCacheInvalidatedAt: { type: Date, default: null, select: false },
+  opportunityAvailabilityHistory: {
+    type: [opportunityAvailabilityHistorySchema],
+    default: () => [],
+    select: false,
+  },
+  enterpriseDisplayPermissions: {
+    type: enterpriseDisplayPermissionsSchema,
+    default: () => ({}),
+    select: false,
+  },
+  enterpriseDisplayPermissionHistory: {
+    type: [enterpriseDisplayPermissionHistorySchema],
+    default: () => [],
+    select: false,
+  },
   status: {
     type: String,
     enum: Object.values(CANDIDATE_STATUS),
     default: CANDIDATE_STATUS.PENDING_VALIDATION,
     required: true,
   },
+  statusHistory: { type: [statusHistorySchema], default: () => [], select: false },
   eligibility: { type: eligibilitySchema, default: () => ({}) },
   eligibilityHistory: { type: [eligibilityHistorySchema], default: () => [], select: false },
+  publicProfile: { type: publicProfileSchema, default: () => ({}), select: false },
+  publicProfileConsentHistory: {
+    type: [publicProfileConsentHistorySchema],
+    default: () => [],
+    select: false,
+  },
   deletedAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
@@ -88,11 +162,16 @@ candidateSchema.index(
 );
 
 candidateSchema.virtual('visibleToCompanies').get(function visibleToCompanies() {
-  return this.status === CANDIDATE_STATUS.ACTIVE;
+  return this.status === CANDIDATE_STATUS.ACTIVE && this.availableForOpportunities === true;
 });
 
 candidateSchema.statics.findVisibleToCompanies = function findVisibleToCompanies() {
-  return this.find({ status: CANDIDATE_STATUS.ACTIVE });
+  return this.find({
+    status: CANDIDATE_STATUS.ACTIVE,
+    availableForOpportunities: true,
+    'eligibility.status': ELIGIBILITY_STATUS.APPROVED,
+    deletedAt: null,
+  });
 };
 
 candidateSchema.set('toJSON', {
@@ -101,6 +180,14 @@ candidateSchema.set('toJSON', {
     delete result.__v;
     delete result.id;
     delete result.eligibilityHistory;
+    delete result.statusHistory;
+    delete result.publicProfile;
+    delete result.publicProfileConsentHistory;
+    delete result.opportunityAvailabilityHistory;
+    delete result.opportunitySearchCacheVersion;
+    delete result.opportunitySearchCacheInvalidatedAt;
+    delete result.enterpriseDisplayPermissions;
+    delete result.enterpriseDisplayPermissionHistory;
     delete result.deletedAt;
     if (result.eligibility) delete result.eligibility.source;
     return result;

@@ -1,6 +1,10 @@
 require('dotenv').config();
 
 const corsOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((origin) => origin.trim()).filter(Boolean);
+const applicationAllowedHosts = (process.env.APPLICATION_ALLOWED_HOSTS || '')
+  .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+const applicationAllowedEmailDomains = (process.env.APPLICATION_ALLOWED_EMAIL_DOMAINS || '')
+  .split(',').map((domain) => domain.trim().toLowerCase()).filter(Boolean);
 
 /**
  * Configuracao central da aplicacao, lida a partir das variaveis de ambiente.
@@ -26,6 +30,19 @@ const config = {
   studentValidation: {
     source: process.env.STUDENT_VALIDATION_SOURCE || 'pending',
   },
+  match: {
+    eliminatoryEnabled: (process.env.MATCH_ELIMINATORY_ENABLED ?? 'true') === 'true',
+  },
+  engagement: {
+    apiUrl: process.env.ENGAGEMENT_API_URL || '',
+    apiToken: process.env.ENGAGEMENT_API_TOKEN || '',
+    timeoutMs: Number(process.env.ENGAGEMENT_API_TIMEOUT_MS || 3000),
+    cacheTtlMs: Number(process.env.ENGAGEMENT_CACHE_TTL_MS || 300000),
+  },
+  application: {
+    allowedHosts: applicationAllowedHosts,
+    allowedEmailDomains: applicationAllowedEmailDomains,
+  },
 };
 
 function validateConfig() {
@@ -33,6 +50,32 @@ function validateConfig() {
 
   if (!['pending', 'mongodb'].includes(config.studentValidation.source)) {
     errors.push('STUDENT_VALIDATION_SOURCE deve ser pending ou mongodb');
+  }
+  if (!['true', 'false'].includes(process.env.MATCH_ELIMINATORY_ENABLED ?? 'true')) {
+    errors.push('MATCH_ELIMINATORY_ENABLED deve ser true ou false');
+  }
+  if (Boolean(config.engagement.apiUrl) !== Boolean(config.engagement.apiToken)) {
+    errors.push('ENGAGEMENT_API_URL e ENGAGEMENT_API_TOKEN devem ser configurados juntos');
+  }
+  if (config.engagement.apiUrl) {
+    try {
+      const engagementUrl = new URL(config.engagement.apiUrl);
+      if (!['http:', 'https:'].includes(engagementUrl.protocol)) throw new Error();
+    } catch {
+      errors.push('ENGAGEMENT_API_URL deve ser uma URL HTTP ou HTTPS valida');
+    }
+  }
+  if (!Number.isSafeInteger(config.engagement.timeoutMs) || config.engagement.timeoutMs < 100 ||
+      config.engagement.timeoutMs > 30000) {
+    errors.push('ENGAGEMENT_API_TIMEOUT_MS deve ser inteiro entre 100 e 30000');
+  }
+  if (!Number.isSafeInteger(config.engagement.cacheTtlMs) || config.engagement.cacheTtlMs < 0 ||
+      config.engagement.cacheTtlMs > 3600000) {
+    errors.push('ENGAGEMENT_CACHE_TTL_MS deve ser inteiro entre 0 e 3600000');
+  }
+  if ([...config.application.allowedHosts, ...config.application.allowedEmailDomains]
+    .some((value) => !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(value))) {
+    errors.push('Hosts e dominios de candidatura devem ser nomes DNS validos');
   }
 
   if (!config.jwt.secret || Buffer.byteLength(config.jwt.secret) < 32 || config.jwt.secret.startsWith('troque-')) {

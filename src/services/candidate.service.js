@@ -1,7 +1,10 @@
 const User = require('../models/user.model');
 const Candidate = require('../models/candidate.model');
+const Company = require('../models/company.model');
+const CompanyUser = require('../models/company-user.model');
 const ApiError = require('../errors/api.error');
 const studentValidation = require('./student-validation.service');
+const { enterpriseCandidateData } = require('./candidate-display-permissions.service');
 const {
   UNKNOWN,
   CANDIDATE_STATUS,
@@ -15,7 +18,7 @@ const {
 
 const PUBLIC_CANDIDATE_FIELDS = Object.freeze([
   'name', 'photoUrl', 'email', 'phone', 'city', 'state', 'country', 'linkedinUrl',
-  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability',
+  'githubUrl', 'portfolioUrl', 'professionalSummary', 'availability', 'availableForOpportunities',
 ]);
 const PROFILE_FIELD_SET = new Set(PROFILE_FIELDS);
 const CANDIDATE_READ_PROJECTION = Object.freeze({
@@ -23,6 +26,7 @@ const CANDIDATE_READ_PROJECTION = Object.freeze({
   user: 1,
   status: 1,
   ...Object.fromEntries(PUBLIC_CANDIDATE_FIELDS.map((field) => [field, 1])),
+  enterpriseDisplayPermissions: 1,
 });
 const EMAIL_UPDATE_TRANSACTION_OPTIONS = Object.freeze({
   readPreference: 'primary',
@@ -64,7 +68,9 @@ function normalizePublicProfileValue(value) {
 function publicCandidateData(candidate, includeStatus) {
   const result = { _id: candidate._id };
   for (const field of PUBLIC_CANDIDATE_FIELDS) {
-    result[field] = PROFILE_FIELD_SET.has(field)
+    result[field] = field === 'availableForOpportunities'
+      ? candidate[field] === true
+      : PROFILE_FIELD_SET.has(field)
       ? normalizePublicProfileValue(candidate[field])
       : candidate[field];
   }
@@ -321,8 +327,25 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
     throw new ApiError(403, 'Acesso negado para este perfil de usuario');
   }
 
+  if (requesterRole === 'company') {
+    const account = await User.findOne({
+      _id: requesterId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+    });
+    const membership = account && await CompanyUser.findOne({ user: account._id, status: 'active' });
+    const company = membership && await Company.findOne({
+      _id: membership.company, status: 'active', deletedAt: null,
+    });
+    if (!company) {
+      throw new ApiError(403, 'Acesso empresarial exige empresa ativa e vinculo de usuario autorizado');
+    }
+  }
+
   const filter = { _id: candidateId };
-  if (requesterRole === 'company') filter.status = CANDIDATE_STATUS.ACTIVE;
+  if (requesterRole === 'company') {
+    filter.status = CANDIDATE_STATUS.ACTIVE;
+    filter.availableForOpportunities = true;
+    filter['eligibility.status'] = ELIGIBILITY_STATUS.APPROVED;
+  }
 
   const candidate = await Candidate.findOne(filter).select(CANDIDATE_READ_PROJECTION).lean();
   if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
@@ -331,7 +354,9 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
     throw new ApiError(403, 'Voce so pode visualizar seu proprio cadastro de candidato');
   }
 
-  return publicCandidateData(candidate, requesterRole === 'candidate');
+  return requesterRole === 'candidate'
+    ? publicCandidateData(candidate, true)
+    : enterpriseCandidateData(candidate);
 }
 
 async function updateCandidateFields(candidate, updates) {
@@ -460,7 +485,39 @@ async function deleteCandidate(candidateId, requesterId, requesterRole) {
       status: { $in: DELETABLE_CANDIDATE_STATUSES },
       deletedAt: null,
     },
-    { $set: { status: CANDIDATE_STATUS.INACTIVE, deletedAt } },
+    {
+      $set: {
+        status: CANDIDATE_STATUS.INACTIVE,
+        deletedAt,
+        'publicProfile.enabled': false,
+        'publicProfile.fields': [],
+        'publicProfile.revokedAt': deletedAt,
+        'publicProfile.cacheInvalidatedAt': deletedAt,
+        availableForOpportunities: false,
+        opportunityAvailabilityChangedAt: deletedAt,
+        opportunitySearchCacheInvalidatedAt: deletedAt,
+        'enterpriseDisplayPermissions.contact': [],
+        'enterpriseDisplayPermissions.formation': [],
+        'enterpriseDisplayPermissions.changedAt': deletedAt,
+        'enterpriseDisplayPermissions.cacheInvalidatedAt': deletedAt,
+      },
+      $inc: {
+        'publicProfile.cacheVersion': 1,
+        opportunitySearchCacheVersion: 1,
+        'enterpriseDisplayPermissions.cacheVersion': 1,
+      },
+      $push: {
+        publicProfileConsentHistory: {
+          action: 'candidate_deleted', fields: [], actor: requesterId, changedAt: deletedAt,
+        },
+        opportunityAvailabilityHistory: {
+          availableForOpportunities: false, actor: requesterId, changedAt: deletedAt,
+        },
+        enterpriseDisplayPermissionHistory: {
+          contact: [], formation: [], actor: requesterId, changedAt: deletedAt,
+        },
+      },
+    },
     { new: true, runValidators: true }
   );
   if (!deleted) throw new ApiError(404, 'Candidato nao encontrado');

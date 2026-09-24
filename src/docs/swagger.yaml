@@ -7,12 +7,32 @@ info:
     Inclui cadastro (VJ-1), login (VJ-2), edicao (VJ-4), consulta publica autenticada (VJ-6),
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
-    logica de candidatos (VJ-27).
+    logica de candidatos (VJ-27), cadastro empresarial separado (VJ-37) e vinculo
+    de recrutador verificado (VJ-38), edicao controlada (VJ-39) e consulta
+    protegida do cadastro empresarial (VJ-40), exclusao logica com revogacao (VJ-41),
+    administracao auditada do status empresarial (VJ-77) e de candidatos (VJ-78),
+    configuracao consolidada e versionada do Motor de Match (VJ-79),
+    cadastro e revisao administrativa de vagas com auditoria (VJ-80),
+    Catalogo Mestre canonico, versionado e com sinonimos (VJ-81),
+    separacao conceitual dos dados importados (VJ-82) e contratos canonicos
+    compativeis com o JSON legado apenas na fronteira de importacao (VJ-83),
+    extracao revisavel da descricao para requisitos estruturados (VJ-84),
+    Match exclusivamente sobre dados estruturados, normalizados e versionados (VJ-85),
+    encaminhamento seguro ao canal oficial de candidatura (VJ-86),
+    catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
+    rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
+    do candidato (VJ-29) e sua edicao (VJ-30).
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Ambiente local
 tags:
+  - name: Match Profile
+    description: Configuracao administrativa dos campos, pesos e catalogos compartilhados
+  - name: Vacancies
+    description: Oportunidades cadastradas pelas empresas
+  - name: Companies
+    description: Cadastro administrativo de empresas
   - name: Candidates
     description: Cadastro, validacao, visualizacao, alteracao e exclusao logica de candidatos
   - name: Auth
@@ -23,6 +43,1310 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /admin/catalogos/{category}/{id}:
+    put:
+      tags: [Match Profile]
+      summary: Publica item canonico do Catalogo Mestre (VJ-81)
+      description: >
+        Cria ou atualiza idempotentemente uma revisao publicada do item. O ID permanece estavel
+        quando o nome muda. Aliases equivalentes por caixa, acento, espaco, ponto, hifen ou
+        sublinhado convergem para o mesmo ID; ambiguidades retornam 409 sem alterar a versao
+        funcional vigente. active=false impede novos usos, mas preserva configuracoes e resultados
+        historicos. A publicacao sincroniza uma nova versao do Perfil de Match quando necessario,
+        invalida cache e agenda reprocessamento.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z][a-z0-9_]*$', maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterCatalogItemRequest' }
+      responses:
+        '200':
+          description: Item criado, atualizado ou repetido de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                additionalProperties: false
+                properties:
+                  item: { $ref: '#/components/schemas/MasterCatalogItem' }
+        '400': { description: Categoria ou identificador canonico invalido }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin ou conta administrativa inexistente }
+        '409': { description: ID reutilizado, alias ambiguo ou publicacao concorrente }
+        '422': { description: Estrutura, alias ou vigencia invalida }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /admin/vagas/{id}:
+    put:
+      tags: [Vacancies]
+      summary: Cadastra ou revisa uma vaga pela administracao (VJ-80)
+      description: >
+        Operacao idempotente e exclusiva de administrador ativo. Um identificador inexistente
+        cria a vaga na versao 1, origem ADMIN e status pending. Uma vaga existente pode ter
+        conteudo e status revisados sem alterar sua origem IMPORTED, COMPANY ou ADMIN.
+        Ativacao exige Perfil de Match canonico completo e requisitos validos. Alteracoes sao
+        auditadas com antes/depois e agendam recalculo conforme a configuracao vigente. Estados
+        nao ativos saem dos rankings sem exclusao fisica; resultados historicos permanecem.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId prescrito ou existente da vaga
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminVacancyRequest' }
+      responses:
+        '200':
+          description: Vaga revisada ou repeticao idempotente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminVacancyResponse' }
+        '201':
+          description: Vaga administrativa criada como pending
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminVacancyResponse' }
+        '400': { description: Identificador de vaga malformado }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin ou conta administrativa inexistente }
+        '409': { description: Origem, versao, transicao ou alteracao concorrente em conflito }
+        '422': { description: Representacao invalida ou vaga sem requisitos para o estado solicitado }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /admin/configuracoes/match/{version}:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao consolidada do Motor de Match (VJ-79)
+      description: >
+        Publica atomicamente pesos, multiplicadores, importancia padrao de importacao,
+        Match minimo e vigencia sob uma versao MATCH_Vx. Uma versao publicada e imutavel;
+        repetir o mesmo conteudo e idempotente. Versoes futuras nao substituem a vigente
+        antes de effectiveAt. Quando vigente, esta configuracao prevalece sobre os endpoints
+        legados e sua versao e registrada nos novos resultados de Match.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', example: MATCH_V2 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchEngineConfigurationRequest'
+      responses:
+        '200':
+          description: Versao criada, publicada ou repetida de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration: { $ref: '#/components/schemas/MatchEngineConfiguration' }
+        '400': { description: Identificador de versao invalido }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '409': { description: Versao publicada ou revisao ja existe com outro conteudo }
+        '422': { description: Configuracao parcial ou parametro fora dos limites }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /configuracoes/match/multiplicadores:
+    put:
+      tags: [Match Profile]
+      summary: Publica multiplicadores versionados do Match (VJ-52)
+      description: >
+        Apenas administrador autenticado. required=1 e indifferent=0 sao invariantes;
+        desirable deve ser estritamente maior que 0 e menor que 1. Repetir a
+        configuracao vigente nao incrementa a versao. Sem publicacao, rankings
+        com pares pontuaveis retornam 503 em vez de usar fator implicito.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [required, desirable, indifferent]
+              additionalProperties: false
+              properties:
+                required: { type: number, enum: [1] }
+                desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+                indifferent: { type: number, enum: [0] }
+      responses:
+        '200':
+          description: Configuracao publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, multipliers, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      multipliers:
+                        type: object
+                        required: [required, desirable, indifferent]
+                        properties:
+                          required: { type: number, enum: [1] }
+                          desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+                          indifferent: { type: number, enum: [0] }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Multiplicadores invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra configuracao }
+  /configuracoes/match/limiar-ranking:
+    put:
+      tags: [Match Profile]
+      summary: Publica percentual minimo versionado para rankings (VJ-65)
+      description: >
+        Apenas administrador autenticado. Aceita percentual de 0 a 100 com ate duas
+        casas decimais. Repetir o valor vigente nao incrementa a versao. Sem publicacao,
+        nenhum corte percentual arbitrario e aplicado. Novas consultas usam imediatamente
+        a versao mais recente, sem alterar pontos, pesos, gaps ou inelegibilidade.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minimumPercentage]
+              additionalProperties: false
+              properties:
+                minimumPercentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  multipleOf: 0.01
+                  example: 60
+      responses:
+        '200':
+          description: Limiar publicado ou mantido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, minimumPercentage, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      minimumPercentage: { type: number, minimum: 0, maximum: 100 }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Percentual ou corpo invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outro limiar }
+  /configuracoes/match/completude-minima:
+    put:
+      tags: [Match Profile]
+      summary: Publica completude minima versionada para recomendacoes (VJ-73)
+      description: >
+        Apenas administrador autenticado. Aceita percentual de 0 a 100 com ate duas
+        casas decimais. Repetir o valor vigente nao cria versao. Sem publicacao, a
+        recomendacao nao recebe bloqueio arbitrario de completude.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minimumPercentage]
+              additionalProperties: false
+              properties:
+                minimumPercentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  multipleOf: 0.01
+                  example: 70
+      responses:
+        '200':
+          description: Completude minima publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    type: object
+                    required: [version, minimumPercentage, effectiveAt, author]
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      minimumPercentage: { type: number, minimum: 0, maximum: 100 }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Percentual ou corpo invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra configuracao }
+  /configuracoes/importacao/importancia-padrao:
+    put:
+      tags: [Match Profile]
+      summary: Publica importancia padrao versionada para vagas importadas (VJ-49)
+      description: >
+        Apenas administrador autenticado. Aceita somente importance. Retorna a
+        versao, autor e data de vigencia. A mesma importancia mantem a versao;
+        alteracoes afetam apenas novas importacoes, sem recalcular vagas existentes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [importance]
+              additionalProperties: false
+              properties:
+                importance: { type: string, enum: [required, desirable, indifferent] }
+      responses:
+        '200':
+          description: Configuracao publicada ou mantida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configuration:
+                    type: object
+                    properties:
+                      version: { type: integer, minimum: 1 }
+                      importance: { type: string, enum: [required, desirable, indifferent] }
+                      effectiveAt: { type: string, format: date-time }
+                      author: { type: string }
+        '400': { description: Corpo ou importancia invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao administrativa }
+        '409': { description: Publicacao concorrente de outra importancia }
+  /candidatos/me/vagas/ranking:
+    get:
+      tags: [Vacancies]
+      summary: Lista vagas elegiveis por Match com Top 3, 5 ou 10 (VJ-45/VJ-63)
+      description: >
+        Requer JWT de candidato com cadastro e Perfil de Match. Aplica status active,
+        prazo vigente e empresa active para vagas COMPANY antes de pontuar, ordenar e
+        paginar. Nao usa cache. Origem nao modifica o percentual tecnico. Campos false
+        de vagas IMPORTED nao pontuam nem eliminam; sem requisito pontuavel, a
+        compatibilidade tecnica e nao calculavel e a vaga nao entra no ranking. O
+        limit aceita Top 3, Top 5 e Top 10. Depois dos filtros, ordena por percentual,
+        requisitos obrigatorios atendidos, atualizacao da vaga e ID estavel. Engajamento
+        nao altera o ranking tecnico. Se houver limiar publicado, aplica corte inclusivo
+        sobre o percentual bruto antes da ordenacao, total e paginacao. Antes de consultar
+        vagas, aplica a completude minima vigente. Perfil insuficiente recebe estado e
+        pendencias explicitos, sem lista vazia ambigua e sem calcular novos Matches.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Ranking elegivel paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recommendationStatus, profileCompletion, minimumProfileCompletionPercentage, completionThresholdVersion]
+                properties:
+                  recommendationStatus:
+                    type: string
+                    enum: [available, insufficient_profile_completeness]
+                  profileCompletion:
+                    $ref: '#/components/schemas/RecommendationProfileCompletion'
+                  items:
+                    type: array
+                    description: Presente somente quando recommendationStatus e available.
+                    items:
+                      type: object
+                      required: [vacancy, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion, audit]
+                      properties:
+                        vacancy: { $ref: '#/components/schemas/Vacancy' }
+                        percentage: { type: number, minimum: 0, maximum: 100 }
+                        earnedPoints: { type: number, minimum: 0 }
+                        possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        matchedRequiredCount: { type: integer, minimum: 0 }
+                        configurationVersion: { type: integer, minimum: 1 }
+                        multipliersVersion: { type: integer, minimum: 1 }
+                        audit: { $ref: '#/components/schemas/MatchAuditReference' }
+                  total: { type: integer, minimum: 0 }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 50 }
+                  pages: { type: integer, minimum: 0 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
+                  minimumProfileCompletionPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  completionThresholdVersion: { type: integer, minimum: 1, nullable: true }
+        '400': { description: Paginacao invalida }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Conta nao e candidata }
+        '404': { description: Cadastro de candidato inexistente }
+        '409': { description: Perfil de Match nao cadastrado }
+        '503': { description: Configuracao tecnica ou de completude indisponivel }
+  /candidatos/me/vagas/{id}/match:
+    get:
+      tags: [Vacancies]
+      summary: Explica o Match do candidato autenticado com uma vaga (VJ-64)
+      description: >
+        Reutiliza o mesmo Motor de Match dos rankings. Retorna criterios atendidos,
+        gaps canonicos ordenados pela perda efetiva e motivo seguro de inelegibilidade.
+        Competencias extras, indifferent, derivados, texto livre e valores importados nao
+        identificados nao viram gaps. Perfil incompleto ou denominador zero produz estado
+        not_calculable e percentual nulo. Distingue eligible, below_threshold, ineligible e
+        not_calculable, avaliando eliminacao antes do limiar. Nao gera plano de estudos nem
+        expoe dados privados. O indicador identifica esta resposta como dimensao technical_match
+        e nao consulta nem incorpora engajamento.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      responses:
+        '200':
+          description: Detalhe explicavel do Match
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vacancy, indicator, audit, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria, diagnostics]
+                properties:
+                  vacancy:
+                    type: object
+                    required: [_id, title]
+                    properties:
+                      _id: { type: string }
+                      title: { type: string }
+                  indicator:
+                    type: object
+                    required: [dimension, label, percentage, status]
+                    properties:
+                      dimension: { type: string, enum: [technical_match] }
+                      label: { type: string, enum: [Match tecnico] }
+                      percentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                      status: { type: string, enum: [eligible, below_threshold, ineligible, not_calculable] }
+                  audit: { $ref: '#/components/schemas/MatchAuditReference' }
+                  resultState:
+                    type: string
+                    enum: [eligible, below_threshold, ineligible, not_calculable]
+                  resultLabel:
+                    type: string
+                    enum: [Compatível, Compatibilidade baixa, Não atende critério eliminatório, Compatibilidade não calculável]
+                  calculationStatus:
+                    type: string
+                    enum: [calculable, not_calculable]
+                  percentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  earnedPoints: { type: number, minimum: 0, nullable: true }
+                  possiblePoints: { type: number, minimum: 0, nullable: true }
+                  configurationVersion: { type: integer, minimum: 1 }
+                  multipliersVersion: { type: integer, minimum: 1 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
+                  eligibility:
+                    type: object
+                    required: [eligible, reason]
+                    properties:
+                      eligible: { type: boolean, nullable: true }
+                      reason: { type: object, nullable: true, additionalProperties: true }
+                  metCriteria:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  gaps:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  availableCriteria:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  diagnostics:
+                    type: array
+                    items:
+                      type: object
+                      required: [code]
+                      properties:
+                        code: { type: string }
+                        field: { type: string, nullable: true }
+                        id: { type: string, nullable: true }
+        '400': { description: Identificador da vaga invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Conta nao e candidata }
+        '404': { description: Candidato inexistente ou vaga indisponivel }
+        '503': { description: Configuracao tecnica indisponivel }
+  /candidatos/me/vagas/{id}/candidatura:
+    post:
+      tags: [Vacancies]
+      summary: Encaminha o candidato ao canal oficial da vaga (VJ-86)
+      description: >
+        Exige JWT de candidato nao bloqueado e corpo vazio. A vaga deve estar ativa,
+        vigente e possuir URL HTTPS ou e-mail institucional normalizado e autorizado
+        pela politica do servidor. Registra uma unica telemetria minima por candidato
+        e vaga, sem contato, credenciais ou conteudo externo. Match baixo nao bloqueia
+        o encaminhamento e eventual inelegibilidade aparece separadamente. O estado
+        redirect_ready nao confirma que a candidatura externa foi concluida.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: Canal oficial pronto para uso, sem confirmacao de candidatura externa
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [application]
+                properties:
+                  application: { $ref: '#/components/schemas/ApplicationReferralResponse' }
+        '400': { description: Identificador invalido ou corpo nao vazio }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel diferente de candidato ou candidato bloqueado }
+        '404': { description: Candidato ou vaga nao encontrados }
+        '409': { description: Vaga pausada, expirada ou sem canal oficial }
+        '503': { description: Canal viola a politica de seguranca ou auditoria indisponivel }
+  /candidatos/me/engajamento:
+    get:
+      tags: [Candidates]
+      summary: Consulta engajamento oficial separado do Match tecnico (VJ-67/VJ-68)
+      description: >
+        Somente candidato ativo e validado. Usa a identidade vinculada a conta e rejeita
+        identificadores externos na query. Consulta a origem com credenciais do servidor,
+        aplica timeout e cache apenas em memoria, filtra campos autorizados e nunca persiste
+        copia editavel. Retorna estado explicito sem inventar zeros quando nao ha dados ou a
+        origem esta indisponivel. Categoria e exibida somente quando recebida oficialmente;
+        dados brutos nunca geram classificacao implicita e nao alteram Match ou ranking.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Estado da consulta oficial de engajamento
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [engagement]
+                properties:
+                  engagement:
+                    type: object
+                    required: [status, readOnly, indicator, data, referenceAt, retrievedAt, cache]
+                    properties:
+                      status:
+                        type: string
+                        enum: [available, no_data, unavailable]
+                      readOnly: { type: boolean, enum: [true] }
+                      indicator:
+                        type: object
+                        required: [dimension, label, category, displayValue, categorySource, availability]
+                        properties:
+                          dimension: { type: string, enum: [training_engagement] }
+                          label: { type: string, enum: [Engajamento na formacao] }
+                          category: { type: string, nullable: true }
+                          displayValue: { type: string }
+                          categorySource: { type: string, enum: [official], nullable: true }
+                          availability: { type: string, enum: [available, no_data, unavailable] }
+                      data:
+                        type: object
+                        nullable: true
+                        additionalProperties: false
+                        properties:
+                          engagementLevel: { type: string }
+                          cohort: { type: string }
+                          challengesCompleted: { type: number }
+                          totalChallenges: { type: number }
+                          score: { type: number }
+                          participation:
+                            oneOf:
+                              - { type: string }
+                              - { type: number }
+                          history:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                type: { type: string }
+                                title: { type: string }
+                                status: { type: string }
+                                occurredAt: { type: string }
+                                score: { type: number }
+                          projects:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                name: { type: string }
+                                description: { type: string }
+                                url: { type: string }
+                                status: { type: string }
+                                completedAt: { type: string }
+                      referenceAt: { type: string, format: date-time, nullable: true }
+                      retrievedAt: { type: string, format: date-time }
+                      reason:
+                        type: string
+                        enum: [student_link_missing, integration_not_configured, student_not_found, authorized_data_absent, origin_unavailable]
+                      cache:
+                        type: object
+                        required: [hit, ttlSeconds]
+                        properties:
+                          hit: { type: boolean }
+                          ttlSeconds: { type: number, minimum: 0, maximum: 3600 }
+        '400': { description: Identificador externo enviado na query }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel, cadastro ou validacao de candidato ausente }
+  /vagas/{id}/candidatos/ranking:
+    get:
+      tags: [Vacancies]
+      summary: Lista candidatos ativos por Match com Top 3, 5 ou 10 (VJ-50/VJ-63)
+      description: >
+        Reutiliza o mesmo calculo tecnico do ranking do candidato, com a vaga como
+        referencia de requisitos e denominador. Recrutador vinculado consulta apenas
+        vaga COMPANY da propria empresa ativa; admin pode consultar origens validas.
+        Exclui candidatos inativos, sem perfil ou inelegiveis antes de ordenar e limitar.
+        O limit aceita Top 3, Top 5 e Top 10. Ordena por percentual, requisitos obrigatorios
+        atendidos, atualizacao do perfil e ID estavel. Engajamento nao participa do MVP.
+        Se houver limiar publicado, aplica corte inclusivo sobre o percentual bruto antes
+        da ordenacao, total e paginacao.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Ranking elegivel paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, limit, pages, minimumMatchPercentage, rankingThresholdVersion]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [candidate, percentage, earnedPoints, possiblePoints, matchedRequiredCount, configurationVersion, multipliersVersion, audit]
+                      properties:
+                        candidate:
+                          type: object
+                          required: [_id, name]
+                          properties:
+                            _id: { type: string }
+                            name: { type: string }
+                        percentage: { type: number, minimum: 0, maximum: 100 }
+                        earnedPoints: { type: number, minimum: 0 }
+                        possiblePoints: { type: number, exclusiveMinimum: 0 }
+                        matchedRequiredCount: { type: integer, minimum: 0 }
+                        configurationVersion: { type: integer, minimum: 1 }
+                        multipliersVersion: { type: integer, minimum: 1 }
+                        audit: { $ref: '#/components/schemas/MatchAuditReference' }
+                  total: { type: integer, minimum: 0 }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 50 }
+                  pages: { type: integer, minimum: 0 }
+                  minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, nullable: true }
+                  rankingThresholdVersion: { type: integer, minimum: 1, nullable: true }
+        '400': { description: ID ou paginacao invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao empresarial ou administrativa }
+        '404': { description: Vaga inexistente ou indisponivel }
+        '503': { description: Configuracao tecnica indisponivel }
+  /perfil-match/configuracao:
+    put:
+      tags: [Match Profile]
+      summary: Publica configuracao versionada do Perfil de Match (VJ-28)
+      description: >
+        Apenas administrador autenticado. Exige exatamente as 22 chaves tecnicas iniciais;
+        cada campo tem peso inteiro positivo e uma lista de opcoes canonicas. Repetir
+        configuracao identica retorna a mesma versao. IDs publicados nao podem ser removidos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchProfileConfigurationRequest'
+      responses:
+        '200':
+          description: Configuracao publicada ou repeticao idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configuration]
+                properties:
+                  configuration:
+                    $ref: '#/components/schemas/MatchProfileConfiguration'
+        '400':
+          description: Campo, peso, opcao ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Alias em conflito, ID removido ou publicacao concorrente diferente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /vagas/{id}/normalizacao:
+    post:
+      tags: [Vacancies]
+      summary: Extrai e revisa requisitos estruturados da descricao (VJ-84)
+      description: >
+        A descricao serve apenas para descobrir sugestoes; nunca pontua diretamente.
+        extract cria um rascunho idempotente com proveniencia e versao do extrator,
+        review aceita ou rejeita sugestoes com classificacao humana explicita e publish
+        incorpora somente IDs aceitos ainda publicados no Catalogo Mestre. Termos
+        desconhecidos permanecem pendentes. Alteracoes preservam historico privado e
+        a publicacao agenda o recalculo conforme a politica vigente. Admin pode operar
+        qualquer origem; recrutador vinculado somente vaga COMPANY da propria empresa.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VacancyNormalizationRequest' }
+      responses:
+        '200':
+          description: Rascunho extraido, revisado ou publicado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [normalization]
+                properties:
+                  normalization: { $ref: '#/components/schemas/VacancyNormalization' }
+        '400': { description: ID, acao, revisao ou decisao invalida }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao sobre a vaga }
+        '404': { description: Vaga inexistente }
+        '409': { description: Termo pendente, vaga encerrada ou revisao concorrente }
+        '503': { description: Catalogo Mestre publicado indisponivel }
+  /vagas/{id}/status:
+    patch:
+      tags: [Vacancies]
+      summary: Altera o status da vaga com trilha de auditoria (VJ-44)
+      description: >
+        Requer JWT. Administradores podem publicar, rejeitar e controlar vagas de qualquer
+        origem. Recrutadores verificados podem pausar, retomar ou remover apenas vagas
+        COMPANY da sua empresa ativa. Reativar vaga expirada exige prorrogacao do prazo,
+        revalidacao do perfil e motivo expresso por administrador. O corpo nao aceita
+        origem, perfil tecnico ou dados cadastrais. Conflitos concorrentes retornam 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [active, paused, expired, removed, rejected] }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Status alterado e transicao auditada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400': { description: ID, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao para origem, empresa ou transicao }
+        '404': { description: Vaga inexistente }
+        '409': { description: Transicao invalida, perfil inapto ou alteracao concorrente }
+  /vagas/{id}/requisitos:
+    patch:
+      tags: [Vacancies]
+      summary: Classifica os requisitos tecnicos da vaga (VJ-46)
+      description: >
+        Admin pode classificar vagas de qualquer origem; recrutador ativo e vinculado
+        apenas vagas COMPANY da propria empresa ativa. A classificacao substitui o
+        conjunto completo de requisitos da vaga e incrementa a revisao auditada.
+        IDs devem existir nos valores canonicos ja registrados. Vagas importadas sem
+        evidencia de importancia permanecem pendentes de classificacao. eliminatory e
+        opcional e falso por padrao; somente required ou desirable podem recebe-lo.
+        Quando a politica MATCH_ELIMINATORY_ENABLED esta ativa, ausencia do requisito
+        torna o candidato inelegivel no ranking sem penalidade adicional no percentual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requirements, reason]
+              additionalProperties: false
+              properties:
+                requirements:
+                  type: array
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/VacancyRequirement' }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Requisitos classificados e revisao incrementada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vacancy: { $ref: '#/components/schemas/Vacancy' }
+        '400': { description: Corpo, importancia ou ID invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Sem permissao sobre a vaga }
+        '404': { description: Vaga inexistente }
+        '409': { description: Competencia duplicada, vaga encerrada ou revisao concorrente }
+        '503': { description: Configuracao tecnica indisponivel }
+  /empresas/{id}/vagas:
+    post:
+      tags: [Vacancies]
+      summary: Cadastra vaga propria pendente (VJ-42)
+      description: >
+        Exige conta company ativa e verificada, vinculo recruiter ativo e empresa active.
+        A origem COMPANY, o status pending, a empresa e o autor sao definidos pelo servidor.
+        Valores do Perfil de Match usam IDs canonicos da configuracao VJ-28 mais recente;
+        aliases publicados sao convertidos ao mesmo ID. Nao calcula pontuacao nem publica
+        a vaga no ranking. A referencia operacional e unica por empresa atual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa ativa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyVacancyRequest'
+      responses:
+        '201':
+          description: Vaga propria criada como pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vacancy]
+                properties:
+                  vacancy:
+                    $ref: '#/components/schemas/Vacancy'
+        '400':
+          description: Corpo, localizacao, modalidade ou competencia fora do catalogo invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente, invalido ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Sem papel company, vinculo autorizado ou empresa ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Referencia de vaga duplicada nesta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /admin/empresas/{id}/status:
+    patch:
+      tags: [Companies]
+      summary: Administra o status empresarial com auditoria (VJ-77)
+      description: >
+        Exige conta admin ativa. Ativacao requer cadastro minimo completo, vinculo recruiter
+        ativo e conta company ativa com email verificado. Inativacao e bloqueio invalidam
+        autorizacoes e impedem imediatamente consultas empresariais. Cada mudanca registra
+        estado anterior, novo estado, administrador, data e motivo. Repetir o estado atual e
+        idempotente e nao cria nova auditoria. Status nao pode ser alterado pelo endpoint de cadastro.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyStatusUpdateRequest'
+      responses:
+        '200':
+          description: Estado atual e indicador de mudanca idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyStatusUpdateResponse'
+        '400': { description: Identificador, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente, invalido ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '404': { description: Empresa inexistente ou excluida }
+        '409': { description: Empresa inapta, transicao proibida ou alteracao concorrente }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /admin/candidatos/{id}/status:
+    patch:
+      tags: [Candidates]
+      summary: Administra o status do candidato com auditoria (VJ-78)
+      description: >
+        Exige conta admin ativa e altera somente o status controlado. Ativacao requer
+        elegibilidade aprovada, cadastro minimo completo, email ativo unico e, quando
+        configurada, completude minima do Perfil de Match. Inativacao e bloqueio retiram o
+        candidato imediatamente das consultas empresariais. Bloqueio tambem revoga tokens,
+        disponibilidade, perfil publico e permissoes de exibicao; a reativacao nao recupera
+        esses consentimentos. Cada mudanca registra estado anterior, novo estado,
+        administrador, data e motivo. Repetir o estado atual e idempotente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId do candidato atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateStatusUpdateRequest'
+      responses:
+        '200':
+          description: Estado atual e indicador de mudanca idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateStatusUpdateResponse'
+        '400': { description: Identificador, status, motivo ou corpo invalidos }
+        '401': { description: JWT ausente, invalido, revogado ou conta inativa }
+        '403': { description: Papel diferente de admin }
+        '404': { description: Candidato inexistente ou excluido }
+        '409': { description: Candidato inapto, transicao proibida ou alteracao concorrente }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas:
+    post:
+      tags: [Companies]
+      summary: Registra empresa pendente (VJ-37)
+      description: >
+        Exige conta ativa com papel admin. Registra entidade Empresa independente de User
+        e Candidate, sempre com status pending. Responsavel e contato, nao credencial.
+        Nao cria usuario de empresa. Papel company sozinho nao libera acesso a candidatos.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+      responses:
+        '201':
+          description: Empresa criada com status pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+        '400':
+          description: Campos obrigatorios, email, URL ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo ja cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/usuarios:
+    post:
+      tags: [Companies]
+      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      description: >
+        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
+        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
+        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
+        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              additionalProperties: false
+              properties:
+                userId:
+                  type: string
+                  pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '201':
+          description: Vinculo ativo criado; sem credenciais ou prova de identidade
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [membership, user]
+                properties:
+                  membership:
+                    $ref: '#/components/schemas/CompanyUser'
+                  user:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador ou corpo invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /empresas/{id}/cadastro:
+    delete:
+      tags: [Companies]
+      summary: Encerra cadastro empresarial e revoga recrutadores (VJ-41)
+      description: >
+        Exige JWT de admin ativo ou recrutador ativo com permissao explicita de exclusao
+        para esta empresa. Define status inactive, registra deletedAt e inativa os vinculos
+        ativos na mesma transacao. Nao exclui User, candidatos ou outras empresas.
+        Acesso empresarial a candidatos cessa imediatamente, mesmo com JWT valido.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa atual
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '204':
+          description: Cadastro encerrado sem corpo
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem permissao explicita para esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou ja excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags: [Companies]
+      summary: Apresenta cadastro empresarial e usuarios publicos permitidos (VJ-40)
+      description: >
+        Exige JWT de conta ativa. Admin pode consultar qualquer empresa atual; recrutador
+        pode consultar somente empresa com vinculo ativo e autorizado, inclusive se ela
+        estiver pending, inactive ou blocked. Esta consulta nao libera acesso a candidatos.
+        Retorna apenas campos publicos da empresa e lista de usuarios vinculados permitidos.
+        A operacao e somente leitura.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Dados empresariais e lista de usuarios publicos permitidos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, usuarios]
+                additionalProperties: false
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Identificador de empresa malformado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente, invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Perfil nao autorizado ou recrutador sem vinculo ativo com esta empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      tags: [Companies]
+      summary: Edita cadastro empresarial e dados publicos do recrutador (VJ-39)
+      description: >
+        Exige JWT ativo. Recrutador verificado e vinculado pode editar empresa e seu nome;
+        admin pode editar os dados empresariais. Status e auditoria usam exclusivamente o endpoint
+        administrativo da VJ-77. Troca de email ou senha de login usa o fluxo User existente.
+        A edicao combinada e atomica e requer MongoDB com suporte a transacoes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ObjectId da empresa
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationUpdateRequest'
+      responses:
+        '200':
+          description: Cadastro atualizado sem campos internos ou credenciais
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company]
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  usuarioAtual:
+                    $ref: '#/components/schemas/PublicCompanyUser'
+        '400':
+          description: Campos, email, URL ou corpo invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token ausente ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Usuario sem vinculo ou de outra empresa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Empresa inexistente ou excluida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email corporativo duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /candidatos:
     post:
       tags: [Candidates]
@@ -89,6 +1413,295 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /candidatos/me/perfil-publico:
+    patch:
+      tags: [Candidates]
+      summary: Registra ou revoga o consentimento do perfil profissional publico (VJ-74)
+      description: >
+        Permite somente ao candidato ativo optar explicitamente pela futura publicacao e
+        selecionar cada campo autorizado. O perfil permanece privado por padrao. Email,
+        telefone, comprovantes, auditoria e identificadores sensiveis nao pertencem a lista.
+        Campos da formacao continuam sujeitos a permissao da fonte oficial. Toda mudanca e
+        auditada internamente e invalida a versao de cache. A publicacao e independente da
+        disponibilidade para buscas empresariais. Esta historia nao cria URL, slug, indexacao
+        nem endpoint publico de leitura.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidatePublicProfileRequest'
+      responses:
+        '200':
+          description: Consentimento atualizado ou revogado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicProfile]
+                properties:
+                  publicProfile:
+                    $ref: '#/components/schemas/CandidatePublicProfileState'
+        '400': { description: Corpo, campo, duplicidade ou combinacao de consentimento invalida }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Candidato nao ativo ou alterado concorrentemente }
+        '503': { description: Banco de dados indisponivel }
+
+  /candidatos/me/disponibilidade:
+    patch:
+      tags: [Candidates]
+      summary: Controla aparicao do candidato nas oportunidades empresariais (VJ-75)
+      description: >
+        Registra a escolha explicita do candidato autenticado sem alterar status cadastral,
+        disponibilidade descritiva, perfil publico ou permissoes de contato/formacao. O estado
+        inicial e false. Para habilitar, exige candidato ativo, elegibilidade aprovada e Perfil
+        de Match atual. Desabilitar remove o candidato das proximas consultas, totais e rankings
+        empresariais e invalida a versao de cache, mas nao impede pesquisa de vagas pelo candidato.
+        A rota /me nao aceita identificador de outro candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateOpportunityAvailabilityRequest'
+      responses:
+        '200':
+          description: Preferencia atualizada ou escolha repetida de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [availability]
+                properties:
+                  availability:
+                    $ref: '#/components/schemas/CandidateOpportunityAvailabilityState'
+        '400': { description: Corpo invalido, valor nao booleano ou campo adicional }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate ou tentativa de alterar outro titular }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Candidato nao ativo/validado, Perfil de Match ausente ou concorrencia }
+        '503': { description: Banco de dados indisponivel }
+
+  /candidatos/me/permissoes-exibicao:
+    patch:
+      tags: [Candidates]
+      summary: Controla contato e formacao exibidos para empresas (VJ-76)
+      description: >
+        Substitui integralmente as permissoes granulares do candidato autenticado. Categorias
+        omitidas ou listas vazias significam nenhuma autorizacao. Contato e formacao sao
+        independentes. Dados oficiais da formacao continuam somente leitura, sao buscados pela
+        integracao protegida e so aparecem quando a origem tambem os fornece. Toda mudanca e
+        auditada e invalida a versao de cache. Empresas nao podem chamar esta operacao.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateDisplayPermissionsRequest'
+      responses:
+        '200':
+          description: Permissoes substituidas ou estado repetido de forma idempotente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [permissions]
+                properties:
+                  permissions:
+                    $ref: '#/components/schemas/CandidateDisplayPermissionsState'
+        '400': { description: Categoria, campo, tipo ou duplicidade invalida }
+        '401': { description: JWT ausente ou invalido, ou conta inativa }
+        '403': { description: Papel diferente de candidate ou tentativa de alterar outro titular }
+        '404': { description: Cadastro atual de candidato inexistente }
+        '409': { description: Alteracao concorrente das permissoes }
+        '503': { description: Banco de dados indisponivel }
+
+  /candidatos/me/perfil-match:
+    get:
+      tags: [Match Profile]
+      summary: Consulta estados e completude do proprio Perfil de Match (VJ-72)
+      description: >
+        Retorna o perfil atual usando a versao de catalogo gravada nele. UNKNOWN representa
+        campo nao respondido; false e lista vazia representam respostas explicitas. A completude
+        usa somente campos tecnicos elegiveis, sem pesos e sem alterar o score do Match.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil, estados das respostas, completude e campos pendentes
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro ou Perfil de Match atual nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags: [Match Profile]
+      summary: Cadastra o Perfil de Match do proprio candidato (VJ-29)
+      description: >
+        Exige conta ativa com papel candidate e cadastro atual pendente, incompleto ou ativo.
+        Usa a ultima configuracao VJ-28 publicada; aceita IDs, rotulos e aliases de catalogo,
+        mas persiste apenas IDs canonicos. Campos omitidos permanecem pendentes. Nao altera
+        o status nem a visibilidade para empresas. So um perfil atual por candidato.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateMatchProfileRequest'
+      responses:
+        '201':
+          description: Perfil criado com valores canonicos e campos pendentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '400':
+          description: Corpo, campo, catalogo ou anos de experiencia invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro atual de candidato nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Perfil atual ja existe ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      tags: [Match Profile]
+      summary: Edita parcialmente o Perfil de Match do proprio candidato (VJ-30)
+      description: >
+        Somente o titular ativo da conta, com cadastro e perfil atuais, pode editar.
+        Campos omitidos permanecem iguais; null volta o campo para UNKNOWN e lista vazia
+        registra a resposta explicita de que nenhuma opcao se aplica.
+        Valores de catalogo sao normalizados aos IDs canonicos da ultima configuracao.
+        Exige If-Match com a revisao atual. A atualizacao e atomica e eleva revision.
+        Nao altera o status do candidato nem os pesos da configuracao.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: Revisao atual entre aspas, por exemplo "1"
+          schema:
+            type: string
+            pattern: '^"[1-9][0-9]*"$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateMatchProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil atualizado; ETag traz a nova revisao
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/CandidateMatchProfile'
+        '400':
+          description: Revisao, corpo, campo ou valor invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel nao candidate ou candidato inativo/bloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Cadastro ou Perfil de Match atual nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Revisao desatualizada ou alteracao concorrente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -192,12 +1805,13 @@ paths:
       tags: [Candidates]
       summary: Visualiza um candidato conforme a permissao (VJ-25)
       description: >
-        Exige JWT valido de candidato ou empresa. O candidato pode consultar somente o
-        proprio cadastro em qualquer status e recebe tambem o status atual. A empresa
-        consulta somente candidatos ativos; candidato inexistente ou com qualquer outro
-        status produz o mesmo 404. A resposta usa uma projecao explicita, converte campos
-        opcionais sem informacao em UNKNOWN e nunca inclui conta vinculada, comprovantes,
-        senha, token ou detalhes internos da validacao. A operacao e somente leitura.
+        Exige JWT valido. O candidato pode consultar somente o proprio cadastro em qualquer
+        status. Papel company isolado recebe 403. Somente conta company ativa com vinculo
+        ativo a empresa active pode consultar candidato ativo, validado e disponivel (VJ-38/VJ-75).
+        Para empresas, email, telefone, links e formacao aparecem somente conforme as permissoes
+        VJ-76; formacao tambem depende da origem protegida. O titular continua vendo seus dados
+        cadastrais. A resposta usa projecao e DTO explicitos e nunca inclui conta vinculada,
+        comprovantes, senha, token, auditoria ou detalhes internos da validacao.
       security:
         - bearerAuth: []
       parameters:
@@ -234,13 +1848,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Candidato tentou consultar outro perfil ou papel sem permissao
+          description: Candidato tentou consultar outro perfil, ou company sem empresa e vinculo ativos
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Candidato inexistente ou nao ativo para uma empresa
+          description: Candidato inexistente
           content:
             application/json:
               schema:
@@ -831,10 +2445,881 @@ components:
       bearerFormat: JWT
 
   schemas:
+    MasterCatalogCategory:
+      type: string
+      enum: [competency, test_automation, qa_tool, ai_tool, programming_language,
+        role, specialization, test_type]
+    MasterCatalogItemRequest:
+      type: object
+      required: [id, name, category, aliases, active]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_]*$', maxLength: 100, example: cypress }
+        name: { type: string, minLength: 1, maxLength: 100, example: Cypress }
+        category: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        aliases:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 100 }
+          example: [Cypress.io, Cypress Framework]
+        active: { type: boolean }
+        effectiveAt:
+          type: string
+          format: date-time
+          description: Vigencia igual ou anterior ao momento da publicacao; omissao usa o horario atual.
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    MasterCatalogItem:
+      type: object
+      required: [_id, id, name, category, aliases, active, revision, state, effectiveAt,
+        reason, profileConfigurationVersion, cacheInvalidatedAt, recalculation, createdAt]
+      properties:
+        _id: { type: string }
+        id: { type: string, pattern: '^[a-z][a-z0-9_]*$' }
+        name: { type: string }
+        category: { $ref: '#/components/schemas/MasterCatalogCategory' }
+        aliases:
+          type: array
+          items: { type: string }
+        active: { type: boolean }
+        revision: { type: integer, minimum: 1 }
+        state: { type: string, enum: [published] }
+        effectiveAt: { type: string, format: date-time }
+        reason: { type: string }
+        profileConfigurationVersion: { type: integer, minimum: 1 }
+        cacheInvalidatedAt: { type: string, format: date-time }
+        recalculation:
+          type: object
+          required: [status, scheduledFor]
+          properties:
+            status: { type: string, enum: [scheduled] }
+            scheduledFor: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    MatchEngineWeights:
+      type: object
+      additionalProperties: false
+      required: [type, agile, programming, automation, webTesting, apiTesting, mobileTesting,
+        desktopTesting, higherEducationDegree, english, spanish, yearsOfExperience,
+        continuousIntegration, certification, testAutomationTechnologies, qaTools,
+        programmingLanguages, genAITools, level, classification, role, specialization]
+      properties:
+        type: { type: number, minimum: 0, maximum: 1000 }
+        agile: { type: number, minimum: 0, maximum: 1000 }
+        programming: { type: number, minimum: 0, maximum: 1000 }
+        automation: { type: number, minimum: 0, maximum: 1000 }
+        webTesting: { type: number, minimum: 0, maximum: 1000 }
+        apiTesting: { type: number, minimum: 0, maximum: 1000 }
+        mobileTesting: { type: number, minimum: 0, maximum: 1000 }
+        desktopTesting: { type: number, minimum: 0, maximum: 1000 }
+        higherEducationDegree: { type: number, minimum: 0, maximum: 1000 }
+        english: { type: number, minimum: 0, maximum: 1000 }
+        spanish: { type: number, minimum: 0, maximum: 1000 }
+        yearsOfExperience: { type: number, minimum: 0, maximum: 1000 }
+        continuousIntegration: { type: number, minimum: 0, maximum: 1000 }
+        certification: { type: number, minimum: 0, maximum: 1000 }
+        testAutomationTechnologies: { type: number, minimum: 0, maximum: 1000 }
+        qaTools: { type: number, minimum: 0, maximum: 1000 }
+        programmingLanguages: { type: number, minimum: 0, maximum: 1000 }
+        genAITools: { type: number, minimum: 0, maximum: 1000 }
+        level: { type: number, minimum: 0, maximum: 1000 }
+        classification: { type: number, minimum: 0, maximum: 1000 }
+        role: { type: number, minimum: 0, maximum: 1000 }
+        specialization: { type: number, minimum: 0, maximum: 1000 }
+    MatchEngineMultipliers:
+      type: object
+      required: [required, desirable, indifferent]
+      additionalProperties: false
+      properties:
+        required: { type: number, enum: [1] }
+        desirable: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 1 }
+        indifferent: { type: number, enum: [0] }
+    MatchEngineConfigurationRequest:
+      type: object
+      required: [state, effectiveAt, weights, multipliers, defaultImportImportance,
+        minimumMatchPercentage]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [draft, published] }
+        effectiveAt: { type: string, format: date-time }
+        weights: { $ref: '#/components/schemas/MatchEngineWeights' }
+        multipliers: { $ref: '#/components/schemas/MatchEngineMultipliers' }
+        defaultImportImportance: { type: string, enum: [required, desirable, indifferent] }
+        minimumMatchPercentage: { type: number, minimum: 0, maximum: 100, multipleOf: 0.01 }
+        minimumProfileCompletionPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          multipleOf: 0.01
+          nullable: true
+        eliminatoryPolicyEnabled:
+          type: boolean
+          description: Controla criterios eliminatorios nos calculos desta versao.
+        recalculationPolicy: { type: string, enum: [none, affected_matches], default: affected_matches }
+    MatchEngineConfiguration:
+      allOf:
+        - $ref: '#/components/schemas/MatchEngineConfigurationRequest'
+        - type: object
+          required: [version, revision, createdBy, cacheVersion, recalculation]
+          properties:
+            version: { type: string, pattern: '^MATCH_V[1-9][0-9]*$' }
+            revision: { type: integer, minimum: 1 }
+            createdBy: { type: string }
+            publishedBy: { type: string, nullable: true }
+            publishedAt: { type: string, format: date-time, nullable: true }
+            cacheVersion: { type: integer, minimum: 1 }
+            cacheInvalidatedAt: { type: string, format: date-time, nullable: true }
+            recalculation:
+              type: object
+              required: [policy, status]
+              properties:
+                policy: { type: string, enum: [none, affected_matches] }
+                status: { type: string, enum: [not_scheduled, not_required, scheduled] }
+                scheduledFor: { type: string, format: date-time, nullable: true }
+    MatchAuditReference:
+      type: object
+      description: Referencia segura para a auditoria interna e imutavel do resultado de Match.
+      required: [evaluationId, executionId, algorithmVersion, calculatedAt, configurationVersions, inputRevisions, diagnostics]
+      additionalProperties: false
+      properties:
+        evaluationId: { type: string, example: 66f1d86e5b47d410ca2a6f15 }
+        executionId: { type: string, example: 3eb30c35-b8a4-4978-802d-8b92a52db912 }
+        algorithmVersion: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', example: MATCH_V1 }
+        calculatedAt: { type: string, format: date-time }
+        configurationVersions:
+          type: object
+          required: [profileCatalog, multipliers, rankingThreshold, completionThreshold]
+          additionalProperties: false
+          properties:
+            engine: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', nullable: true }
+            profileCatalog: { type: integer, minimum: 1, example: 3 }
+            multipliers: { type: integer, minimum: 1, example: 2 }
+            rankingThreshold: { type: integer, minimum: 1, nullable: true, example: 4 }
+            completionThreshold: { type: integer, minimum: 1, nullable: true, example: 2 }
+        inputRevisions:
+          type: object
+          required: [vacancyRequirements, vacancyUpdatedAt, candidateProfile, candidateProfileUpdatedAt]
+          additionalProperties: false
+          properties:
+            vacancyRequirements: { type: integer, minimum: 1, example: 5 }
+            vacancyUpdatedAt: { type: string, format: date-time }
+            candidateProfile: { type: integer, minimum: 1, nullable: true, example: 7 }
+            candidateProfileUpdatedAt: { type: string, format: date-time, nullable: true }
+        diagnostics:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [code]
+            additionalProperties: false
+            properties:
+              code:
+                type: string
+                enum: [UNPUBLISHED_REQUIREMENT, REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE]
+              field: { type: string, nullable: true }
+              id: { type: string, nullable: true }
+    MatchCriterionDetail:
+      type: object
+      required: [field, id, label, importance, status, earnedPoints, possiblePoints, lostPoints]
+      additionalProperties: false
+      properties:
+        field: { type: string, example: testAutomationTechnologies }
+        id: { type: string, example: playwright }
+        label: { type: string, example: Playwright }
+        importance:
+          type: string
+          enum: [required, desirable]
+        status:
+          type: string
+          enum: [met, gap, unknown]
+        earnedPoints: { type: number, minimum: 0, nullable: true }
+        possiblePoints: { type: number, exclusiveMinimum: 0 }
+        lostPoints: { type: number, minimum: 0, nullable: true }
+    MatchProfileOption:
+      type: object
+      required: [id, label, aliases]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z][a-z0-9_-]*$', example: cypress }
+        label: { type: string, example: Cypress }
+        aliases:
+          type: array
+          items: { type: string }
+    MatchProfileFieldInput:
+      type: object
+      required: [weight, options]
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Nome amigavel opcional; nao altera a chave tecnica persistida.
+        weight: { type: integer, minimum: 1 }
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchProfileOption'
+    MatchProfileConfigurationRequest:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        geographyWeights:
+          type: object
+          description: Pesos inteiros positivos por dimensão; publicar antes de usar restrições geográficas.
+          required: [country, state, city]
+          additionalProperties: false
+          properties:
+            country: { type: integer, minimum: 1 }
+            state: { type: integer, minimum: 1 }
+            city: { type: integer, minimum: 1 }
+        fields:
+          type: object
+          description: >
+            Exatamente as 22 chaves tecnicas da VJ-28. Em testAutomationTechnologies,
+            publicar IDs canonicos com labels e aliases conferidos na base real;
+            a proposta opcional pode ser gerada por npm run match:automation-proposal.
+            Em programmingLanguages, a proposta opcional pode ser gerada por
+            npm run match:programming-languages-proposal; Java, JavaScript,
+            TypeScript, C, C++ e C# devem manter IDs distintos.
+            O campo canonico qaTools pode publicar o label de apresentacao
+            Ferramentas de QA e Gestao de Testes e a proposta pode ser gerada
+            por npm run match:qa-management-proposal. Nomes nao podem se sobrepor
+            automaticamente a testAutomationTechnologies.
+            Uma nova publicacao deve preservar todos os IDs ja publicados.
+          minProperties: 22
+          maxProperties: 22
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileFieldInput'
+    MatchProfileConfiguration:
+      type: object
+      required: [_id, version, fields, createdAt]
+      properties:
+        geographyWeights:
+          type: object
+          nullable: true
+          description: Pesos publicados para restrições geográficas explícitas.
+        _id: { type: string }
+        version: { type: integer, minimum: 1 }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key, weight, options]
+            properties:
+              key: { type: string }
+              label:
+                type: string
+                nullable: true
+                description: Nome amigavel; a chave tecnica continua estavel.
+              weight: { type: integer }
+              options:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchProfileOption'
+        createdAt: { type: string, format: date-time }
+    AdminVacancyRequest:
+      type: object
+      required: [version, reason, origin, status, reference, title, description, matchProfile]
+      additionalProperties: false
+      properties:
+        version: { type: integer, minimum: 1, description: Revisao administrativa otimista }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
+        status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 10000 }
+        applicationChannel: { $ref: '#/components/schemas/ApplicationChannel' }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        location:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            country: { $ref: '#/components/schemas/GeographicRestriction' }
+            state: { $ref: '#/components/schemas/GeographicRestriction' }
+            city: { $ref: '#/components/schemas/GeographicRestriction' }
+        matchProfile:
+          type: object
+          required: [values]
+          additionalProperties: false
+          properties:
+            values:
+              type: object
+              minProperties: 1
+              additionalProperties: true
+            requirements:
+              type: array
+              maxItems: 200
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+    AdminVacancyResponse:
+      type: object
+      required: [vacancy, created, changed]
+      additionalProperties: false
+      properties:
+        vacancy: { $ref: '#/components/schemas/Vacancy' }
+        created: { type: boolean }
+        changed: { type: boolean }
+    CompanyVacancyRequest:
+      type: object
+      required: [reference, title, description, matchProfile]
+      additionalProperties: false
+      properties:
+        reference: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$', maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 10000 }
+        applicationChannel: { $ref: '#/components/schemas/ApplicationChannel' }
+        expiresAt: { type: string, format: date-time, nullable: true, description: Prazo futuro em UTC }
+        location:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          minProperties: 1
+          additionalProperties: false
+          description: Restricoes explicitas, independentes do endereco da empresa e da modalidade.
+          properties:
+            country: { $ref: '#/components/schemas/GeographicRestriction' }
+            state: { $ref: '#/components/schemas/GeographicRestriction' }
+            city: { $ref: '#/components/schemas/GeographicRestriction' }
+        matchProfile:
+          type: object
+          required: [values]
+          additionalProperties: false
+          properties:
+            values:
+              type: object
+              minProperties: 1
+              required: [type]
+              description: >
+                Chaves tecnicas da VJ-28. type representa modalidade; demais campos de catalogo
+                aceitam ID, rotulo ou alias publicado, sempre persistido como ID canonico.
+                yearsOfExperience aceita numero de 0 a 100 com uma casa decimal.
+              additionalProperties: true
+            requirements:
+              type: array
+              maxItems: 200
+              description: Classificacao opcional na criacao; sem ela, vaga permanece pending e nao pode ser ativada.
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+    VacancyRequirement:
+      type: object
+      description: >
+        Para campos de catalogo, use field, id canonico e importance. Para
+        yearsOfExperience, use field, value numerico e importance.
+      required: [field, importance]
+      properties:
+        field: { type: string, description: Chave tecnica da configuracao VJ-28 }
+        id: { type: string, description: ID canonico; ausente em yearsOfExperience }
+        value: { type: number, description: Valor numerico apenas em yearsOfExperience }
+        importance: { type: string, enum: [required, desirable, indifferent] }
+        eliminatory:
+          type: boolean
+          default: false
+          description: Criterio eliminatorio explicito; invalido com importance indifferent
+    VacancyNormalizationRequest:
+      oneOf:
+        - type: object
+          required: [action]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [extract] }
+        - type: object
+          required: [action, revision, decisions]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [review] }
+            revision: { type: integer, minimum: 1 }
+            decisions:
+              type: array
+              minItems: 1
+              maxItems: 200
+              items:
+                type: object
+                required: [id, state]
+                additionalProperties: false
+                properties:
+                  id: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+                  state: { type: string, enum: [accepted, rejected] }
+                  field: { type: string, description: Obrigatorio apenas ao escolher alias ambiguo }
+                  canonicalId: { type: string, description: Obrigatorio apenas ao escolher alias ambiguo }
+                  importance: { type: string, enum: [required, desirable, indifferent] }
+                  eliminatory: { type: boolean }
+        - type: object
+          required: [action, revision, reason]
+          additionalProperties: false
+          properties:
+            action: { type: string, enum: [publish] }
+            revision: { type: integer, minimum: 1 }
+            reason: { type: string, minLength: 1, maxLength: 500 }
+    VacancyNormalizationSuggestion:
+      type: object
+      required: [id, originalValue, confidence, origin, sourceStart, sourceEnd, extractorVersion, catalogStatus, state]
+      properties:
+        id: { type: string }
+        field: { type: string, nullable: true }
+        originalValue: { type: string }
+        canonicalId: { type: string, nullable: true }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        origin: { type: string, enum: [description] }
+        sourceStart: { type: integer, minimum: 0 }
+        sourceEnd: { type: integer, minimum: 1 }
+        extractorVersion: { type: string, enum: [DESCRIPTION_EXTRACTOR_V1] }
+        catalogStatus: { type: string, enum: [matched, pending] }
+        candidates:
+          type: array
+          description: Opcoes publicadas para decisao humana quando o alias e ambiguo.
+          items:
+            type: object
+            required: [field, canonicalId]
+            properties:
+              field: { type: string }
+              canonicalId: { type: string }
+        state: { type: string, enum: [suggested, accepted, rejected] }
+        importance: { type: string, enum: [required, desirable, indifferent], nullable: true }
+        eliminatory: { type: boolean, nullable: true }
+    VacancyNormalization:
+      type: object
+      required: [revision, extractorVersion, configurationVersion, status, suggestions, createdAt, updatedAt]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        extractorVersion: { type: string, enum: [DESCRIPTION_EXTRACTOR_V1] }
+        configurationVersion: { type: integer, minimum: 1 }
+        status: { type: string, enum: [draft, published] }
+        suggestions:
+          type: array
+          items: { $ref: '#/components/schemas/VacancyNormalizationSuggestion' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        recalculation:
+          type: object
+          nullable: true
+          properties:
+            policy: { type: string, enum: [none, affected_matches] }
+            status: { type: string, enum: [not_required, scheduled] }
+            scheduledFor: { type: string, format: date-time, nullable: true }
+            engineVersion: { type: string, nullable: true }
+    Vacancy:
+      type: object
+      required: [_id, reference, title, description, matchProfile, origin, status]
+      description: >
+        Vagas COMPANY, IMPORTED e ADMIN compartilham as mesmas chaves, tipos e versao
+        tecnica do Perfil de Match. A origem e procedencia sao atribuídas por fluxos
+        confiaveis do servidor e nao participam do calculo tecnico. Para COMPANY,
+        company e obrigatoria; para IMPORTED, importSource e importSourceId; para ADMIN,
+        o autor administrativo e armazenado internamente. Sem origem verificavel,
+        a vaga requer saneamento e nao fica apta ao Match. Na origem IMPORTED,
+        false significa requisito nao identificado e nao aparece nos valores
+        canonicos; a auditoria bruta permanece interna.
+      properties:
+        _id: { type: string }
+        company: { type: string, nullable: true }
+        importSource: { type: string, nullable: true }
+        importSourceId: { type: string, nullable: true }
+        reference: { type: string }
+        title: { type: string }
+        description: { type: string }
+        applicationChannel:
+          allOf:
+            - $ref: '#/components/schemas/ApplicationChannel'
+          nullable: true
+        location: { type: object, nullable: true }
+        geographicRestrictions:
+          type: object
+          nullable: true
+          description: Apenas dimensões declaradas participam do Match; endereço descritivo não pontua.
+        matchProfile:
+          type: object
+          properties:
+            configurationVersion: { type: integer, minimum: 1 }
+            values: { type: object }
+            requirements:
+              type: array
+              items: { $ref: '#/components/schemas/VacancyRequirement' }
+        origin: { type: string, enum: [IMPORTED, COMPANY, ADMIN] }
+        status: { type: string, enum: [pending, active, paused, expired, removed, rejected] }
+        adminRevision: { type: integer, minimum: 0 }
+        requirementsRevision: { type: integer, minimum: 0 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ApplicationChannel:
+      type: object
+      required: [type, value]
+      additionalProperties: false
+      description: Canal oficial normalizado; nunca inferido da descricao da vaga.
+      properties:
+        type: { type: string, enum: [https_url, email] }
+        value:
+          type: string
+          maxLength: 2000
+          description: URL HTTPS em host permitido ou e-mail em dominio institucional permitido.
+    ApplicationReferralResponse:
+      type: object
+      required: [state, applicationConfirmed, channel, referral, matchAdvisory]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [redirect_ready] }
+        applicationConfirmed: { type: boolean, enum: [false] }
+        channel:
+          oneOf:
+            - type: object
+              required: [type, url]
+              additionalProperties: false
+              properties:
+                type: { type: string, enum: [https_url] }
+                url: { type: string, format: uri }
+            - type: object
+              required: [type, address, uri]
+              additionalProperties: false
+              properties:
+                type: { type: string, enum: [email] }
+                address: { type: string, format: email }
+                uri: { type: string, pattern: '^mailto:' }
+        referral:
+          type: object
+          required: [id, recordedAt]
+          additionalProperties: false
+          properties:
+            id: { type: string }
+            recordedAt: { type: string, format: date-time }
+        matchAdvisory:
+          type: object
+          required: [blocksApplication, eligibility]
+          additionalProperties: false
+          properties:
+            blocksApplication: { type: boolean, enum: [false] }
+            eligibility:
+              type: object
+              nullable: true
+              properties:
+                eligible: { type: boolean, nullable: true }
+                reason: { type: object, nullable: true, additionalProperties: true }
+    CompanyRegistrationUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        empresa:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            legalName: { type: string, minLength: 1, maxLength: 200 }
+            tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+            website: { type: string, format: uri, maxLength: 2048, nullable: true }
+            description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+            city: { type: string, minLength: 1, maxLength: 200 }
+            state: { type: string, minLength: 1, maxLength: 200 }
+            country: { type: string, minLength: 1, maxLength: 200 }
+            responsibleName: { type: string, minLength: 1, maxLength: 200 }
+            email: { type: string, format: email, maxLength: 254 }
+            phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+            linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+            segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        usuarioAtual:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 1, maxLength: 200 }
+    CompanyStatusUpdateRequest:
+      type: object
+      required: [status, reason]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [pending, active, inactive, blocked] }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CompanyStatusUpdateResponse:
+      type: object
+      required: [company, previousStatus, changed, changedAt]
+      additionalProperties: false
+      properties:
+        company:
+          type: object
+          required: [_id, status]
+          additionalProperties: false
+          properties:
+            _id: { type: string }
+            status: { type: string, enum: [pending, active, inactive, blocked] }
+        previousStatus: { type: string, enum: [pending, active, inactive, blocked] }
+        changed: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
+    CompanyUser:
+      type: object
+      required: [_id, company, user, role, status]
+      properties:
+        _id: { type: string }
+        company: { type: string }
+        user: { type: string }
+        role: { type: string, enum: [recruiter] }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PublicCompanyUser:
+      type: object
+      required: [_id, name, email]
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+    CompanyRegistrationRequest:
+      type: object
+      required: [legalName, responsibleName, email, city, state, country]
+      additionalProperties: false
+      properties:
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        tradeName: { type: string, minLength: 1, maxLength: 200, nullable: true }
+        website: { type: string, format: uri, maxLength: 2048, nullable: true }
+        description: { type: string, minLength: 1, maxLength: 5000, nullable: true }
+        city: { type: string, minLength: 1, maxLength: 200 }
+        state: { type: string, minLength: 1, maxLength: 200 }
+        country: { type: string, minLength: 1, maxLength: 200 }
+        responsibleName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, minLength: 6, maxLength: 40, nullable: true }
+        linkedinUrl: { type: string, format: uri, maxLength: 2048, nullable: true }
+        segment: { type: string, minLength: 1, maxLength: 200, nullable: true }
+    Company:
+      type: object
+      required: [_id, legalName, responsibleName, email, city, state, country, status]
+      properties:
+        _id: { type: string }
+        legalName: { type: string }
+        tradeName: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        responsibleName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        linkedinUrl: { type: string, nullable: true }
+        segment: { type: string, nullable: true }
+        status: { type: string, enum: [pending, active, inactive, blocked] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MatchProfileChoices:
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 100
+        - type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+    MatchProfileBooleanChoices:
+      oneOf:
+        - { $ref: '#/components/schemas/MatchProfileChoices' }
+        - type: boolean
+          description: true exige uma unica opcao publicada; false registra ausencia explicita.
+    CandidateMatchProfileRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values:
+          type: object
+          description: Catalogos aceitam somente valores publicados; chaves omitidas ficam pendentes.
+          additionalProperties: false
+          properties:
+            type: { $ref: '#/components/schemas/MatchProfileChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            english: { $ref: '#/components/schemas/MatchProfileChoices' }
+            spanish: { $ref: '#/components/schemas/MatchProfileChoices' }
+            yearsOfExperience:
+              type: number
+              minimum: 0
+              maximum: 100
+              multipleOf: 0.1
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileBooleanChoices' }
+            testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileChoices' }
+            qaTools: { $ref: '#/components/schemas/MatchProfileChoices' }
+            programmingLanguages: { $ref: '#/components/schemas/MatchProfileChoices' }
+            genAITools: { $ref: '#/components/schemas/MatchProfileChoices' }
+            genAITecnologies:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: >
+                Entrada legada de migracao. Alias publicado e confiavel e mapeado para genAITools;
+                valor sem correspondencia fica pendente em auditoria privada e nao pontua.
+            level:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: Senioridade canonica; unknown/desconhecido nao sao opcoes validas.
+            classification: { $ref: '#/components/schemas/MatchProfileChoices' }
+            role: { $ref: '#/components/schemas/MatchProfileChoices' }
+            specialization: { $ref: '#/components/schemas/MatchProfileChoices' }
+    CandidateMatchProfileUpdateRequest:
+      type: object
+      required: [values]
+      additionalProperties: false
+      properties:
+        values:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          description: Campos omitidos permanecem iguais; null remove para UNKNOWN; [] significa nenhuma opcao.
+          properties:
+            type: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            agile: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            programming: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            automation: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            webTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            apiTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            mobileTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            desktopTesting: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            higherEducationDegree: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            english: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            spanish: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            yearsOfExperience:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 100
+              multipleOf: 0.1
+            continuousIntegration: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            certification: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            testAutomationTechnologies: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            qaTools: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            programmingLanguages: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            genAITools: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            genAITecnologies:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileChoices' }]
+              description: >
+                Entrada legada de migracao; nao remove genAITools existente, nao e persistida
+                como criterio e nao aceita null. Use genAITools para edicao canonica.
+            level:
+              allOf: [{ $ref: '#/components/schemas/MatchProfileUpdateChoices' }]
+              description: Senioridade canonica ou null para remover; unknown/desconhecido sao invalidos.
+            classification: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            role: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+            specialization: { $ref: '#/components/schemas/MatchProfileUpdateChoices' }
+    MatchProfileUpdateChoices:
+      nullable: true
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 100
+        - type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+    CandidateMatchProfile:
+      type: object
+      required: [_id, candidate, configurationVersion, revision, values, answers, completion, pendingFields, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        _id: { type: string }
+        candidate: { type: string }
+        configurationVersion: { type: integer, minimum: 1 }
+        revision: { type: integer, minimum: 1 }
+        values:
+          type: object
+          description: Somente valores canonicos preenchidos
+        answers:
+          type: object
+          description: Estado e valor de cada campo elegivel na versao do catalogo do perfil.
+          additionalProperties:
+            $ref: '#/components/schemas/MatchProfileAnswer'
+        completion:
+          $ref: '#/components/schemas/MatchProfileCompletion'
+        pendingFields:
+          type: array
+          description: Campos elegiveis com estado UNKNOWN.
+          items: { type: string }
+        matchEligible:
+          type: boolean
+          readOnly: true
+          description: Retornado pela edicao; true somente para candidato active com algum valor informado
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MatchProfileAnswer:
+      type: object
+      required: [state, value]
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [UNKNOWN, ANSWERED] }
+        value:
+          nullable: true
+          oneOf:
+            - type: boolean
+            - type: number
+            - type: array
+              items: { type: string }
+    MatchProfileCompletion:
+      type: object
+      required: [percentage, answeredFields, totalEligibleFields]
+      additionalProperties: false
+      properties:
+        percentage: { type: number, minimum: 0, maximum: 100 }
+        answeredFields: { type: integer, minimum: 0 }
+        totalEligibleFields: { type: integer, minimum: 0 }
+    RecommendationProfileCompletion:
+      type: object
+      required: [percentage, answeredFields, totalEligibleFields, pendingFields]
+      additionalProperties: false
+      properties:
+        percentage: { type: number, minimum: 0, maximum: 100 }
+        answeredFields: { type: integer, minimum: 0 }
+        totalEligibleFields: { type: integer, minimum: 0 }
+        pendingFields:
+          type: array
+          items: { type: string }
     CandidateStatus:
       type: string
       enum: [pending_validation, incomplete_profile, active, inactive, blocked]
       description: Pendente de validacao, Perfil incompleto, Ativo, Inativo ou Bloqueado
+    CandidateStatusUpdateRequest:
+      type: object
+      required: [status, reason]
+      additionalProperties: false
+      properties:
+        status: { $ref: '#/components/schemas/CandidateStatus' }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CandidateStatusUpdateResponse:
+      type: object
+      required: [candidate, previousStatus, changed, changedAt]
+      additionalProperties: false
+      properties:
+        candidate:
+          type: object
+          required: [_id, status]
+          additionalProperties: false
+          properties:
+            _id: { type: string }
+            status: { $ref: '#/components/schemas/CandidateStatus' }
+        previousStatus: { $ref: '#/components/schemas/CandidateStatus' }
+        changed: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
     CandidateEligibilityRequest:
       type: object
       additionalProperties: false
@@ -870,6 +3355,135 @@ components:
           type: string
           format: date-time
           nullable: true
+    GeographicRestriction:
+      type: object
+      required: [value, importance]
+      additionalProperties: false
+      properties:
+        value: { type: string, minLength: 1, maxLength: 200 }
+        importance: { type: string, enum: [required, desirable, indifferent] }
+    CandidatePublicProfileField:
+      type: string
+      enum:
+        - name
+        - photoUrl
+        - city
+        - state
+        - country
+        - linkedinUrl
+        - githubUrl
+        - portfolioUrl
+        - professionalSummary
+        - matchProfile.type
+        - matchProfile.agile
+        - matchProfile.programming
+        - matchProfile.automation
+        - matchProfile.webTesting
+        - matchProfile.apiTesting
+        - matchProfile.mobileTesting
+        - matchProfile.desktopTesting
+        - matchProfile.higherEducationDegree
+        - matchProfile.english
+        - matchProfile.spanish
+        - matchProfile.yearsOfExperience
+        - matchProfile.continuousIntegration
+        - matchProfile.certification
+        - matchProfile.testAutomationTechnologies
+        - matchProfile.qaTools
+        - matchProfile.programmingLanguages
+        - matchProfile.genAITools
+        - matchProfile.level
+        - matchProfile.classification
+        - matchProfile.role
+        - matchProfile.specialization
+        - formation.engagementLevel
+        - formation.cohort
+        - formation.challengesCompleted
+        - formation.totalChallenges
+        - formation.score
+        - formation.participation
+        - formation.history
+        - formation.projects
+    CandidatePublicProfileRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          description: true registra opt-in; false revoga imediatamente a futura exposicao
+        fields:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/CandidatePublicProfileField'
+          description: Obrigatorio e nao vazio ao habilitar; ausente ou vazio ao revogar
+    CandidatePublicProfileState:
+      type: object
+      additionalProperties: false
+      required: [enabled, fields, effectiveFields, consentedAt, revokedAt, cacheVersion, cacheInvalidatedAt]
+      properties:
+        enabled: { type: boolean }
+        fields:
+          type: array
+          items: { $ref: '#/components/schemas/CandidatePublicProfileField' }
+        effectiveFields:
+          type: array
+          description: Selecao apos aplicar permissoes vigentes da fonte oficial de formacao
+          items: { $ref: '#/components/schemas/CandidatePublicProfileField' }
+        consentedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        cacheVersion: { type: integer, minimum: 1 }
+        cacheInvalidatedAt: { type: string, format: date-time, nullable: true }
+    CandidateOpportunityAvailabilityRequest:
+      type: object
+      required: [availableForOpportunities]
+      additionalProperties: false
+      properties:
+        availableForOpportunities:
+          type: boolean
+          description: Escolha explicita e separada da disponibilidade descritiva do cadastro
+    CandidateOpportunityAvailabilityState:
+      type: object
+      required: [availableForOpportunities, changedAt, candidateStatus, visibleToCompanies]
+      additionalProperties: false
+      properties:
+        availableForOpportunities: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
+        candidateStatus: { $ref: '#/components/schemas/CandidateStatus' }
+        visibleToCompanies:
+          type: boolean
+          description: true somente quando status e active e a preferencia esta habilitada
+    CandidateContactDisplayField:
+      type: string
+      enum: [email, phone, linkedinUrl, githubUrl, portfolioUrl]
+    CandidateFormationDisplayField:
+      type: string
+      enum: [engagementLevel, cohort, challengesCompleted, totalChallenges, score, participation, history, projects]
+    CandidateDisplayPermissionsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        contact:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CandidateContactDisplayField' }
+        formation:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CandidateFormationDisplayField' }
+    CandidateDisplayPermissionsState:
+      type: object
+      required: [contact, formation, changedAt]
+      additionalProperties: false
+      properties:
+        contact:
+          type: array
+          items: { $ref: '#/components/schemas/CandidateContactDisplayField' }
+        formation:
+          type: array
+          items: { $ref: '#/components/schemas/CandidateFormationDisplayField' }
+        changedAt: { type: string, format: date-time, nullable: true }
     CandidateRegistrationRequest:
       type: object
       required: [name, email]
@@ -984,7 +3598,7 @@ components:
       description: URL HTTP/HTTPS absoluta ou UNKNOWN; null remove a informacao
     Candidate:
       type: object
-      required: [_id, user, name, email, status, eligibility, visibleToCompanies]
+      required: [_id, user, name, email, availableForOpportunities, status, eligibility, visibleToCompanies]
       properties:
         _id:
           type: string
@@ -1017,6 +3631,16 @@ components:
         availability:
           type: string
           enum: [available, unavailable, UNKNOWN]
+        availableForOpportunities:
+          type: boolean
+          default: false
+          readOnly: true
+          description: Opt-in independente controlado por PATCH /candidatos/me/disponibilidade
+        opportunityAvailabilityChangedAt:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         status:
           $ref: '#/components/schemas/CandidateStatus'
         eligibility:
@@ -1024,7 +3648,7 @@ components:
         visibleToCompanies:
           type: boolean
           readOnly: true
-          description: Derivado exclusivamente de status active; sempre false no cadastro
+          description: Exige status active e availableForOpportunities true; sempre false no cadastro
         createdAt:
           type: string
           format: date-time
@@ -1033,20 +3657,7 @@ components:
           format: date-time
     PublicCandidate:
       type: object
-      required:
-        - _id
-        - name
-        - photoUrl
-        - email
-        - phone
-        - city
-        - state
-        - country
-        - linkedinUrl
-        - githubUrl
-        - portfolioUrl
-        - professionalSummary
-        - availability
+      required: [_id, name]
       additionalProperties: false
       properties:
         _id:
@@ -1085,6 +3696,24 @@ components:
         availability:
           type: string
           enum: [available, unavailable, UNKNOWN]
+        availableForOpportunities:
+          type: boolean
+          readOnly: true
+        formation:
+          type: object
+          readOnly: true
+          additionalProperties: false
+          description: Somente campos consentidos e fornecidos pela origem oficial
+          properties:
+            engagementLevel: { type: string }
+            cohort: { type: string }
+            challengesCompleted: { type: number }
+            totalChallenges: { type: number }
+            score: { type: number }
+            participation:
+              oneOf: [{ type: string }, { type: number }]
+            history: { type: array, items: { type: object, additionalProperties: true } }
+            projects: { type: array, items: { type: object, additionalProperties: true } }
         status:
           allOf:
             - $ref: '#/components/schemas/CandidateStatus'

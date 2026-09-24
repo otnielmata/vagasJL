@@ -39,6 +39,8 @@ const userSchema = new Schema(
       default: 'active',
       required: true,
     },
+    tokenVersion: { type: Number, default: 0, min: 0, required: true, select: false },
+    emailVerifiedAt: { type: Date, default: null, select: false },
   },
   {
     timestamps: true,
@@ -65,6 +67,8 @@ userSchema.methods.comparePassword = function comparePassword(candidatePassword)
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
     delete ret.password;
+    delete ret.tokenVersion;
+    delete ret.emailVerifiedAt;
     delete ret.__v;
     return ret;
   },
