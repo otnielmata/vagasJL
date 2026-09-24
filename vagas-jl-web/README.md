@@ -30,7 +30,7 @@ npm run dev:mock
 
 No modo demonstração qualquer senha funciona; e-mails começando com `empresa@` ou `admin@` entram com esses papéis.
 
-> Na API, inclua a origem do web em `CORS_ORIGIN` (ex.: `http://localhost:3001`).
+> Com o proxy `/backend` não é preciso CORS. Se usar URL absoluta, inclua a origem do web em `CORS_ORIGIN` da API.
 
 ## Scripts
 
@@ -46,7 +46,8 @@ No modo demonstração qualquer senha funciona; e-mails começando com `empresa@
 
 | Variável | Exemplo | Descrição |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:3000` | URL base da API, sem barra final |
+| `NEXT_PUBLIC_API_URL` | `/backend` | Base usada pelo navegador: `/backend` (proxy, recomendado) ou URL absoluta da API |
+| `API_PROXY_TARGET` | `https://vagas-jl.vercel.app` | Para onde o Next encaminha `/backend/*` (sem CORS) |
 | `NEXT_PUBLIC_API_MOCK` | `false` | `true` usa dados simulados |
 
 ## Telas
@@ -74,8 +75,8 @@ No modo demonstração qualquer senha funciona; e-mails começando com `empresa@
 
 1. Na Vercel: Add New → Project → importar `otnielmata/vagasJL` e definir **Root Directory = `vagas-jl-web`**.
 2. Framework: Next.js (detectado automaticamente).
-3. `NEXT_PUBLIC_API_URL` já vem de `.env.production` (https://vagas-jl.vercel.app); defina na Vercel só se quiser sobrescrever.
-4. Na API, adicione o domínio do web em `CORS_ORIGIN`.
+3. `.env.production` já define o proxy `/backend` → `https://vagas-jl.vercel.app`. Para outra API, defina `API_PROXY_TARGET` na Vercel.
+4. Não é necessário mexer no `CORS_ORIGIN` da API.
 
 ## Documentação
 

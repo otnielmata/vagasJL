@@ -17,5 +17,5 @@ Cada item tem um **contorno provisório no front** — ao implementar o endpoint
 
 ## Configuração necessária na API
 
-- **CORS:** incluir a origem do web em `CORS_ORIGIN` (ex.: `http://localhost:3001,https://vagas-jl-web.vercel.app`).
+- **CORS:** resolvido pelo proxy `/backend` do Next (`API_PROXY_TARGET`). Só é necessário configurar `CORS_ORIGIN` se o web chamar a API por URL absoluta.
 - **Porta local:** a API usa `3000`; o web roda em `3001` (`npm run dev`).

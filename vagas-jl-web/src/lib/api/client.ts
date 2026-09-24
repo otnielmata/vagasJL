@@ -1,7 +1,8 @@
 import type { ApiErrorBody } from './types';
 import { tokenStorage } from '@/lib/storage';
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+/** URL base da API. Pode ser absoluta (http://localhost:3000) ou relativa ao proxy (/backend). */
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/backend').replace(/\/$/, '');
 export const API_MOCK = process.env.NEXT_PUBLIC_API_MOCK === 'true';
 
 /** Erro padronizado a partir do contrato `Error` da API ({ message, errors[] }). */
@@ -43,7 +44,7 @@ export async function request<T>(method: Method, path: string, opts: RequestOpti
     return mockRequest<T>(method, path, opts);
   }
 
-  const url = new URL(API_URL + path);
+  const url = new URL(API_URL + path, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
   Object.entries(opts.query ?? {}).forEach(([k, v]) => v !== undefined && url.searchParams.set(k, String(v)));
 
   const headers: Record<string, string> = { Accept: 'application/json' };
