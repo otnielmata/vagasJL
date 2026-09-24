@@ -8,7 +8,8 @@ info:
     cadastro de candidatos (VJ-22), exclusao da propria conta (VJ-23), validacao de
     elegibilidade (VJ-24), visualizacao individual (VJ-25), alteracao (VJ-26) e exclusao
     logica de candidatos (VJ-27), configuracao versionada do Perfil de Match (VJ-28)
-    e cadastro (VJ-29), edicao (VJ-30) e consulta (VJ-31) do Perfil de Match do candidato.
+    e cadastro (VJ-29), edicao (VJ-30), consulta (VJ-31) e exclusao logica (VJ-32)
+    do Perfil de Match do candidato.
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -279,6 +280,38 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Revisao desatualizada ou alteracao concorrente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      tags: [Match Profile]
+      summary: Exclui logicamente o proprio Perfil de Match (VJ-32)
+      description: >
+        Somente o candidato titular com conta ativa e cadastro atual. Marca deletedAt
+        atomicamente no perfil atual, sem excluir conta, dados cadastrais, catalogo ou pesos.
+        Perfil excluido deixa de ser apresentado e repeticao da exclusao retorna 404.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Perfil marcado como excluido, sem corpo
+        '401':
+          description: JWT ausente ou invalido, ou conta inativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Papel diferente de candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Perfil atual inexistente ou ja excluido
           content:
             application/json:
               schema:
