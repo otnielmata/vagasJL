@@ -2097,8 +2097,8 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
 
 - Para o GitHub Actions, use `npm ci` e `npm test` com o `package-lock.json` versionado.
   O workflow será definido na etapa de integração contínua.
-- A Vercel oferece detecção nativa do Express exportado em `src/app.js`, conforme a
-  [documentação oficial](https://vercel.com/docs/frameworks/backend/express).
+- O deploy da Vercel utiliza o handler Express exportado em `api/index.js` e o
+  roteamento serverless definido em `vercel.json`.
   Configure `NODE_ENV=production`, `BASE_URL` com a URL pública, `MONGODB_URI` com o banco
   de destino, `JWT_SECRET`, `JWT_EXPIRES_IN` e `CORS_ORIGIN` no ambiente da plataforma.
 - Valide os assets do Swagger no futuro preview: a Vercel documenta que `express.static()`
