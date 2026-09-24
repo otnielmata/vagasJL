@@ -13,6 +13,12 @@ const explanationSchema = new mongoose.Schema({
   partialCount: { type: Number, required: true, min: 0, immutable: true },
   gapCount: { type: Number, required: true, min: 0, immutable: true },
 }, { _id: false });
+const diagnosticSchema = new mongoose.Schema({
+  code: { type: String, required: true,
+    enum: ['UNPUBLISHED_REQUIREMENT', 'REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE'], immutable: true },
+  field: { type: String, default: null, maxlength: 100, immutable: true },
+  id: { type: String, default: null, maxlength: 100, immutable: true },
+}, { _id: false });
 
 const matchEvaluationSchema = new mongoose.Schema({
   candidate: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', required: true, immutable: true },
@@ -45,6 +51,7 @@ const matchEvaluationSchema = new mongoose.Schema({
     reason: { type: mongoose.Schema.Types.Mixed, default: null, immutable: true },
   },
   explanation: { type: explanationSchema, required: true, immutable: true },
+  diagnostics: { type: [diagnosticSchema], default: [], immutable: true },
   privacyScope: { type: String, enum: ['internal_ids_only'], default: 'internal_ids_only',
     immutable: true },
 }, { timestamps: { createdAt: true, updatedAt: false } });

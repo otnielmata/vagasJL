@@ -1,5 +1,6 @@
 const Configuration = require('../models/match-engine-configuration.model');
 const ApiError = require('../errors/api.error');
+const config = require('../config/env');
 const { INITIAL_MATCH_WEIGHTS } = require('../config/match-profile');
 const { validMultipliers } = require('../config/match-multipliers');
 
@@ -12,7 +13,8 @@ const REQUIRED_KEYS = Object.freeze([
   'defaultImportImportance', 'effectiveAt', 'minimumMatchPercentage', 'multipliers',
   'state', 'weights',
 ]);
-const OPTIONAL_KEYS = Object.freeze(['minimumProfileCompletionPercentage', 'recalculationPolicy']);
+const OPTIONAL_KEYS = Object.freeze(['eliminatoryPolicyEnabled',
+  'minimumProfileCompletionPercentage', 'recalculationPolicy']);
 
 function validPercentage(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 &&
@@ -51,6 +53,8 @@ function normalizeInput(version, input) {
       (input.minimumProfileCompletionPercentage !== undefined &&
         input.minimumProfileCompletionPercentage !== null &&
         !validPercentage(input.minimumProfileCompletionPercentage)) ||
+      (input.eliminatoryPolicyEnabled !== undefined &&
+        typeof input.eliminatoryPolicyEnabled !== 'boolean') ||
       (input.recalculationPolicy !== undefined &&
         !RECALCULATION_POLICIES.has(input.recalculationPolicy))) {
     throw new ApiError(422, 'Configuracao consolidada do Match invalida');
@@ -69,6 +73,7 @@ function normalizeInput(version, input) {
     defaultImportImportance: input.defaultImportImportance,
     minimumMatchPercentage: input.minimumMatchPercentage,
     minimumProfileCompletionPercentage: input.minimumProfileCompletionPercentage ?? null,
+    eliminatoryPolicyEnabled: input.eliminatoryPolicyEnabled ?? config.match.eliminatoryEnabled,
     effectiveAt,
     recalculationPolicy: input.recalculationPolicy || 'affected_matches',
   };
@@ -88,6 +93,7 @@ function comparable(configuration) {
     defaultImportImportance: data.defaultImportImportance,
     minimumMatchPercentage: data.minimumMatchPercentage,
     minimumProfileCompletionPercentage: data.minimumProfileCompletionPercentage ?? null,
+    eliminatoryPolicyEnabled: data.eliminatoryPolicyEnabled ?? config.match.eliminatoryEnabled,
     effectiveAt: new Date(data.effectiveAt).toISOString(),
     recalculationPolicy: data.recalculation?.policy || data.recalculationPolicy,
   };
@@ -164,6 +170,7 @@ async function getEffectiveMatchEngineConfiguration(now = new Date()) {
     defaultImportImportance: configuration.defaultImportImportance,
     minimumMatchPercentage: configuration.minimumMatchPercentage,
     minimumProfileCompletionPercentage: configuration.minimumProfileCompletionPercentage,
+    eliminatoryPolicyEnabled: configuration.eliminatoryPolicyEnabled,
     effectiveAt: configuration.effectiveAt,
     recalculationPolicy: configuration.recalculation?.policy,
   });

@@ -3,7 +3,7 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const MatchEvaluation = require('../../src/models/match-evaluation.model');
-const { recordMatchEvaluation, getLatestMatchEvaluation, auditData, safeExplanation,
+const { recordMatchEvaluation, getLatestMatchEvaluation, auditData, safeExplanation, safeDiagnostics,
   MATCH_ALGORITHM_VERSION } =
   require('../../src/services/match-evaluation-audit.service');
 
@@ -39,6 +39,7 @@ test('records calculable result with algorithm, configuration versions and input
   assert.equal(MATCH_ALGORITHM_VERSION, 'MATCH_V1');
   assert.deepEqual(audit.configurationVersions,
     { profileCatalog: 7, multipliers: 2, rankingThreshold: 3, completionThreshold: null });
+  assert.deepEqual(audit.diagnostics, []);
   const [filter, update, options] = writes.mock.calls[0].arguments;
   assert.equal(filter.executionId, 'run-123');
   assert.equal(filter['inputRevisions.vacancyRequirements'], 4);
@@ -122,6 +123,19 @@ test('builds a bounded canonical explanation and rejects unsafe details', () => 
   assert.throws(() => auditData(input({ score: { ...input().score,
     details: [{ field: 'english', weight: 7, earnedPoints: 8 }] } })),
   { statusCode: 503, message: 'Contexto de auditoria do Match invalido' });
+});
+
+test('keeps only controlled Match diagnostics without leaking arbitrary fields', () => {
+  assert.deepEqual(safeDiagnostics([{ code: 'UNPUBLISHED_REQUIREMENT',
+    field: 'testAutomationTechnologies', id: 'unknown', rawText: 'private description' }]),
+  [{ code: 'UNPUBLISHED_REQUIREMENT', field: 'testAutomationTechnologies', id: 'unknown' }]);
+  assert.equal(safeDiagnostics([{ code: 'UNCONTROLLED', rawText: 'private' }]), null);
+  const data = auditData(input({ score: { ...input().score, diagnostics: [
+    { code: 'REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE', field: 'qaTools', id: 'xray' },
+  ] } }));
+  assert.deepEqual(data.diagnostics, [
+    { code: 'REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE', field: 'qaTools', id: 'xray' },
+  ]);
 });
 
 test('latest pair lookup uses calculation time and stable id without deleting history', async (context) => {

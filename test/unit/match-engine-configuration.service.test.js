@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const Configuration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { publishMatchEngineConfiguration, getEffectiveMatchEngineConfiguration,
-  applyEngineWeights } = require('../../src/services/match-engine-configuration.service');
+  applyEngineWeights, normalizeInput } = require('../../src/services/match-engine-configuration.service');
 
 const admin = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'admin' };
 const now = new Date('2026-09-23T20:00:00.000Z');
@@ -127,6 +127,14 @@ test('engine weights override only scoring weights and preserve the historical c
   assert.equal(result.fields.find((field) => field.key === 'type').weight, 0);
   assert.equal(result.fields.find((field) => field.key === 'type').options[0].id, 'remote');
   assert.equal(catalog.fields[0].weight, 8);
+});
+
+test('normalizes the eliminatory policy as a versioned administrative rule', () => {
+  const normalized = normalizeInput('MATCH_V8', { ...input(), eliminatoryPolicyEnabled: false });
+  assert.equal(normalized.eliminatoryPolicyEnabled, false);
+  assert.equal(normalizeInput('MATCH_V8', input()).eliminatoryPolicyEnabled, true);
+  assert.throws(() => normalizeInput('MATCH_V8', { ...input(), eliminatoryPolicyEnabled: 'false' }),
+    { statusCode: 422 });
 });
 
 test('only authenticated administrators may publish', async () => {

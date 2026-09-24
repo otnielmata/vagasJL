@@ -30,6 +30,7 @@ const schema = new mongoose.Schema({
   },
   minimumMatchPercentage: { type: Number, required: true, min: 0, max: 100 },
   minimumProfileCompletionPercentage: { type: Number, default: null, min: 0, max: 100 },
+  eliminatoryPolicyEnabled: { type: Boolean, required: true, default: true },
   effectiveAt: { type: Date, required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

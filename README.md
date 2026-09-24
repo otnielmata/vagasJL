@@ -619,7 +619,9 @@ obtidos, pontos possíveis e a versão da configuração técnica aplicada.
 versão completa como `MATCH_V2`. O corpo reúne os 22 pesos técnicos, multiplicadores de importância,
 importância padrão das vagas importadas, percentual mínimo de Match, vigência e estado `draft` ou
 `published`. Opcionalmente, também centraliza a completude mínima do perfil e a política de
-reprocessamento (`none` ou `affected_matches`).
+reprocessamento (`none` ou `affected_matches`). A partir da VJ-85, também pode definir
+`eliminatoryPolicyEnabled`; quando a configuração consolidada está vigente, esse valor substitui a
+compatibilidade legada de `MATCH_ELIMINATORY_ENABLED`.
 
 Pesos aceitam valores de 0 a 1000 com até duas casas decimais; peso zero retira o critério do cálculo.
 O multiplicador `required` permanece 1, `indifferent` permanece 0 e `desirable` deve ficar entre 0 e 1.
@@ -747,6 +749,29 @@ somente sugestões aceitas que ainda existam no Catálogo Mestre publicado. A al
 no histórico de requisitos, atualiza a versão canônica do Perfil de Match e agenda o recálculo dos
 Matches afetados conforme a política vigente. Rascunhos e históricos não aparecem nas respostas
 comuns de vaga.
+
+## Match somente com dados estruturados — VJ-85
+
+O Motor de Match usa exclusivamente o Perfil de Match do candidato, o Perfil de Match publicado da
+vaga, IDs canônicos do Catálogo Mestre e a configuração versionada vigente. `description`, textos
+profissionais, frequência de palavras, aliases legados, embeddings e campos derivados não entram no
+numerador, denominador, desempate ou elegibilidade. Alterar somente a descrição da vaga mantém
+percentual, pontos e elegibilidade; sugestões extraídas pela VJ-84 só passam a valer depois de
+revisadas e publicadas no perfil estruturado.
+
+IDs, labels e aliases publicados convergem para um único ID e pontuam no máximo uma vez. Requisitos
+que ainda não pertencem ao catálogo ou ao perfil publicado são ignorados pelo cálculo e geram apenas
+diagnósticos controlados (`UNPUBLISHED_REQUIREMENT` ou
+`REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE`). Esses diagnósticos não armazenam a descrição bruta e ficam
+associados à auditoria imutável do resultado. Sem critério estruturado aplicável, o estado é
+`not_calculable`, com percentual nulo e zero pontos possíveis.
+
+Os dois rankings e a explicação individual reutilizam o mesmo `scorePair`. Cada avaliação registra
+pontos obtidos e possíveis, critérios canônicos, elegibilidade, data, revisões de entrada e versões
+do algoritmo, configuração consolidada, catálogo, multiplicadores e limiares. Para o mesmo par e as
+mesmas versões, o resultado técnico é reproduzível nos dois sentidos. Pesos, multiplicadores,
+limiares e política eliminatória são lidos da configuração administrativa vigente; os controles
+legados permanecem apenas como compatibilidade quando ainda não existe configuração consolidada.
 
 ## Multiplicadores do Match — VJ-52
 
@@ -1012,12 +1037,13 @@ Cada requisito estruturado aceita `eliminatory: true|false` no cadastro ou no me
 `testingRelatedKeywords` são recusados para essa finalidade. O sinalizador segue a mesma
 autorização, revisão e auditoria da VJ-46. `required` sem o sinalizador **não elimina**.
 
-Com `MATCH_ELIMINATORY_ENABLED=true` (padrão), requisito eliminatório não comprovado,
+Com `eliminatoryPolicyEnabled=true` na configuração consolidada vigente, requisito eliminatório não comprovado,
 ausente ou desconhecido torna a avaliação `ineligible` com motivo estruturado no serviço
 de Match, separado do percentual. A vaga não aparece no ranking personalizado desse
 candidato e sai de `total`/paginação, mas não recebe penalidade extra na pontuação.
 Valores numéricos exigem atingir ao menos o nível da vaga. `false` desativa a política
-global sem alterar requisitos, pesos ou percentuais. Não há cache; a próxima consulta
+da versão sem alterar requisitos, pesos ou percentuais. Sem configuração consolidada, a variável
+legada `MATCH_ELIMINATORY_ENABLED` mantém a compatibilidade. Não há cache; a próxima consulta
 reflete imediatamente a alteração, sem expor o motivo interno a outros usuários.
 
 ## `false` em vagas importadas — VJ-48

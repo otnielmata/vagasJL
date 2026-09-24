@@ -95,7 +95,7 @@ async function rankVacancies(actor, query = {}, now = new Date(), auditContext =
     if (!configuration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel');
     const scoringConfiguration = applyEngineWeights(configuration, engineConfiguration);
     const score = scorePair(vacancy, candidateValues, scoringConfiguration,
-      matchConfiguration.multipliers, now, candidate);
+      matchConfiguration.multipliers, now, candidate, engineConfiguration || {});
     const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
       cause: 'candidate_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
       algorithmVersion: engineConfiguration?.version,

@@ -64,7 +64,7 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, scoringConfiguration,
-      matchConfiguration.multipliers, now, candidate);
+      matchConfiguration.multipliers, now, candidate, engineConfiguration || {});
     const audit = await recordMatchEvaluation({ candidate, vacancy, profile, score,
       cause: 'vacancy_ranking', executionId, calculatedAt: auditContext.calculatedAt || now,
       algorithmVersion: engineConfiguration?.version,

@@ -113,7 +113,7 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
     .select('values configurationVersion revision updatedAt');
   const candidateValues = plain(profile?.values);
   const score = scorePair(vacancy, candidateValues, scoringConfiguration,
-    matchConfiguration.multipliers, now, candidate);
+    matchConfiguration.multipliers, now, candidate, engineConfiguration || {});
   const criteria = criteriaFromScore(score, vacancy, scoringConfiguration, candidateValues, candidate);
   const calculable = score.calculationStatus === 'calculable' &&
     criteria.every((criterion) => criterion.status !== 'unknown');
@@ -149,6 +149,7 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
     metCriteria: criteria.filter((criterion) => criterion.status === 'met'),
     gaps: criteria.filter((criterion) => criterion.status === 'gap').sort(compareGaps),
     availableCriteria: criteria,
+    diagnostics: score.diagnostics || [],
   };
 }
 

@@ -17,6 +17,7 @@ info:
     separacao conceitual dos dados importados (VJ-82) e contratos canonicos
     compativeis com o JSON legado apenas na fronteira de importacao (VJ-83),
     extracao revisavel da descricao para requisitos estruturados (VJ-84),
+    Match exclusivamente sobre dados estruturados, normalizados e versionados (VJ-85),
     catalogo versionado (VJ-28), cadastro de vaga propria (VJ-42) e origem
     rastreavel independente do Perfil de Match (VJ-43) e cadastro do Perfil de Match
     do candidato (VJ-29) e sua edicao (VJ-30).
@@ -448,7 +449,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vacancy, indicator, audit, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria]
+                required: [vacancy, indicator, audit, resultState, resultLabel, calculationStatus, percentage, earnedPoints, possiblePoints, configurationVersion, multipliersVersion, minimumMatchPercentage, rankingThresholdVersion, eligibility, metCriteria, gaps, availableCriteria, diagnostics]
                 properties:
                   vacancy:
                     type: object
@@ -496,6 +497,15 @@ paths:
                   availableCriteria:
                     type: array
                     items: { $ref: '#/components/schemas/MatchCriterionDetail' }
+                  diagnostics:
+                    type: array
+                    items:
+                      type: object
+                      required: [code]
+                      properties:
+                        code: { type: string }
+                        field: { type: string, nullable: true }
+                        id: { type: string, nullable: true }
         '400': { description: Identificador da vaga invalido }
         '401': { description: JWT ausente ou invalido }
         '403': { description: Conta nao e candidata }
@@ -2503,6 +2513,9 @@ components:
           maximum: 100
           multipleOf: 0.01
           nullable: true
+        eliminatoryPolicyEnabled:
+          type: boolean
+          description: Controla criterios eliminatorios nos calculos desta versao.
         recalculationPolicy: { type: string, enum: [none, affected_matches], default: affected_matches }
     MatchEngineConfiguration:
       allOf:
@@ -2527,7 +2540,7 @@ components:
     MatchAuditReference:
       type: object
       description: Referencia segura para a auditoria interna e imutavel do resultado de Match.
-      required: [evaluationId, executionId, algorithmVersion, calculatedAt, configurationVersions, inputRevisions]
+      required: [evaluationId, executionId, algorithmVersion, calculatedAt, configurationVersions, inputRevisions, diagnostics]
       additionalProperties: false
       properties:
         evaluationId: { type: string, example: 66f1d86e5b47d410ca2a6f15 }
@@ -2539,6 +2552,7 @@ components:
           required: [profileCatalog, multipliers, rankingThreshold, completionThreshold]
           additionalProperties: false
           properties:
+            engine: { type: string, pattern: '^MATCH_V[1-9][0-9]*$', nullable: true }
             profileCatalog: { type: integer, minimum: 1, example: 3 }
             multipliers: { type: integer, minimum: 1, example: 2 }
             rankingThreshold: { type: integer, minimum: 1, nullable: true, example: 4 }
@@ -2552,6 +2566,19 @@ components:
             vacancyUpdatedAt: { type: string, format: date-time }
             candidateProfile: { type: integer, minimum: 1, nullable: true, example: 7 }
             candidateProfileUpdatedAt: { type: string, format: date-time, nullable: true }
+        diagnostics:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [code]
+            additionalProperties: false
+            properties:
+              code:
+                type: string
+                enum: [UNPUBLISHED_REQUIREMENT, REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE]
+              field: { type: string, nullable: true }
+              id: { type: string, nullable: true }
     MatchCriterionDetail:
       type: object
       required: [field, id, label, importance, status, earnedPoints, possiblePoints, lostPoints]

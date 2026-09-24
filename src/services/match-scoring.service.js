@@ -17,6 +17,11 @@ const DERIVED_FIELDS = Object.freeze([
 const MATCH_V1_EXCLUDED_FIELDS = Object.freeze([...DERIVED_FIELDS, 'testingRelatedKeywords']);
 const TECHNICAL_FIELDS = Object.freeze(Object.keys(INITIAL_MATCH_WEIGHTS)
   .filter((key) => !MATCH_V1_EXCLUDED_FIELDS.includes(key)));
+const MATCH_DIAGNOSTIC_CODES = Object.freeze([
+  'UNPUBLISHED_REQUIREMENT',
+  'REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE',
+]);
+const CANONICAL_ID = /^[a-z][a-z0-9_-]*$/;
 
 function configuredWeights(configuration) {
   const fields = configuration?.fields;
@@ -34,7 +39,7 @@ function configuredWeights(configuration) {
   return weights;
 }
 
-function buildScoreResult(details, vacancy) {
+function buildScoreResult(details, vacancy, diagnostics = []) {
   const earnedPoints = details.reduce((total, detail) => total + detail.earnedPoints, 0);
   const possiblePoints = details.reduce((total, detail) => total + detail.weight, 0);
   const groups = new Map();
@@ -55,6 +60,7 @@ function buildScoreResult(details, vacancy) {
     groups: [...groups.values()].map((group) => ({ ...group,
       percentage: Number((group.earnedPoints / group.possiblePoints * 100).toFixed(2)) })),
     eligibility: { eligible: !reason, reason },
+    ...(diagnostics.length ? { diagnostics } : {}),
     ...(vacancy?.origin === 'IMPORTED'
       ? { technicalCompatibility: notCalculable ? 'not_calculable' : 'calculable' } : {}),
   };
@@ -150,9 +156,11 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
   const fields = new Map(configuration.fields.map((field) => [field.key, field]));
   const rawType = Array.isArray(vacancyValues.type) ? vacancyValues.type : [vacancyValues.type];
   const vacancyType = canonicalValues(vacancy.origin === 'IMPORTED'
-    ? rawType.filter((value) => !isUnidentifiedModality(value)) : vacancyValues.type, fields.get('type'));
+    ? rawType.filter((value) => !isUnidentifiedModality(value)) : vacancyValues.type,
+  fields.get('type'), true);
   if (vacancyType.size > 1) throw new TypeError('Modalidade principal da vaga invalida');
   const details = [];
+  const diagnostics = [];
   if (requirements !== undefined) {
     if (!Array.isArray(requirements) || !validMultipliers(multipliers) ||
         typeof eliminatoryPolicyEnabled !== 'boolean') throw new TypeError('Importancia invalida');
@@ -160,7 +168,11 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
     let unmetEliminatory = null;
     for (const requirement of requirements) {
       const { field, id, value, importance, eliminatory = false } = requirement;
-      if (!weights.has(field) || !['required', 'desirable', 'indifferent'].includes(importance)) {
+      if (!weights.has(field)) {
+        diagnostics.push({ code: 'UNPUBLISHED_REQUIREMENT' });
+        continue;
+      }
+      if (!['required', 'desirable', 'indifferent'].includes(importance)) {
         throw new TypeError('Requisito invalido');
       }
       if (typeof eliminatory !== 'boolean' || (importance === 'indifferent' && eliminatory)) {
@@ -179,8 +191,21 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         continue;
       }
       seen.set(key, { importance, eliminatory, value });
+      const configuredField = fields.get(field);
+      if (field !== 'yearsOfExperience' && (typeof id !== 'string' ||
+          !configuredField.options.some((option) => option.id === id))) {
+        diagnostics.push({ code: 'UNPUBLISHED_REQUIREMENT', field,
+          ...(typeof id === 'string' && id.length <= 100 && CANONICAL_ID.test(id) ? { id } : {}) });
+        continue;
+      }
+      const publishedVacancyValues = field === 'yearsOfExperience' ? null
+        : canonicalValues(vacancyValues[field], configuredField, true);
+      if (field !== 'yearsOfExperience' && !publishedVacancyValues.has(id)) {
+        diagnostics.push({ code: 'REQUIREMENT_OUTSIDE_PUBLISHED_PROFILE', field, id });
+        continue;
+      }
       if (importance === 'indifferent') continue;
-      if (field === 'type' && !vacancyType.has(id)) throw new TypeError('Modalidade principal da vaga invalida');
+      if (field === 'type' && !vacancyType.has(id)) continue;
       const weight = weights.get(field) * multipliers[importance];
       let matched;
       let earnedPoints;
@@ -197,9 +222,6 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         earnedPoints = candidateExperience == null ? 0 : weight *
           (value === 0 ? 1 : Math.min(candidateExperience / value, 1));
       } else {
-        if (typeof id !== 'string' || !canonicalValues(vacancyValues[field], fields.get(field)).has(id)) {
-          throw new TypeError('Competencia fora do perfil da vaga');
-        }
         matched = canonicalValues(candidateValues[field], fields.get(field), true).has(id);
         earnedPoints = matched ? weight : 0;
       }
@@ -211,7 +233,8 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         weight, earnedPoints });
     }
     const result = buildScoreResult([...details,
-      ...geographicDetails(geographicRestrictions, candidateLocation, configuration, multipliers)], vacancy);
+      ...geographicDetails(geographicRestrictions, candidateLocation, configuration, multipliers)],
+    vacancy, diagnostics);
     if (unmetEliminatory) result.eligibility = { eligible: false, reason: unmetEliminatory };
     return result;
   }
@@ -221,9 +244,9 @@ function calculateCompetencyMatch({ vacancyValues = {}, candidateValues = {}, co
         (Array.isArray(vacancyValues.level) ? vacancyValues.level : [vacancyValues.level])
           .some(isUnknownSeniority)) continue;
     const field = fields.get(key);
-    const required = canonicalValues(vacancyValues[key], field);
+    const required = canonicalValues(vacancyValues[key], field, true);
     if (!required.size) continue;
-    const offered = canonicalValues(candidateValues[key], field);
+    const offered = canonicalValues(candidateValues[key], field, true);
     const weight = weights.get(key);
     if (weight === 0) continue;
     for (const id of [...required].sort()) {
@@ -239,5 +262,6 @@ module.exports = {
   TECHNICAL_FIELDS,
   DERIVED_FIELDS,
   MATCH_V1_EXCLUDED_FIELDS,
+  MATCH_DIAGNOSTIC_CODES,
   MATCH_SCORING_VERSION,
 };

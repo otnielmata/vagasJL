@@ -104,11 +104,14 @@ test('comparison does not mutate legacy inputs', () => {
   assert.equal(JSON.stringify(candidateValues), originalCandidate);
 });
 
-test('unknown free text is rejected instead of scored by textual similarity', () => {
-  assert.throws(() => calculateCompetencyMatch({
+test('unknown free text is ignored instead of scored by textual similarity', () => {
+  const result = calculateCompetencyMatch({
     vacancyValues: { testAutomationTechnologies: ['Cypress-like'] },
     candidateValues: { testAutomationTechnologies: ['cypress'] }, configuration: configuration(),
-  }), TypeError);
+  });
+  assert.equal(result.calculationStatus, 'not_calculable');
+  assert.equal(result.percentage, null);
+  assert.deepEqual(result.details, []);
 });
 
 test('missing competencies and derived-only data create no implicit points', () => {

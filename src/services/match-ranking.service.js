@@ -27,13 +27,14 @@ function compareRankingRows(left, right) {
     String(left.stableId).localeCompare(String(right.stableId));
 }
 
-function scorePair(vacancy, candidateValues, configuration, multipliers, now, candidateLocation) {
+function scorePair(vacancy, candidateValues, configuration, multipliers, now, candidateLocation,
+  rules = {}) {
   const technicalProfile = assessVacancyForMatch(vacancy, now).technicalProfile;
   const score = calculateCompetencyMatch({ vacancyValues: technicalProfile.values,
     candidateValues, configuration, requirements: vacancy.matchProfile.requirements,
     geographicRestrictions: vacancy.geographicRestrictions, candidateLocation,
     multipliers,
-    eliminatoryPolicyEnabled: config.match.eliminatoryEnabled,
+    eliminatoryPolicyEnabled: rules.eliminatoryPolicyEnabled ?? config.match.eliminatoryEnabled,
     vacancy: { origin: vacancy.origin } });
   return { ...score, matchedRequiredCount: countMatchedRequired(score,
     vacancy.matchProfile.requirements, vacancy.geographicRestrictions) };
