@@ -703,6 +703,41 @@ paths:
         '403': { description: Sem permissao empresarial ou administrativa }
         '404': { description: Vaga inexistente ou indisponivel }
         '503': { description: Configuracao tecnica indisponivel }
+  /importacoes/vagas/sincronizar:
+    post:
+      tags: [Vacancies]
+      summary: Sincroniza vagas do JL Vagas (enriched-dataset.json)
+      description: >
+        Admin autenticado. Busca IMPORT_VACANCIES_URL, converte cada item para IDs canonicos do
+        Perfil de Match publicado e concilia as vagas IMPORTED (cria, atualiza, fecha ausentes).
+        dryRun valida sem gravar; activatePending publica as vagas importadas pendentes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                dryRun: { type: boolean }
+                activatePending: { type: boolean }
+      responses:
+        '200': { description: 'Resumo da importacao: recebidas, importaveis, descartadas, nao mapeadas e resultado' }
+        '400': { description: Corpo invalido }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Papel diferente de admin }
+        '502': { description: Fonte indisponivel ou JSON invalido }
+        '503': { description: Configuracao ausente }
+    get:
+      tags: [Vacancies]
+      summary: Sincronizacao agendada (Vercel Cron)
+      description: Exige Authorization Bearer igual a CRON_SECRET.
+      responses:
+        '200': { description: Resumo da importacao }
+        '401': { description: Segredo ausente ou invalido }
+        '503': { description: CRON_SECRET nao configurado }
   /perfil-match/configuracao:
     put:
       tags: [Match Profile]
