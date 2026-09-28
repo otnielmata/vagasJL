@@ -201,6 +201,16 @@ vacancySchema.index({ importSource: 1, importSourceId: 1 }, {
     origin: 'IMPORTED', importSource: { $type: 'string' }, importSourceId: { $type: 'string' },
   },
 });
+vacancySchema.index({ status: 1, updatedAt: -1 }, { name: 'vacancy_status_updated' });
+vacancySchema.index({ origin: 1, status: 1, updatedAt: -1 }, { name: 'vacancy_origin_status_updated' });
+vacancySchema.index({ 'location.country': 1, 'location.state': 1, 'location.city': 1, status: 1 }, {
+  name: 'vacancy_location_status',
+});
+vacancySchema.index({
+  'matchProfile.values.type': 1,
+  'matchProfile.values.level': 1,
+  status: 1,
+}, { name: 'vacancy_type_level_status' });
 
 vacancySchema.set('toJSON', {
   transform: (_document, result) => {

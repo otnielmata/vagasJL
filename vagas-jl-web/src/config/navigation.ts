@@ -25,6 +25,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   candidate: [
     { href: '/candidato', label: 'Visão geral', icon: LayoutDashboard },
     { href: '/candidato/vagas', label: 'Vagas para mim', icon: Sparkles },
+    { href: '/candidato/todas-vagas', label: 'Todas as vagas', icon: Briefcase },
     { href: '/candidato/perfil-match', label: 'Perfil de Match', icon: Gauge },
     { href: '/candidato/cadastro', label: 'Dados profissionais', icon: UserRound },
     { href: '/candidato/engajamento', label: 'Engajamento', icon: Activity },

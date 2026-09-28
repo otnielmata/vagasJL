@@ -5,6 +5,7 @@ const controller = require('../controllers/vacancy.controller');
 
 const router = Router();
 
+router.get('/', authenticate, authorize('candidate', 'admin'), ensureDatabase, controller.list);
 router.post('/:id/normalizacao', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.normalizeDescription);
 router.get('/:id/candidatos/ranking', authenticate, authorize('admin', 'company'), ensureDatabase,

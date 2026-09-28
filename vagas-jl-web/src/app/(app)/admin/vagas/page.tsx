@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { StatusChangeForm } from '@/components/admin/status-change-form';
 import { CandidateRanking } from '@/components/match/candidate-ranking';
 import { VACANCY_STATUS_LABEL } from '@/components/match/status-badges';
+import { VacancyBrowser } from '@/components/vacancies/vacancy-browser';
 
 type Target = Exclude<VacancyStatus, 'pending'>;
 
@@ -21,6 +22,7 @@ export default function AdminVacanciesPage() {
     <>
       <PageHeader eyebrow="Administração" title="Vagas" description="Somente vagas Ativas participam dos rankings apresentados aos candidatos." />
       <div className="space-y-6">
+        <VacancyBrowser admin />
         <StatusChangeForm<Target>
           title="Revisar status da vaga"
           description="Aprovar (ativar), pausar, expirar, remover ou rejeitar."

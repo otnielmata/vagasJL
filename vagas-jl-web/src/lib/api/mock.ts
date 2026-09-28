@@ -13,6 +13,7 @@ import type {
   Role,
   User,
   Vacancy,
+  VacancyListResponse,
   VacancyRankingItem,
 } from './types';
 
@@ -244,6 +245,47 @@ export async function mockRequest<T>(method: string, path: string, opts: Request
       return { permissions: { contact: body.contact ?? [], formation: body.formation ?? [], changedAt: now } } as T;
     case 'PATCH /candidatos/me/perfil-publico':
       return { publicProfile: { enabled: Boolean(body.enabled), fields: body.fields ?? [], effectiveFields: body.fields ?? [], consentedAt: now, revokedAt: null } } as T;
+    case 'GET /vagas': {
+      const query = opts.query ?? {};
+      const page = Math.max(1, Number(query.page ?? 1));
+      const normalized = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
+      const includes = (value: unknown, expected: unknown) => normalized(value).includes(normalized(expected));
+      const values = (item: Vacancy, field: keyof Vacancy['matchProfile']['values']) => {
+        const value = item.matchProfile.values[field];
+        return Array.isArray(value) ? value.map(normalized) : [normalized(value)];
+      };
+      const skills = (item: Vacancy) => [
+        ...(item.matchProfile.requirements ?? []).map((requirement) => requirement.id ?? ''),
+        ...values(item, 'testAutomationTechnologies'),
+        ...values(item, 'qaTools'),
+        ...values(item, 'programmingLanguages'),
+        ...values(item, 'genAITools'),
+      ];
+      const filtered = VACANCIES.filter((item) => {
+        if (state.user?.role !== 'admin' && item.status !== 'active') return false;
+        if (query.status && item.status !== query.status) return false;
+        if (query.origin && item.origin !== query.origin) return false;
+        if (query.city && !includes(item.location?.city, query.city)) return false;
+        if (query.state && !includes(item.location?.state, query.state)) return false;
+        if (query.country && !includes(item.location?.country, query.country)) return false;
+        for (const field of ['type', 'level', 'role', 'specialization'] as const) {
+          if (query[field] && !values(item, field).includes(normalized(query[field]))) return false;
+        }
+        if (query.skill && !skills(item).includes(normalized(query.skill))) return false;
+        if (query.q) {
+          const searchable = [item.title, item.description, item.reference, item.location?.city,
+            item.location?.state, item.location?.country, ...skills(item)];
+          if (!searchable.some((value) => includes(value, query.q))) return false;
+        }
+        return true;
+      });
+      const limit = 10;
+      const start = (page - 1) * limit;
+      return {
+        items: filtered.slice(start, start + limit), page, limit, total: filtered.length,
+        pages: Math.ceil(filtered.length / limit), filters: query,
+      } as VacancyListResponse as T;
+    }
     case 'GET /vagas/:id/candidatos/ranking':
       return {
         items: ['Maria Silva', 'João Pereira', 'Ana Costa', 'Lucas Rocha', 'Beatriz Lima'].map((name, i) => ({

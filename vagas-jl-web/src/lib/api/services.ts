@@ -25,6 +25,8 @@ import type {
   User,
   Vacancy,
   VacancyImportResult,
+  VacancyListFilters,
+  VacancyListResponse,
   VacancyRequirement,
   VacancyStatus,
 } from './types';
@@ -97,6 +99,8 @@ export const companyService = {
 };
 
 export const vacancyService = {
+  list: (params: VacancyListFilters & { page?: number } = {}) =>
+    api.get<VacancyListResponse>('/vagas', { query: { ...params } }),
   candidateRanking: (vacancyId: string, params: { page?: number; limit?: number } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>

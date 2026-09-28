@@ -191,6 +191,29 @@ export interface Vacancy {
   updatedAt?: string;
 }
 
+export interface VacancyListFilters {
+  q?: string;
+  origin?: VacancyOrigin;
+  status?: VacancyStatus;
+  city?: string;
+  state?: string;
+  country?: string;
+  type?: string;
+  level?: string;
+  role?: string;
+  specialization?: string;
+  skill?: string;
+}
+
+export interface VacancyListResponse {
+  items: Vacancy[];
+  page: number;
+  limit: 10;
+  total: number;
+  pages: number;
+  filters: VacancyListFilters;
+}
+
 export interface CompanyVacancyInput {
   reference: string;
   title: string;
