@@ -2131,12 +2131,19 @@ O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da 
   (inclua `www.linkedin.com`); caso contrário a vaga entra sem canal.
 - **Fechamento:** com `IMPORT_VACANCIES_CLOSE_MISSING=true`, vagas que saírem do arquivo ficam `expired`,
   exceto se o arquivo vier com menos da metade das vagas abertas (proteção contra arquivo incompleto).
-- **Status:** vagas importadas entram `pending`. O admin publica em lote com `activatePending`.
+- **Status:** vagas importadas entram `pending`. Somente o perfil `master` pode importar e publicar em lote com `activatePending`.
 
 | Método | Rota | Acesso | Uso |
 |---|---|---|---|
-| POST | `/importacoes/vagas/sincronizar` | Admin (Bearer) | `{"dryRun": true}` valida sem gravar; `{}` importa; `{"activatePending": true}` importa e publica as pendentes |
+| POST | `/importacoes/vagas/arquivo` | Master (Bearer) | Upload `multipart/form-data` no campo `file`; `dryRun=true` valida e `activatePending=true` publica as importadas pendentes |
+| POST | `/importacoes/vagas/sincronizar` | Master (Bearer) | `{"dryRun": true}` valida sem gravar; `{}` importa; `{"activatePending": true}` importa e publica as pendentes |
 | GET | `/importacoes/vagas/sincronizar` | `Authorization: Bearer <CRON_SECRET>` | Chamado pela Vercel Cron (`vercel.json`, diariamente às 09:00 UTC) |
+
+O perfil `master` não pode ser criado pelo cadastro público. Cadastre uma conta comum e promova-a
+operacionalmente com `MONGODB_URI="<uri>" npm run users:promote-master -- email@exemplo.com`.
+O comando ativa a conta, altera somente o papel e incrementa `tokenVersion`, invalidando sessões antigas.
+Na camada web, esse papel recebe a área exclusiva `/master/importacao`; o menu não é exibido para
+candidatos, empresas ou administradores.
 
 Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), importância padrão
 da importação publicada (`PUT /configuracoes/importacao/importancia-padrao`), `APPLICATION_ALLOWED_HOSTS`

@@ -2,6 +2,14 @@ const crypto = require('node:crypto');
 const config = require('../config/env');
 const importService = require('../services/vacancy-import-source.service');
 
+function booleanOption(value, name) {
+  if (value === undefined || value === false || value === 'false') return false;
+  if (value === true || value === 'true') return true;
+  const error = new Error(`${name} deve ser booleano`);
+  error.statusCode = 400;
+  throw error;
+}
+
 /**
  * POST /importacoes/vagas/sincronizar — admin.
  * { "dryRun": true } so valida; { "activatePending": true } publica as importadas pendentes.
@@ -17,6 +25,35 @@ async function sync(req, res, next) {
     const importacao = await importService.syncVacancyImport({ dryRun: body.dryRun === true });
     const publicacao = body.activatePending === true ? await importService.activatePendingImported(req.user) : undefined;
     return res.status(200).json({ importacao, ...(publicacao ? { publicacao } : {}) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** POST /importacoes/vagas/arquivo — master, multipart/form-data. */
+async function upload(req, res, next) {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({ message: 'Envie um arquivo JSON no campo file' });
+    }
+    let dataset;
+    try {
+      dataset = JSON.parse(req.file.buffer.toString('utf8'));
+    } catch {
+      return res.status(400).json({ message: 'Arquivo JSON invalido' });
+    }
+    const dryRun = booleanOption(req.body?.dryRun, 'dryRun');
+    const activatePending = booleanOption(req.body?.activatePending, 'activatePending');
+    if (dryRun && activatePending) {
+      return res.status(400).json({ message: 'dryRun e activatePending nao podem ser usados juntos' });
+    }
+    const importacao = await importService.syncVacancyImport({ dryRun, dataset });
+    const publicacao = activatePending ? await importService.activatePendingImported(req.user) : undefined;
+    return res.status(200).json({
+      arquivo: { nome: req.file.originalname, tamanho: req.file.size },
+      importacao,
+      ...(publicacao ? { publicacao } : {}),
+    });
   } catch (error) {
     return next(error);
   }
@@ -39,4 +76,4 @@ async function cron(req, res, next) {
   return sync({ ...req, body: {} }, res, next);
 }
 
-module.exports = { sync, cron };
+module.exports = { sync, upload, cron, booleanOption };

@@ -119,7 +119,7 @@ async function syncVacancyImport({ dryRun = false, dataset: provided, referenceA
  * Cada vaga passa pelas mesmas validacoes de publicacao do PATCH /vagas/{id}/status.
  */
 async function activatePendingImported(actor, source = config.vacancyImport.source) {
-  if (actor?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem publicar vagas importadas');
+  if (actor?.role !== 'master') throw new ApiError(403, 'Apenas o perfil master pode publicar vagas importadas');
   const pending = await Vacancy.find({ origin: 'IMPORTED', importSource: source, status: 'pending',
     deletedAt: null }).select('_id importSourceId').lean();
   const errors = [];

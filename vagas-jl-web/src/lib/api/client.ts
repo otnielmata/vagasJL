@@ -48,7 +48,11 @@ export async function request<T>(method: Method, path: string, opts: RequestOpti
   Object.entries(opts.query ?? {}).forEach(([k, v]) => v !== undefined && url.searchParams.set(k, String(v)));
 
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  if (opts.body !== undefined && !isFormData) headers['Content-Type'] = 'application/json';
+  const requestBody: BodyInit | undefined = opts.body === undefined
+    ? undefined
+    : isFormData ? opts.body as FormData : JSON.stringify(opts.body);
   const token = tokenStorage.get();
   if (opts.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
@@ -57,7 +61,7 @@ export async function request<T>(method: Method, path: string, opts: RequestOpti
     res = await fetch(url, {
       method,
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: requestBody,
       signal: opts.signal,
     });
   } catch {

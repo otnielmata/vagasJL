@@ -22,6 +22,12 @@ function errorHandler(err, req, res, next) {
   } else if (err.type === 'entity.too.large') {
     statusCode = 413;
     message = 'Corpo da requisicao excede o limite permitido';
+  } else if (err.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 413;
+    message = 'Arquivo excede o limite de 25 MB';
+  } else if (err.name === 'MulterError') {
+    statusCode = 400;
+    message = 'Envie somente um arquivo JSON no campo file';
   } else if (['MongooseServerSelectionError', 'MongoServerSelectionError', 'MongoNetworkError'].includes(err.name)) {
     statusCode = 503;
     message = 'Banco de dados temporariamente indisponivel';

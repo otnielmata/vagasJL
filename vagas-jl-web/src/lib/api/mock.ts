@@ -2,7 +2,7 @@
  * Modo demonstracao (NEXT_PUBLIC_API_MOCK=true).
  * Simula os contratos da API em memoria para desenvolver e revisar telas sem
  * backend. Nao e usado em producao. Qualquer senha funciona; o papel e
- * inferido pelo e-mail: empresa@... -> company, admin@... -> admin.
+ * inferido pelo e-mail: empresa@... -> company, admin@... -> admin, master@... -> master.
  */
 import { ApiError, type RequestOptions } from './client';
 import { linkStorage, userStorage } from '@/lib/storage';
@@ -56,8 +56,13 @@ const state = {
 };
 
 function makeUser(email: string, name?: string): User {
-  const role: Role = email.startsWith('empresa') ? 'company' : email.startsWith('admin') ? 'admin' : 'candidate';
-  return { _id: '66a0000000000000000000aa', name: name ?? (role === 'company' ? 'Recrutadora Demo' : role === 'admin' ? 'Admin Demo' : 'Maria Silva'), email, role, status: 'active' };
+  const role: Role = email.startsWith('empresa') ? 'company'
+    : email.startsWith('admin') ? 'admin'
+      : email.startsWith('master') ? 'master' : 'candidate';
+  const roleName = role === 'company' ? 'Recrutadora Demo'
+    : role === 'admin' ? 'Admin Demo'
+      : role === 'master' ? 'Master Demo' : 'Maria Silva';
+  return { _id: '66a0000000000000000000aa', name: name ?? roleName, email, role, status: 'active' };
 }
 
 function makeCandidate(): Candidate {
@@ -166,6 +171,15 @@ export async function mockRequest<T>(method: string, path: string, opts: Request
       return { user: state.user } as T;
     case 'GET /api/health':
       return { status: 'ok', timestamp: now } as T;
+    case 'POST /importacoes/vagas/arquivo':
+      return {
+        arquivo: { nome: 'enriched-dataset.json', tamanho: 1400000 },
+        importacao: {
+          dryRun: false, source: 'juliodelima-vagas', adapterVersion: 'JL_ENRICHED_V1',
+          configurationVersion: 2, received: 331, importable: 320,
+          skipped: { NOT_TESTING_RELATED: 11 }, unmapped: [], result: { created: 320 }, failures: [],
+        },
+      } as T;
     case 'POST /candidatos':
       state.candidate = { ...makeCandidate(), ...(body as Partial<Candidate>) };
       return { candidate: state.candidate } as T;

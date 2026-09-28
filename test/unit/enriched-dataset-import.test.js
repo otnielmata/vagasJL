@@ -103,6 +103,42 @@ test('POST sincronizar aceita dryRun e activatePending e recusa outros campos', 
   assert.equal(sync.mock.callCount(), 1);
 });
 
+test('upload aceita JSON enviado pelo master e encaminha o dataset para importacao', async (context) => {
+  const dataset = [raw()];
+  const sync = context.mock.method(service, 'syncVacancyImport', async (options) => ({
+    dryRun: options.dryRun,
+    received: options.dataset.length,
+  }));
+  const publish = context.mock.method(service, 'activatePendingImported', async () => ({ activated: 1 }));
+  const res = response();
+  await controller.upload({
+    user: { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'master' },
+    body: { dryRun: 'false', activatePending: 'true' },
+    file: { originalname: 'enriched-dataset.json', size: 123, buffer: Buffer.from(JSON.stringify(dataset)) },
+  }, res, () => assert.fail('erro inesperado'));
+  assert.equal(res.code, 200);
+  assert.deepEqual(res.body.arquivo, { nome: 'enriched-dataset.json', tamanho: 123 });
+  assert.deepEqual(res.body.importacao, { dryRun: false, received: 1 });
+  assert.deepEqual(res.body.publicacao, { activated: 1 });
+  assert.equal(sync.mock.callCount(), 1);
+  assert.equal(publish.mock.callCount(), 1);
+});
+
+test('upload recusa arquivo ausente, JSON invalido e opcoes contraditorias sem importar', async (context) => {
+  const sync = context.mock.method(service, 'syncVacancyImport', async () => assert.fail('nao deve importar'));
+  for (const request of [
+    { body: {} },
+    { body: {}, file: { originalname: 'vagas.json', size: 1, buffer: Buffer.from('{') } },
+    { body: { dryRun: 'true', activatePending: 'true' },
+      file: { originalname: 'vagas.json', size: 2, buffer: Buffer.from('[]') } },
+  ]) {
+    const res = response();
+    await controller.upload(request, res, () => assert.fail('erro inesperado'));
+    assert.equal(res.code, 400);
+  }
+  assert.equal(sync.mock.callCount(), 0);
+});
+
 test('GET sincronizar (Vercel Cron) exige CRON_SECRET no Authorization', async (context) => {
   context.mock.method(service, 'syncVacancyImport', async () => ({ ok: true }));
   const original = config.vacancyImport.cronSecret;
