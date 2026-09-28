@@ -3,7 +3,7 @@
  * (vagas-jl-api/src/docs/swagger.yaml). Mantenha sincronizado ao evoluir a API.
  */
 
-export type Role = 'candidate' | 'company' | 'admin';
+export type Role = 'candidate' | 'company' | 'admin' | 'master';
 
 export interface User {
   _id: string;
@@ -200,6 +200,33 @@ export interface CompanyVacancyInput {
   location?: VacancyLocation | null;
   geographicRestrictions?: Vacancy['geographicRestrictions'];
   matchProfile: { values: MatchValues; requirements?: VacancyRequirement[] };
+}
+
+export interface VacancyImportResult {
+  arquivo: { nome: string; tamanho: number };
+  importacao: {
+    dryRun: boolean;
+    source: string;
+    adapterVersion: string;
+    configurationVersion: number;
+    received: number;
+    importable: number;
+    skipped: Record<string, number>;
+    unmapped: { field: string; value: string; count: number }[];
+    result?: Record<string, number>;
+    failures?: { sourceId?: string; message: string }[];
+    preview?: {
+      valid: number;
+      invalid: number;
+      errors: { message: string; count: number }[];
+    };
+  };
+  publicacao?: {
+    pending: number;
+    activated: number;
+    failed: number;
+    errors: { message: string; count: number }[];
+  };
 }
 
 /* -------------------------------------------------------------------- Match */

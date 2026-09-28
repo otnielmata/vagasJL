@@ -31,6 +31,11 @@ test('declares a unique index for normalized email', () => {
   assert.equal(user.email, 'maria@example.com');
 });
 
+test('accepts master only as a provisioned model role', () => {
+  assert.equal(new User({ ...validInput, role: 'master' }).validateSync(), undefined);
+  assert.ok(new User({ ...validInput, role: 'owner' }).validateSync().errors.role);
+});
+
 test('hashes password before persistence and compares credentials securely', async (context) => {
   let persisted;
   context.mock.method(User.collection, 'insertOne', async (document) => {

@@ -39,6 +39,16 @@ const config = {
     timeoutMs: Number(process.env.ENGAGEMENT_API_TIMEOUT_MS || 3000),
     cacheTtlMs: Number(process.env.ENGAGEMENT_CACHE_TTL_MS || 300000),
   },
+  // Importacao de vagas do JL Vagas (enriched-dataset.json)
+  vacancyImport: {
+    url: (process.env.IMPORT_VACANCIES_URL ?? 'https://juliodelima.com.br/vagas/data/enriched-dataset.json').trim(),
+    source: (process.env.IMPORT_VACANCIES_SOURCE || 'juliodelima-vagas').trim().toLowerCase(),
+    timeoutMs: Number(process.env.IMPORT_VACANCIES_TIMEOUT_MS || 20000),
+    closeMissing: (process.env.IMPORT_VACANCIES_CLOSE_MISSING ?? 'true') === 'true',
+    languageLevel: (process.env.IMPORT_VACANCIES_LANGUAGE_LEVEL || 'intermediate').trim(),
+    // Segredo enviado pela Vercel Cron no header Authorization (Bearer)
+    cronSecret: process.env.CRON_SECRET || '',
+  },
   application: {
     allowedHosts: applicationAllowedHosts,
     allowedEmailDomains: applicationAllowedEmailDomains,
@@ -48,6 +58,23 @@ const config = {
 function validateConfig() {
   const errors = [];
 
+  if (config.vacancyImport.url) {
+    try {
+      if (new URL(config.vacancyImport.url).protocol !== 'https:') throw new Error();
+    } catch {
+      errors.push('IMPORT_VACANCIES_URL deve ser uma URL HTTPS valida');
+    }
+  }
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(config.vacancyImport.source)) {
+    errors.push('IMPORT_VACANCIES_SOURCE deve conter apenas letras minusculas, numeros, ponto, hifen ou underline');
+  }
+  if (!Number.isSafeInteger(config.vacancyImport.timeoutMs) || config.vacancyImport.timeoutMs < 1000 ||
+      config.vacancyImport.timeoutMs > 60000) {
+    errors.push('IMPORT_VACANCIES_TIMEOUT_MS deve ser inteiro entre 1000 e 60000');
+  }
+  if (!['true', 'false'].includes(process.env.IMPORT_VACANCIES_CLOSE_MISSING ?? 'true')) {
+    errors.push('IMPORT_VACANCIES_CLOSE_MISSING deve ser true ou false');
+  }
   if (!['pending', 'mongodb'].includes(config.studentValidation.source)) {
     errors.push('STUDENT_VALIDATION_SOURCE deve ser pending ou mongodb');
   }

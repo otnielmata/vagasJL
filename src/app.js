@@ -23,6 +23,7 @@ const profileCompletionThresholdConfigurationRoutes =
   require('./routes/profile-completion-threshold-configuration.routes');
 const matchEngineConfigurationRoutes = require('./routes/match-engine-configuration.routes');
 const masterCatalogRoutes = require('./routes/master-catalog.routes');
+const vacancyImportRoutes = require('./routes/vacancy-import.routes');
 const notFoundHandler = require('./middleware/notFound.middleware');
 const errorHandler = require('./middleware/error.middleware');
 
@@ -60,6 +61,7 @@ app.use('/configuracoes', rankingThresholdConfigurationRoutes);
 app.use('/configuracoes', profileCompletionThresholdConfigurationRoutes);
 app.use('/admin/configuracoes', matchEngineConfigurationRoutes);
 app.use('/admin/catalogos', masterCatalogRoutes);
+app.use('/importacoes', vacancyImportRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).json({

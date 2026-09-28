@@ -1,0 +1,793 @@
+{
+  "fields": {
+    "type": {
+      "weight": 8,
+      "options": [
+        {
+          "id": "remote",
+          "label": "Remoto",
+          "aliases": [
+            "Remote"
+          ]
+        },
+        {
+          "id": "hybrid",
+          "label": "Híbrido",
+          "aliases": [
+            "Hybrid"
+          ]
+        },
+        {
+          "id": "onsite",
+          "label": "Presencial",
+          "aliases": [
+            "On-site",
+            "Onsite"
+          ]
+        }
+      ]
+    },
+    "yearsOfExperience": {
+      "weight": 9,
+      "options": []
+    },
+    "agile": {
+      "weight": 4,
+      "options": [
+        {
+          "id": "agile",
+          "label": "Agile",
+          "aliases": [
+            "metodologias ageis",
+            "scrum",
+            "kanban"
+          ]
+        }
+      ]
+    },
+    "programming": {
+      "weight": 3,
+      "options": [
+        {
+          "id": "programming",
+          "label": "Programação",
+          "aliases": [
+            "programacao",
+            "programming skills"
+          ]
+        }
+      ]
+    },
+    "automation": {
+      "weight": 5,
+      "options": [
+        {
+          "id": "automation",
+          "label": "Automação de testes",
+          "aliases": [
+            "automacao",
+            "test automation"
+          ]
+        }
+      ]
+    },
+    "webTesting": {
+      "weight": 6,
+      "options": [
+        {
+          "id": "web-testing",
+          "label": "Web Testing",
+          "aliases": [
+            "testes web"
+          ]
+        }
+      ]
+    },
+    "apiTesting": {
+      "weight": 7,
+      "options": [
+        {
+          "id": "api-testing",
+          "label": "API Testing",
+          "aliases": [
+            "testes de api"
+          ]
+        }
+      ]
+    },
+    "mobileTesting": {
+      "weight": 5,
+      "options": [
+        {
+          "id": "mobile-testing",
+          "label": "Mobile Testing",
+          "aliases": [
+            "testes mobile"
+          ]
+        }
+      ]
+    },
+    "desktopTesting": {
+      "weight": 4,
+      "options": [
+        {
+          "id": "desktop-testing",
+          "label": "Desktop Testing",
+          "aliases": [
+            "testes desktop"
+          ]
+        }
+      ]
+    },
+    "continuousIntegration": {
+      "weight": 6,
+      "options": [
+        {
+          "id": "ci-cd",
+          "label": "CI/CD",
+          "aliases": [
+            "integracao continua",
+            "continuous integration"
+          ]
+        }
+      ]
+    },
+    "testAutomationTechnologies": {
+      "weight": 10,
+      "options": [
+        {
+          "id": "cypress",
+          "label": "Cypress",
+          "aliases": []
+        },
+        {
+          "id": "selenium",
+          "label": "Selenium",
+          "aliases": []
+        },
+        {
+          "id": "playwright",
+          "label": "Playwright",
+          "aliases": []
+        },
+        {
+          "id": "postman",
+          "label": "Postman",
+          "aliases": []
+        },
+        {
+          "id": "appium",
+          "label": "Appium",
+          "aliases": []
+        },
+        {
+          "id": "robot_framework",
+          "label": "Robot Framework",
+          "aliases": [
+            "robot framework"
+          ]
+        },
+        {
+          "id": "cucumber",
+          "label": "Cucumber",
+          "aliases": []
+        },
+        {
+          "id": "jmeter",
+          "label": "JMeter",
+          "aliases": []
+        },
+        {
+          "id": "k6",
+          "label": "K6",
+          "aliases": []
+        },
+        {
+          "id": "restassured",
+          "label": "RestAssured",
+          "aliases": []
+        },
+        {
+          "id": "testng",
+          "label": "TestNG",
+          "aliases": []
+        },
+        {
+          "id": "soapui",
+          "label": "SoapUI",
+          "aliases": []
+        },
+        {
+          "id": "karate",
+          "label": "Karate",
+          "aliases": []
+        },
+        {
+          "id": "gatling",
+          "label": "Gatling",
+          "aliases": []
+        },
+        {
+          "id": "loadrunner",
+          "label": "LoadRunner",
+          "aliases": []
+        },
+        {
+          "id": "insomnia",
+          "label": "Insomnia",
+          "aliases": []
+        },
+        {
+          "id": "detox",
+          "label": "Detox",
+          "aliases": []
+        },
+        {
+          "id": "locust",
+          "label": "Locust",
+          "aliases": []
+        },
+        {
+          "id": "bruno",
+          "label": "Bruno",
+          "aliases": []
+        },
+        {
+          "id": "allure",
+          "label": "Allure",
+          "aliases": []
+        },
+        {
+          "id": "uft",
+          "label": "UFT",
+          "aliases": []
+        },
+        {
+          "id": "supertest",
+          "label": "SuperTest",
+          "aliases": []
+        },
+        {
+          "id": "espresso",
+          "label": "Espresso",
+          "aliases": []
+        },
+        {
+          "id": "xcuitest",
+          "label": "XCUITest",
+          "aliases": []
+        },
+        {
+          "id": "percy",
+          "label": "Percy",
+          "aliases": []
+        },
+        {
+          "id": "testcomplete",
+          "label": "TestComplete",
+          "aliases": []
+        }
+      ]
+    },
+    "programmingLanguages": {
+      "weight": 9,
+      "options": [
+        {
+          "id": "javascript",
+          "label": "JavaScript",
+          "aliases": []
+        },
+        {
+          "id": "typescript",
+          "label": "TypeScript",
+          "aliases": []
+        },
+        {
+          "id": "java",
+          "label": "Java",
+          "aliases": []
+        },
+        {
+          "id": "python",
+          "label": "Python",
+          "aliases": []
+        },
+        {
+          "id": "csharp",
+          "label": "C#",
+          "aliases": []
+        },
+        {
+          "id": "php",
+          "label": "PHP",
+          "aliases": []
+        },
+        {
+          "id": "ruby",
+          "label": "Ruby",
+          "aliases": []
+        },
+        {
+          "id": "kotlin",
+          "label": "Kotlin",
+          "aliases": []
+        },
+        {
+          "id": "swift",
+          "label": "Swift",
+          "aliases": []
+        },
+        {
+          "id": "cpp",
+          "label": "C++",
+          "aliases": []
+        },
+        {
+          "id": "groovy",
+          "label": "Groovy",
+          "aliases": []
+        },
+        {
+          "id": "plsql",
+          "label": "PL/SQL",
+          "aliases": []
+        },
+        {
+          "id": "rust",
+          "label": "Rust",
+          "aliases": []
+        },
+        {
+          "id": "perl",
+          "label": "Perl",
+          "aliases": []
+        },
+        {
+          "id": "scala",
+          "label": "Scala",
+          "aliases": []
+        },
+        {
+          "id": "vbscript",
+          "label": "VBScript",
+          "aliases": []
+        },
+        {
+          "id": "abap",
+          "label": "ABAP",
+          "aliases": []
+        },
+        {
+          "id": "cobol",
+          "label": "COBOL",
+          "aliases": []
+        },
+        {
+          "id": "apex",
+          "label": "Apex",
+          "aliases": []
+        },
+        {
+          "id": "bash",
+          "label": "Bash",
+          "aliases": [
+            "Shell",
+            "Shell Script"
+          ]
+        },
+        {
+          "id": "elm",
+          "label": "Elm",
+          "aliases": []
+        },
+        {
+          "id": "scheme",
+          "label": "Scheme",
+          "aliases": []
+        },
+        {
+          "id": "matlab",
+          "label": "MATLAB",
+          "aliases": []
+        },
+        {
+          "id": "scratch",
+          "label": "Scratch",
+          "aliases": []
+        },
+        {
+          "id": "objective_c",
+          "label": "Objective-C",
+          "aliases": []
+        }
+      ]
+    },
+    "qaTools": {
+      "weight": 5,
+      "options": [
+        {
+          "id": "testrail",
+          "label": "TestRail",
+          "aliases": []
+        },
+        {
+          "id": "xray",
+          "label": "Xray",
+          "aliases": []
+        },
+        {
+          "id": "zephyr",
+          "label": "Zephyr",
+          "aliases": []
+        },
+        {
+          "id": "azure_devops",
+          "label": "Azure DevOps",
+          "aliases": []
+        },
+        {
+          "id": "testlink",
+          "label": "TestLink",
+          "aliases": []
+        },
+        {
+          "id": "qtest",
+          "label": "qTest",
+          "aliases": []
+        },
+        {
+          "id": "hp_alm",
+          "label": "HP ALM",
+          "aliases": []
+        },
+        {
+          "id": "redmine",
+          "label": "Redmine",
+          "aliases": []
+        },
+        {
+          "id": "octane",
+          "label": "ALM Octane",
+          "aliases": [
+            "Octane"
+          ]
+        }
+      ]
+    },
+    "genAITools": {
+      "weight": 5,
+      "options": [
+        {
+          "id": "chatgpt",
+          "label": "ChatGPT",
+          "aliases": []
+        },
+        {
+          "id": "copilot",
+          "label": "GitHub Copilot",
+          "aliases": [
+            "github copilot"
+          ]
+        },
+        {
+          "id": "claude",
+          "label": "Claude",
+          "aliases": []
+        },
+        {
+          "id": "gemini",
+          "label": "Gemini",
+          "aliases": []
+        },
+        {
+          "id": "cursor",
+          "label": "Cursor",
+          "aliases": []
+        },
+        {
+          "id": "claude_code",
+          "label": "Claude Code",
+          "aliases": []
+        },
+        {
+          "id": "llm",
+          "label": "LLM",
+          "aliases": [
+            "Large Language Model",
+            "Large Language Models"
+          ]
+        },
+        {
+          "id": "openai",
+          "label": "OpenAI",
+          "aliases": [
+            "OpenAI API"
+          ]
+        }
+      ]
+    },
+    "english": {
+      "weight": 7,
+      "options": [
+        {
+          "id": "basic",
+          "label": "Básico",
+          "aliases": []
+        },
+        {
+          "id": "intermediate",
+          "label": "Intermediário",
+          "aliases": []
+        },
+        {
+          "id": "advanced",
+          "label": "Avançado",
+          "aliases": []
+        },
+        {
+          "id": "fluent",
+          "label": "Fluente",
+          "aliases": []
+        }
+      ]
+    },
+    "spanish": {
+      "weight": 3,
+      "options": [
+        {
+          "id": "basic",
+          "label": "Básico",
+          "aliases": []
+        },
+        {
+          "id": "intermediate",
+          "label": "Intermediário",
+          "aliases": []
+        },
+        {
+          "id": "advanced",
+          "label": "Avançado",
+          "aliases": []
+        },
+        {
+          "id": "fluent",
+          "label": "Fluente",
+          "aliases": []
+        }
+      ]
+    },
+    "higherEducationDegree": {
+      "weight": 3,
+      "options": [
+        {
+          "id": "higher-education",
+          "label": "Formação superior",
+          "aliases": [
+            "ensino superior",
+            "graduacao"
+          ]
+        }
+      ]
+    },
+    "certification": {
+      "weight": 2,
+      "options": [
+        {
+          "id": "certification",
+          "label": "Certificação",
+          "aliases": [
+            "certificacao",
+            "ctfl",
+            "istqb"
+          ]
+        }
+      ]
+    },
+    "level": {
+      "weight": 10,
+      "options": [
+        {
+          "id": "intern",
+          "label": "Estágio",
+          "aliases": []
+        },
+        {
+          "id": "junior",
+          "label": "Júnior",
+          "aliases": []
+        },
+        {
+          "id": "mid",
+          "label": "Pleno",
+          "aliases": []
+        },
+        {
+          "id": "senior",
+          "label": "Sênior",
+          "aliases": []
+        },
+        {
+          "id": "specialist",
+          "label": "Especialista",
+          "aliases": []
+        }
+      ]
+    },
+    "role": {
+      "weight": 5,
+      "options": [
+        {
+          "id": "qa_analyst",
+          "label": "Analista de QA",
+          "aliases": [
+            "Analista",
+            "Analista de Testes",
+            "QA Analyst"
+          ]
+        },
+        {
+          "id": "qa_engineer",
+          "label": "QA Engineer",
+          "aliases": [
+            "Engenheiro",
+            "Engenheiro de QA",
+            "Engenheiro de Testes"
+          ]
+        },
+        {
+          "id": "sdet",
+          "label": "SDET",
+          "aliases": []
+        },
+        {
+          "id": "qa_lead",
+          "label": "QA Lead",
+          "aliases": [
+            "Líder",
+            "Lider",
+            "Tech Lead QA"
+          ]
+        },
+        {
+          "id": "test_manager",
+          "label": "Gerente de Testes",
+          "aliases": [
+            "Gerente",
+            "QA Manager"
+          ]
+        },
+        {
+          "id": "tester",
+          "label": "Testador",
+          "aliases": [
+            "Tester"
+          ]
+        },
+        {
+          "id": "qa_specialist",
+          "label": "Especialista em QA",
+          "aliases": [
+            "Especialista"
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "weight": 7,
+      "options": [
+        {
+          "id": "test_automation",
+          "label": "Automação de testes",
+          "aliases": [
+            "Automação",
+            "Automacao",
+            "Automation"
+          ]
+        },
+        {
+          "id": "manual_testing",
+          "label": "Testes manuais",
+          "aliases": [
+            "Manual",
+            "Testes Manuais"
+          ]
+        },
+        {
+          "id": "performance",
+          "label": "Performance",
+          "aliases": []
+        },
+        {
+          "id": "security",
+          "label": "Segurança",
+          "aliases": []
+        },
+        {
+          "id": "mobile",
+          "label": "Mobile",
+          "aliases": []
+        },
+        {
+          "id": "accessibility",
+          "label": "Acessibilidade",
+          "aliases": []
+        },
+        {
+          "id": "sap",
+          "label": "SAP",
+          "aliases": []
+        },
+        {
+          "id": "ai",
+          "label": "IA",
+          "aliases": [
+            "AI",
+            "Inteligência Artificial"
+          ]
+        },
+        {
+          "id": "games",
+          "label": "Games",
+          "aliases": [
+            "Jogos"
+          ]
+        },
+        {
+          "id": "uat",
+          "label": "UAT",
+          "aliases": [
+            "Teste de Aceitação"
+          ]
+        },
+        {
+          "id": "salesforce",
+          "label": "Salesforce",
+          "aliases": []
+        },
+        {
+          "id": "embedded",
+          "label": "Embarcados",
+          "aliases": [
+            "Embarcado",
+            "Embedded"
+          ]
+        }
+      ]
+    },
+    "classification": {
+      "weight": 3,
+      "options": [
+        {
+          "id": "functional",
+          "label": "Funcional",
+          "aliases": []
+        },
+        {
+          "id": "technical",
+          "label": "Técnico",
+          "aliases": []
+        },
+        {
+          "id": "hybrid_profile",
+          "label": "Híbrido",
+          "aliases": []
+        },
+        {
+          "id": "testing",
+          "label": "Testes",
+          "aliases": [
+            "Testing"
+          ]
+        },
+        {
+          "id": "quality",
+          "label": "Qualidade",
+          "aliases": [
+            "Quality",
+            "Quality Assurance"
+          ]
+        }
+      ]
+    }
+  }
+}

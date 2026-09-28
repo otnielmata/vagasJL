@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  UploadCloud,
   UserRound,
   Users,
   type LucideIcon,
@@ -42,10 +43,15 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/admin/vagas', label: 'Vagas', icon: FileSearch },
     { href: '/admin/configuracoes', label: 'Parâmetros do Match', icon: SlidersHorizontal },
   ],
+  master: [
+    { href: '/master', label: 'Visão geral', icon: LayoutDashboard },
+    { href: '/master/importacao', label: 'Importar vagas', icon: UploadCloud },
+  ],
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
   candidate: 'Candidato',
   company: 'Empresa',
   admin: 'Administrador',
+  master: 'Master',
 };

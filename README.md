@@ -2112,3 +2112,39 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
   user stories do Jira.
 - Implementar o motor de match entre vagas e candidatos.
 - Configurar CI via GitHub Actions e deploy via Vercel.
+
+## Importação do JL Vagas (enriched-dataset.json)
+
+A fonte oficial das vagas importadas é o arquivo publicado em
+`https://juliodelima.com.br/vagas/data/enriched-dataset.json` (`IMPORT_VACANCIES_URL`).
+O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da VJ-69:
+
+- **Identidade:** `id` do item (ID da vaga no LinkedIn) é o `importSourceId`; a fonte é `juliodelima-vagas`.
+  A referência da vaga é `jl-<id>`. A versão é o hash do item: conteúdo igual não gera revisão.
+- **Descartes:** itens com `reasonToBeRemoved` ou `isTestingRelated: false` não são importados.
+- **Valores:** convertidos para os IDs canônicos da configuração publicada do Perfil de Match
+  (`testAutomationTecnologies`, `tecnologies` e `especialization` já são aceitos). `Desconhecido`
+  e `Outros` viram "não informado"; valores sem correspondência são omitidos e listados em `unmapped`
+  para ampliar o catálogo (veja `vagas-jl-web/docs/perfil-match-catalogo-v2.json`).
+  `english`/`spanish` = `true` usam o nível de `IMPORT_VACANCIES_LANGUAGE_LEVEL`.
+- **Canal:** a URL da vaga vira canal de candidatura quando o host está em `APPLICATION_ALLOWED_HOSTS`
+  (inclua `www.linkedin.com`); caso contrário a vaga entra sem canal.
+- **Fechamento:** com `IMPORT_VACANCIES_CLOSE_MISSING=true`, vagas que saírem do arquivo ficam `expired`,
+  exceto se o arquivo vier com menos da metade das vagas abertas (proteção contra arquivo incompleto).
+- **Status:** vagas importadas entram `pending`. Somente o perfil `master` pode importar e publicar em lote com `activatePending`.
+
+| Método | Rota | Acesso | Uso |
+|---|---|---|---|
+| POST | `/importacoes/vagas/arquivo` | Master (Bearer) | Upload `multipart/form-data` no campo `file`; `dryRun=true` valida e `activatePending=true` publica as importadas pendentes |
+| POST | `/importacoes/vagas/sincronizar` | Master (Bearer) | `{"dryRun": true}` valida sem gravar; `{}` importa; `{"activatePending": true}` importa e publica as pendentes |
+| GET | `/importacoes/vagas/sincronizar` | `Authorization: Bearer <CRON_SECRET>` | Chamado pela Vercel Cron (`vercel.json`, diariamente às 09:00 UTC) |
+
+O perfil `master` não pode ser criado pelo cadastro público. Cadastre uma conta comum e promova-a
+operacionalmente com `MONGODB_URI="<uri>" npm run users:promote-master -- email@exemplo.com`.
+O comando ativa a conta, altera somente o papel e incrementa `tokenVersion`, invalidando sessões antigas.
+Na camada web, esse papel recebe a área exclusiva `/master/importacao`; o menu não é exibido para
+candidatos, empresas ou administradores.
+
+Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), importância padrão
+da importação publicada (`PUT /configuracoes/importacao/importancia-padrao`), `APPLICATION_ALLOWED_HOSTS`
+com `www.linkedin.com` e `CRON_SECRET` definido no projeto da Vercel.

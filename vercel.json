@@ -12,5 +12,11 @@
       "src": "/(.*)",
       "dest": "api/index.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/importacoes/vagas/sincronizar",
+      "schedule": "0 9 * * *"
+    }
   ]
 }

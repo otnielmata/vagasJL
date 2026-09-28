@@ -24,6 +24,7 @@ import type {
   Role,
   User,
   Vacancy,
+  VacancyImportResult,
   VacancyRequirement,
   VacancyStatus,
 } from './types';
@@ -33,7 +34,7 @@ import type {
 export const authService = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/login', { email, password }, { auth: false }),
-  register: (input: { name: string; email: string; password: string; role: Exclude<Role, 'admin'> }) =>
+  register: (input: { name: string; email: string; password: string; role: Exclude<Role, 'admin' | 'master'> }) =>
     api.post<{ user: User }>('/usuarios', input, { auth: false }),
   me: () => api.get<{ user: User }>('/api/users/me'),
   health: () => api.get<{ status: string; timestamp: string }>('/api/health', { auth: false }),
@@ -122,4 +123,14 @@ export const adminService = {
     api.put<unknown>('/configuracoes/match/completude-minima', { minimumPercentage }),
   setMultipliers: (desirable: number) =>
     api.put<unknown>('/configuracoes/match/multiplicadores', { required: 1, desirable, indifferent: 0 }),
+};
+
+export const masterService = {
+  importVacancies: (file: File, options: { dryRun?: boolean; activatePending?: boolean } = {}) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('dryRun', String(options.dryRun === true));
+    body.append('activatePending', String(options.activatePending === true));
+    return api.post<VacancyImportResult>('/importacoes/vagas/arquivo', body);
+  },
 };

@@ -21,6 +21,7 @@ export const HOME_BY_ROLE: Record<Role, string> = {
   candidate: '/candidato',
   company: '/empresa',
   admin: '/admin',
+  master: '/master',
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
