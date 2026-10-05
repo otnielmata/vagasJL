@@ -46,6 +46,7 @@ function VacancyListCard({ vacancy, admin }: { vacancy: Vacancy; admin: boolean 
               {admin && <VacancyStatusBadge value={vacancy.status} />}
             </div>
             <h2 className="font-display text-lg font-semibold">{vacancy.title}</h2>
+            {vacancy.sourceCompanyName && <p className="mt-1 text-sm font-medium">{vacancy.sourceCompanyName}</p>}
             {location && <p className="mt-1 inline-flex items-center gap-1 text-sm text-muted"><MapPin className="h-4 w-4" />{location}</p>}
           </div>
           {!admin && (

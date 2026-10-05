@@ -7,7 +7,8 @@ const ApiError = require('../errors/api.error');
 
 const SOURCE_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const EDITABLE_FIELDS = ['reference', 'title', 'description', 'applicationChannel', 'location',
-  'geographicRestrictions', 'matchProfile', 'expiresAt', 'importMappingAudit', 'importImportance'];
+  'geographicRestrictions', 'matchProfile', 'expiresAt', 'sourceCompanyName', 'importSourceData',
+  'importMappingAudit', 'importImportance'];
 const AUDIT_FIELDS = ['origin', 'status', ...EDITABLE_FIELDS];
 const CLOSE_TRANSITIONS = Object.freeze({
   pending: ['removed'], active: ['expired', 'removed'], paused: ['expired', 'removed'],
@@ -194,7 +195,7 @@ async function reconcileItem(item, batch, result, failures, itemIndex) {
   const existing = await Vacancy.findOne({ origin: 'IMPORTED', importSource: batch.source,
     importSourceId: sourceId }).select('+importMappingAudit +importContentFingerprint +importSourceVersion ' +
       '+importScope +lastSeenImportAt +lastSeenImportBatchId +importReconciliationReviewRequired ' +
-      '+requirementsHistory +deletedAt');
+      '+requirementsHistory +importSourceData +deletedAt');
   if (item.closedStatus !== undefined) {
     if (!existing) safeFailure(failures, sourceId, itemIndex, 'status', 'CLOSURE_TARGET_NOT_FOUND');
     else await closeExisting(existing, { ...item, sourceId }, batch, result, failures, itemIndex);

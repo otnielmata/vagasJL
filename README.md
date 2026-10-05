@@ -2118,7 +2118,7 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
 
 A fonte oficial das vagas importadas é o arquivo publicado em
 `https://juliodelima.com.br/vagas/data/enriched-dataset.json` (`IMPORT_VACANCIES_URL`).
-O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da VJ-69:
+O adaptador `JL_ENRICHED_V2` converte cada item para o lote de conciliação da VJ-69:
 
 - **Identidade:** `id` do item (ID da vaga no LinkedIn) é o `importSourceId`; a fonte é `juliodelima-vagas`.
   A referência da vaga é `jl-<id>`. A versão é o hash do item: conteúdo igual não gera revisão.
@@ -2128,6 +2128,10 @@ O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da 
   e `Outros` viram "não informado"; valores sem correspondência são omitidos e listados em `unmapped`
   para ampliar o catálogo (veja `vagas-jl-web/docs/perfil-match-catalogo-v2.json`).
   `english`/`spanish` = `true` usam o nível de `IMPORT_VACANCIES_LANGUAGE_LEVEL`.
+- **Empresa e localização:** `company` é preservado como nome da empresa de origem e `location` é
+  convertido, quando possível, em `city`, `state` e `country`, mantendo também o valor original na auditoria.
+- **Metadados não pontuáveis:** contadores, `testingRelatedKeywords`, `hasGenAI` e `isTestingRelated`
+  são preservados para auditoria, mas não entram diretamente no cálculo do Match.
 - **Canal:** a URL da vaga vira canal de candidatura quando o host está em `APPLICATION_ALLOWED_HOSTS`
   (inclua `www.linkedin.com`); caso contrário a vaga entra sem canal.
 - **Fechamento:** com `IMPORT_VACANCIES_CLOSE_MISSING=true`, vagas que saírem do arquivo ficam `expired`,
@@ -2149,3 +2153,5 @@ candidatos, empresas ou administradores.
 Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), importância padrão
 da importação publicada (`PUT /configuracoes/importacao/importancia-padrao`), `APPLICATION_ALLOWED_HOSTS`
 com `www.linkedin.com` e `CRON_SECRET` definido no projeto da Vercel.
+Uma importação real é interrompida antes de criar o lote quando a importância padrão ainda não foi publicada;
+o modo `dryRun` continua disponível para apresentar os problemas de configuração sem gravar vagas.

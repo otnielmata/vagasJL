@@ -71,7 +71,8 @@ test('admin can list every status and combine textual and structured filters', a
   assert.equal(state.filter['matchProfile.values.role'], 'qa_engineer');
   assert.equal(state.filter['matchProfile.values.specialization'], 'test_automation');
   assert.match('Brasil', state.filter['location.country']);
-  assert.equal(state.filter.$or.length, 7);
+  assert.equal(state.filter.$or.length, 8);
+  assert.ok(state.filter.$or.some((condition) => condition.sourceCompanyName));
   assert.equal(state.filter.$and, undefined);
   assert.equal(state.select, '-statusHistory -requirementsHistory');
 });

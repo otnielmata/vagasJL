@@ -173,6 +173,7 @@ export interface Vacancy {
   company?: string | null;
   importSource?: string | null;
   importSourceId?: string | null;
+  sourceCompanyName?: string | null;
   reference: string;
   title: string;
   description?: string;

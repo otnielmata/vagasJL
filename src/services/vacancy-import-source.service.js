@@ -1,11 +1,13 @@
 const config = require('../config/env');
 const ApiError = require('../errors/api.error');
 const Configuration = require('../models/match-profile-configuration.model');
+const ImportImportanceConfiguration = require('../models/import-importance-configuration.model');
 const Vacancy = require('../models/vacancy.model');
 const { adaptEnrichedDataset, sha256 } = require('./enriched-dataset-adapter.service');
 const { prepareImportedVacancyData } = require('./vacancy-origin.service');
 const { reconcileImportBatch } = require('./vacancy-import-reconciliation.service');
 const { updateStatus } = require('./vacancy-status.service');
+const { getEffectiveMatchEngineConfiguration } = require('./match-engine-configuration.service');
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_BATCH_ITEMS = 1000;
@@ -60,6 +62,21 @@ async function previewItems(items, source) {
   return { valid, invalid: items.length - valid, errors: summarizeErrors(errors), sample: failures };
 }
 
+function hasIdentifiedRequirements(items) {
+  return items.some((item) => Object.values(item.content?.matchProfile?.values || {}).some((value) =>
+    value !== false && value !== null && value !== undefined && (!Array.isArray(value) || value.length)));
+}
+
+async function ensureImportImportance(items) {
+  if (!items.length || !hasIdentifiedRequirements(items)) return;
+  const engineConfiguration = await getEffectiveMatchEngineConfiguration();
+  if (engineConfiguration) return;
+  const configuration = await ImportImportanceConfiguration.findOne().sort({ version: -1 }).lean();
+  if (!configuration) {
+    throw new ApiError(409, 'Publique a importancia padrao da importacao antes de importar as vagas');
+  }
+}
+
 /**
  * Busca o enriched-dataset.json, adapta ao Perfil de Match publicado e concilia as vagas.
  * `dryRun` so valida e devolve o resumo. `dataset` permite testar com um arquivo local.
@@ -78,6 +95,7 @@ async function syncVacancyImport({ dryRun = false, dataset: provided, referenceA
     importable: adapted.items.length, skipped: adapted.skipped, unmapped: adapted.unmapped.slice(0, 50),
   };
   if (dryRun) return { dryRun: true, ...summary, preview: await previewItems(adapted.items, source) };
+  await ensureImportImportance(adapted.items);
 
   const openCount = await Vacancy.countDocuments({ origin: 'IMPORTED', importSource: source,
     status: { $in: ['pending', 'active', 'paused'] } });
@@ -137,4 +155,5 @@ async function activatePendingImported(actor, source = config.vacancyImport.sour
     errors: summarizeErrors(errors) };
 }
 
-module.exports = { syncVacancyImport, fetchDataset, previewItems, activatePendingImported };
+module.exports = { syncVacancyImport, fetchDataset, previewItems, activatePendingImported,
+  ensureImportImportance, hasIdentifiedRequirements };

@@ -84,7 +84,7 @@ function buildFilter(actor, filters, now) {
   if (filters.q) {
     const pattern = new RegExp(escaped(filters.q), 'i');
     const search = { $or: [
-      { title: pattern }, { description: pattern }, { reference: pattern },
+      { title: pattern }, { description: pattern }, { reference: pattern }, { sourceCompanyName: pattern },
       { 'location.city': pattern }, { 'location.state': pattern }, { 'location.country': pattern },
       { 'matchProfile.requirements.id': filters.q.toLowerCase() },
     ] };
