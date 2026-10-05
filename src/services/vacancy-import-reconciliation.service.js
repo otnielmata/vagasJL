@@ -14,6 +14,7 @@ const CLOSE_TRANSITIONS = Object.freeze({
   pending: ['removed'], active: ['expired', 'removed'], paused: ['expired', 'removed'],
   expired: ['removed'], rejected: [], removed: [],
 });
+const IMPORT_CONCURRENCY = 8;
 
 function plain(value) {
   if (value instanceof Date) return value.toISOString();
@@ -284,6 +285,18 @@ async function closeMissingSnapshotVacancies(batch, result, failures) {
   }
 }
 
+async function processConcurrently(entries, worker, concurrency = IMPORT_CONCURRENCY) {
+  let cursor = 0;
+  async function run() {
+    while (cursor < entries.length) {
+      const current = entries[cursor];
+      cursor += 1;
+      await worker(current);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, run));
+}
+
 async function reconcileImportBatch(input) {
   const batch = normalizeBatch(input);
   await Promise.all([ImportBatch.init(), Vacancy.init(), VacancyImportRevision.init()]);
@@ -300,6 +313,7 @@ async function reconcileImportBatch(input) {
   const result = { created: 0, unchanged: 0, updated: 0, closed: 0, reviewRequired: 0, failed: 0 };
   const failures = [];
   const seen = new Set();
+  const entries = [];
   for (const [itemIndex, item] of batch.items.entries()) {
     const sourceId = itemIdentity(item);
     if (sourceId && seen.has(sourceId)) {
@@ -307,8 +321,10 @@ async function reconcileImportBatch(input) {
       continue;
     }
     if (sourceId) seen.add(sourceId);
-    await reconcileItem(item, batch, result, failures, itemIndex);
+    entries.push({ item, itemIndex });
   }
+  await processConcurrently(entries,
+    ({ item, itemIndex }) => reconcileItem(item, batch, result, failures, itemIndex));
   await closeMissingSnapshotVacancies(batch, result, failures);
   result.failed = failures.length;
   const status = failures.length ? 'completed_with_failures' : 'completed';
@@ -319,4 +335,4 @@ async function reconcileImportBatch(input) {
 }
 
 module.exports = { reconcileImportBatch, normalizeBatch, contentFingerprint,
-  changedFields, relevantSnapshot, auditSnapshot };
+  changedFields, relevantSnapshot, auditSnapshot, processConcurrently, IMPORT_CONCURRENCY };

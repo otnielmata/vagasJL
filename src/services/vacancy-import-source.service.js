@@ -103,12 +103,14 @@ async function syncVacancyImport({ dryRun = false, dataset: provided, referenceA
   const closeMissing = config.vacancyImport.closeMissing && single && adapted.items.length > 0 &&
     adapted.items.length >= Math.ceil(openCount * MIN_SNAPSHOT_RATIO);
   const day = referenceAt.toISOString().slice(0, 10);
+  const adapterId = adapted.adapterVersion.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const batches = [];
   for (let start = 0; start < adapted.items.length; start += MAX_BATCH_ITEMS) {
     const items = adapted.items.slice(start, start + MAX_BATCH_ITEMS);
     const batch = {
       source,
-      batchId: `${day}-${fetched.fingerprint.slice(0, 16)}-${configuration.version}-${start / MAX_BATCH_ITEMS}`,
+      batchId: `${day}-${fetched.fingerprint.slice(0, 16)}-${configuration.version}-${adapterId}-` +
+        `${start / MAX_BATCH_ITEMS}`,
       collectionType: closeMissing ? 'snapshot' : 'incremental',
       scope: 'default',
       referenceAt: referenceAt.toISOString(),
