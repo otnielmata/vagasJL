@@ -26,8 +26,8 @@ function escaped(value) {
 }
 
 function parseQuery(actor, query = {}) {
-  if (!['candidate', 'admin'].includes(actor?.role)) {
-    throw new ApiError(403, 'Apenas candidatos e administradores podem listar vagas');
+  if (!['candidate', 'admin', 'master'].includes(actor?.role)) {
+    throw new ApiError(403, 'Apenas candidatos, administradores e master podem listar vagas');
   }
   if (Object.keys(query).some((key) => !ALLOWED_FILTERS.has(key))) {
     throw new ApiError(400, 'Filtros de vagas invalidos');

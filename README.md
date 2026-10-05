@@ -194,7 +194,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
 | PUT    | `/configuracoes/match/completude-minima` | Admin (Bearer) | Publica completude mínima para recomendações (VJ-73) |
-| GET    | `/vagas?page=1` | Candidato/Admin (Bearer) | Lista 10 vagas por página, sem cálculo de Match, com filtros textuais e estruturados |
+| GET    | `/vagas?page=1` | Candidato/Admin/Master (Bearer) | Lista 10 vagas por página, sem cálculo de Match, com filtros textuais e estruturados |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |

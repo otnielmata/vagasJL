@@ -47,6 +47,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   master: [
     { href: '/master', label: 'Visão geral', icon: LayoutDashboard },
     { href: '/master/importacao', label: 'Importar vagas', icon: UploadCloud },
+    { href: '/master/vagas', label: 'Vagas cadastradas', icon: FileSearch },
   ],
 };
 

@@ -49,7 +49,7 @@ paths:
       summary: Lista vagas com filtros sem utilizar o Match
       description: >
         Retorna dez vagas por pagina. Candidatos consultam somente vagas ativas e nao expiradas;
-        administradores podem consultar todos os status. A ordenacao usa a atualizacao mais recente
+        administradores e master podem consultar todos os status. A ordenacao usa a atualizacao mais recente
         e nenhum percentual de Match e calculado para montar esta listagem.
       security:
         - bearerAuth: []

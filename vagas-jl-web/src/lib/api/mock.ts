@@ -262,7 +262,7 @@ export async function mockRequest<T>(method: string, path: string, opts: Request
         ...values(item, 'genAITools'),
       ];
       const filtered = VACANCIES.filter((item) => {
-        if (state.user?.role !== 'admin' && item.status !== 'active') return false;
+        if (!['admin', 'master'].includes(state.user?.role ?? '') && item.status !== 'active') return false;
         if (query.status && item.status !== query.status) return false;
         if (query.origin && item.origin !== query.origin) return false;
         if (query.city && !includes(item.location?.city, query.city)) return false;

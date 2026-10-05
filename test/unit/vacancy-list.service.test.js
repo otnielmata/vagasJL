@@ -7,6 +7,7 @@ const { listVacancies, parseQuery, PAGE_SIZE } = require('../../src/services/vac
 
 const candidate = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'candidate' };
 const admin = { id: '6512f1e2b3a1c2d3e4f5a6b8', role: 'admin' };
+const master = { id: '6512f1e2b3a1c2d3e4f5a6b9', role: 'master' };
 const now = new Date('2026-09-28T12:00:00Z');
 
 function setup(context, rows = [], total = rows.length) {
@@ -72,6 +73,16 @@ test('admin can list every status and combine textual and structured filters', a
   assert.match('Brasil', state.filter['location.country']);
   assert.equal(state.filter.$or.length, 7);
   assert.equal(state.filter.$and, undefined);
+  assert.equal(state.select, '-statusHistory -requirementsHistory');
+});
+
+test('master can list registered vacancies from every status with the same protected projection', async (context) => {
+  const { state } = setup(context, [{ _id: 'imported' }], 1);
+  const result = await listVacancies(master, { status: 'pending', origin: 'IMPORTED' }, now);
+
+  assert.equal(result.total, 1);
+  assert.equal(state.filter.status, 'pending');
+  assert.equal(state.filter.origin, 'IMPORTED');
   assert.equal(state.select, '-statusHistory -requirementsHistory');
 });
 
