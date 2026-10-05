@@ -13,6 +13,7 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_BATCH_ITEMS = 1000;
 // Snapshot so fecha vagas ausentes se o arquivo tiver ao menos esta fracao das vagas abertas.
 const MIN_SNAPSHOT_RATIO = 0.5;
+const IMPORT_PIPELINE_VERSION = 2;
 
 async function fetchDataset(url = config.vacancyImport.url) {
   if (!url) throw new ApiError(503, 'IMPORT_VACANCIES_URL nao configurada');
@@ -109,7 +110,8 @@ async function syncVacancyImport({ dryRun = false, dataset: provided, referenceA
     const items = adapted.items.slice(start, start + MAX_BATCH_ITEMS);
     const batch = {
       source,
-      batchId: `${day}-${fetched.fingerprint.slice(0, 16)}-${configuration.version}-${adapterId}-` +
+      batchId: `${day}-${fetched.fingerprint.slice(0, 16)}-${configuration.version}-${adapterId}-p` +
+        `${IMPORT_PIPELINE_VERSION}-` +
         `${start / MAX_BATCH_ITEMS}`,
       collectionType: closeMissing ? 'snapshot' : 'incremental',
       scope: 'default',

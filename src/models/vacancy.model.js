@@ -220,9 +220,12 @@ vacancySchema.index({ 'location.country': 1, 'location.state': 1, 'location.city
 });
 vacancySchema.index({
   'matchProfile.values.type': 1,
+  status: 1,
+}, { name: 'vacancy_type_status' });
+vacancySchema.index({
   'matchProfile.values.level': 1,
   status: 1,
-}, { name: 'vacancy_type_level_status' });
+}, { name: 'vacancy_level_status' });
 
 vacancySchema.set('toJSON', {
   transform: (_document, result) => {
