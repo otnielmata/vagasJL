@@ -42,6 +42,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/admin', label: 'Visão geral', icon: LayoutDashboard },
     { href: '/admin/empresas', label: 'Empresas', icon: Building2 },
     { href: '/admin/candidatos', label: 'Candidatos', icon: Users },
+    { href: '/admin/vagas/nova', label: 'Nova vaga', icon: Briefcase },
     { href: '/admin/vagas', label: 'Vagas', icon: FileSearch },
     { href: '/admin/configuracoes', label: 'Parâmetros do Match', icon: SlidersHorizontal },
   ],

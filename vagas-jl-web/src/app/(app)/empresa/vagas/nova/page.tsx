@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send } from 'lucide-react';
-import { companyService } from '@/lib/api/services';
+import { adminService, companyService } from '@/lib/api/services';
 import type { Importance, MatchFieldKey, MatchValues, VacancyRequirement } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
 import { MATCH_FIELDS } from '@/config/match-catalog';
@@ -28,7 +28,7 @@ const IMPORTANCE: { value: Importance; label: string }[] = [
   { value: 'indifferent', label: 'Indiferente' },
 ];
 
-function NewVacancyForm({ companyId }: { companyId: string }) {
+export function VacancyForm({ companyId, admin = false }: { companyId?: string; admin?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [base, setBase] = useState({ reference: '', title: '', description: '', city: '', state: '', country: 'Brasil', channelType: 'https_url', channel: '', expiresAt: '' });
@@ -67,7 +67,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
       const location = Object.fromEntries(
         (['city', 'state', 'country'] as const).filter((k) => base[k].trim()).map((k) => [k, base[k].trim()]),
       );
-      await companyService.createVacancy(companyId, {
+      const input = {
         reference: base.reference.trim(),
         title: base.title.trim(),
         description: base.description.trim(),
@@ -75,9 +75,16 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
         ...(base.expiresAt ? { expiresAt: new Date(`${base.expiresAt}T23:59:59`).toISOString() } : {}),
         ...(Object.keys(location).length ? { location } : {}),
         matchProfile: buildMatchProfile(),
-      });
+      };
+      if (admin) {
+        const vacancyId = Array.from(crypto.getRandomValues(new Uint8Array(12)),
+          (byte) => byte.toString(16).padStart(2, '0')).join('');
+        await adminService.createVacancy(vacancyId, input);
+      } else {
+        await companyService.createVacancy(companyId!, input);
+      }
       toast('success', 'Vaga criada e enviada para revisão.');
-      router.push('/empresa/vagas');
+      router.push(admin ? '/admin/vagas' : '/empresa/vagas');
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, { message: 'Erro inesperado' }));
     } finally {
@@ -89,7 +96,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6" noValidate>
-      <PageHeader eyebrow="Nova vaga" title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
+      <PageHeader eyebrow={admin ? 'Administração' : 'Nova vaga'} title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
 
       <Card>
         <CardHeader title="Dados da vaga" />
@@ -196,5 +203,5 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 }
 
 export default function NewVacancyPage() {
-  return <CompanyGate>{(id) => <NewVacancyForm companyId={id} />}</CompanyGate>;
+  return <CompanyGate>{(id) => <VacancyForm companyId={id} />}</CompanyGate>;
 }

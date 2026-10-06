@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { vacancyService } from '@/lib/api/services';
 import type { VacancyStatus } from '@/lib/api/types';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody } from '@/components/ui/card';
 import { Input } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button';
 import { StatusChangeForm } from '@/components/admin/status-change-form';
 import { CandidateRanking } from '@/components/match/candidate-ranking';
 import { VACANCY_STATUS_LABEL } from '@/components/match/status-badges';
@@ -20,7 +23,8 @@ export default function AdminVacanciesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Administração" title="Vagas" description="Somente vagas Ativas participam dos rankings apresentados aos candidatos." />
+      <PageHeader eyebrow="Administração" title="Vagas" description="Somente vagas Ativas participam dos rankings apresentados aos candidatos."
+        actions={<Link href="/admin/vagas/nova" className={buttonClasses()}><Plus className="h-4 w-4" /> Cadastrar vaga</Link>} />
       <div className="space-y-6">
         <VacancyBrowser admin />
         <StatusChangeForm<Target>
