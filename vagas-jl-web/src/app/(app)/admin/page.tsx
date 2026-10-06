@@ -5,8 +5,8 @@ import { Card, CardBody } from '@/components/ui/card';
 
 const SECTIONS = [
   { href: '/admin/empresas', icon: Building2, title: 'Empresas', text: 'Cadastrar, vincular recrutadores e ativar, inativar ou bloquear.' },
-  { href: '/admin/candidatos', icon: Users, title: 'Candidatos', text: 'Administrar status com trilha de auditoria.' },
-  { href: '/admin/vagas', icon: FileSearch, title: 'Vagas', text: 'Revisar status e consultar o ranking de candidatos de qualquer vaga.' },
+  { href: '/admin/candidatos', icon: Users, title: 'Candidatos', text: 'Visualizar o ranking de candidatos das vagas cadastradas por você.' },
+  { href: '/admin/vagas', icon: FileSearch, title: 'Vagas', text: 'Cadastrar e consultar somente as suas vagas.' },
   { href: '/admin/configuracoes', icon: SlidersHorizontal, title: 'Parâmetros do Match', text: 'Match mínimo, completude mínima e multiplicadores.' },
 ];
 

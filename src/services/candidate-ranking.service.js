@@ -37,6 +37,8 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   if (actor.role === 'company') {
     if (vacancy.origin !== 'COMPANY') throw new ApiError(403, 'Acesso negado a esta vaga');
     await ensureCompanyAuthorized(actor, vacancy);
+  } else if (vacancy.origin !== 'ADMIN' || String(vacancy.createdBy) !== actor.id) {
+    throw new ApiError(403, 'Administrador pode consultar somente o ranking das vagas que cadastrou');
   }
   if (vacancy.origin === 'COMPANY') {
     const company = await Company.findOne({ _id: vacancy.company, status: 'active',
