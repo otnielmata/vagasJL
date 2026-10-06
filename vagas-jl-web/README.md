@@ -68,6 +68,7 @@ No modo demonstração qualquer senha funciona; e-mails começando com `empresa@
 | | `/empresa/cadastro` | dados pessoais do recrutador |
 | Recrutador legado | `/admin/vagas` | vagas `COMPANY` da empresa vinculada e ranking de candidatos |
 | Master | `/master/empresas` | cadastro de empresas e vínculo de recrutadores |
+| | `/master/recrutadores` | diretório de usuários `admin`, com pesquisa e IDs para vínculo |
 | | `/master/candidatos` | alteração controlada do status de candidatos |
 | | `/master/vagas` | aprovação e revisão de vagas pendentes |
 
