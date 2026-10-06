@@ -89,6 +89,22 @@ test('admin activates eligible complete candidate and records audited status cha
   assert.equal(updateUser.mock.callCount(), 0);
 });
 
+test('admin activates eligible complete candidate directly from pending validation', async (context) => {
+  const { candidate, updateCandidate } = setup(context, CANDIDATE_STATUS.PENDING_VALIDATION);
+  const response = await updateCandidateStatus(admin, candidateId, {
+    status: CANDIDATE_STATUS.ACTIVE, reason: 'Validacao manual aprovada',
+  }, now);
+  assert.equal(response.previousStatus, CANDIDATE_STATUS.PENDING_VALIDATION);
+  assert.equal(response.candidate.status, CANDIDATE_STATUS.ACTIVE);
+  assert.equal(updateCandidate.mock.callCount(), 1);
+  assert.deepEqual(updateCandidate.mock.calls[0].arguments[0], {
+    _id: candidate._id,
+    status: CANDIDATE_STATUS.PENDING_VALIDATION,
+    updatedAt: candidate.updatedAt,
+    deletedAt: null,
+  });
+});
+
 test('activation rejects missing eligibility, incomplete profile and duplicate active email', async (context) => {
   const { candidate, duplicateQuery, updateCandidate } = setup(context);
   candidate.eligibility.status = ELIGIBILITY_STATUS.PENDING;
@@ -174,7 +190,7 @@ test('invalid actors, payloads, transitions and concurrent writes fail without m
   ]) await assert.rejects(updateCandidateStatus(admin, id, body), { statusCode: 400 });
 
   await assert.rejects(updateCandidateStatus(admin, candidateId,
-    { status: CANDIDATE_STATUS.ACTIVE, reason: 'Atalho invalido' }, now), { statusCode: 409 });
+    { status: CANDIDATE_STATUS.INCOMPLETE_PROFILE, reason: 'Atalho invalido' }, now), { statusCode: 409 });
   candidate.status = CANDIDATE_STATUS.ACTIVE;
   updateCandidate.mock.mockImplementation(async () => null);
   await assert.rejects(updateCandidateStatus(admin, candidateId,
