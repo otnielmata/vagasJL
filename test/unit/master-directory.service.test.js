@@ -74,6 +74,8 @@ test('master recruiter directory returns only admin profiles filtered by name or
 });
 
 test('master candidate directory returns 15 current candidates filtered by name or email', async (context) => {
+  const candidateUserIds = ['6512f1e2b3a1c2d3e4f5a6b9'];
+  const distinct = context.mock.method(User, 'distinct', async () => candidateUserIds);
   const state = mockList(context, Candidate, [{
     _id: 'candidate', name: 'Maria', email: 'maria@example.com', phone: '11999999999', status: 'active',
   }], 31);
@@ -83,11 +85,21 @@ test('master candidate directory returns 15 current candidates filtered by name 
   assert.equal(state.skip, 15);
   assert.equal(state.limit, 15);
   assert.equal(state.filter.deletedAt, null);
+  assert.deepEqual(state.filter.user, { $in: candidateUserIds });
   assert.equal(state.filter.$or[0].name.source, 'Maria QA');
   assert.equal(state.filter.$or[1].email.source, 'Maria QA');
   assert.equal(state.projection._id, 1);
   assert.equal(state.projection.phone, 1);
   assert.equal(state.projection.status, 1);
+  assert.deepEqual(distinct.mock.calls[0].arguments, ['_id', { role: 'candidate' }]);
+});
+
+test('master candidate directory excludes recruiter and administrator accounts by role', async (context) => {
+  const candidateUserIds = ['6512f1e2b3a1c2d3e4f5a6b9'];
+  context.mock.method(User, 'distinct', async () => candidateUserIds);
+  const state = mockList(context, Candidate, []);
+  await listCandidates(master);
+  assert.deepEqual(state.filter, { deletedAt: null, user: { $in: candidateUserIds } });
 });
 
 test('directory rejects non-master actors and invalid filters before storage', async () => {

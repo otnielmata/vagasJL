@@ -79,7 +79,8 @@ async function listRecruiters(actor, query = {}) {
 async function listCandidates(actor, query = {}) {
   if (actor?.role !== 'master') throw new ApiError(403, 'Apenas o perfil master pode listar candidatos');
   const { page, q } = parseQuery(query);
-  const filter = { deletedAt: null };
+  const candidateUserIds = await User.distinct('_id', { role: 'candidate' });
+  const filter = { deletedAt: null, user: { $in: candidateUserIds } };
   if (q) {
     const pattern = new RegExp(escaped(q), 'i');
     filter.$or = [{ name: pattern }, { email: pattern }];
