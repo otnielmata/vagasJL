@@ -62,14 +62,14 @@ No modo demonstração qualquer senha funciona; e-mails começando com `empresa@
 | | `/candidato/cadastro` | `POST/GET/PATCH /candidatos`, `POST …/validacao` |
 | | `/candidato/engajamento` | `GET /candidatos/me/engajamento` |
 | | `/candidato/privacidade` | `PATCH disponibilidade / permissoes-exibicao / perfil-publico` |
-| Empresa | `/empresa` | `GET /empresas/{id}/cadastro` |
+| Recrutador | `/empresa` | `GET /empresas/me/cadastro` |
 | | `/empresa/vagas/nova` | `POST /empresas/{id}/vagas` |
 | | `/empresa/ranking` | `GET /vagas/{id}/candidatos/ranking` |
-| | `/empresa/cadastro` | `GET/PATCH /empresas/{id}/cadastro` |
-| Admin | `/admin/empresas` | `POST /empresas`, `POST …/usuarios`, `PATCH /admin/empresas/{id}/status` |
-| | `/admin/candidatos` | `PATCH /admin/candidatos/{id}/status` |
-| | `/admin/vagas` | `PATCH /vagas/{id}/status`, ranking de candidatos |
-| | `/admin/configuracoes` | `PUT /configuracoes/match/*` |
+| | `/empresa/cadastro` | dados pessoais do recrutador |
+| Recrutador legado | `/admin/vagas` | vagas `COMPANY` da empresa vinculada e ranking de candidatos |
+| Master | `/master/empresas` | cadastro de empresas e vínculo de recrutadores |
+| | `/master/candidatos` | alteração controlada do status de candidatos |
+| | `/master/vagas` | aprovação e revisão de vagas pendentes |
 
 ## Deploy na Vercel
 

@@ -180,15 +180,16 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
-| POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
-| POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
-| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita dados cadastrais (VJ-39) |
-| GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
-| DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
-| PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
-| PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
+| POST   | `/empresas`        | Master (Bearer) | Registra empresa pendente (VJ-37) |
+| POST   | `/empresas/{id}/usuarios` | Master (Bearer) | Vincula recrutador verificado à empresa (VJ-38) |
+| PATCH  | `/empresas/{id}/cadastro` | Master (Bearer) | Edita dados cadastrais (VJ-39) |
+| GET    | `/empresas/{id}/cadastro` | Master (Bearer) | Consulta empresa e recrutadores vinculados (VJ-40) |
+| GET    | `/empresas/me/cadastro` | Recrutador vinculado (Bearer) | Resolve automaticamente a empresa do recrutador |
+| DELETE | `/empresas/{id}/cadastro` | Master (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
+| PATCH  | `/admin/empresas/{id}/status` | Master (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
+| PATCH  | `/admin/candidatos/{id}/status` | Master (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
 | PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
-| PUT    | `/admin/vagas/{id}` | Admin (Bearer) | Cadastra ou revisa vaga com versão e auditoria (VJ-80) |
+| PUT    | `/admin/vagas/{id}` | Master (Bearer) | Gerencia vaga administrativa com versão e auditoria (VJ-80) |
 | PUT    | `/admin/catalogos/{categoria}/{id}` | Admin (Bearer) | Publica item canônico do Catálogo Mestre (VJ-81) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
@@ -393,7 +394,8 @@ Usuários não administradores recebem **403** e campos adicionais no corpo rece
 
 ## Cadastro de vaga própria — VJ-42
 
-`POST /empresas/{id}/vagas` exige JWT de conta `company` ativa e verificada, vínculo
+`POST /empresas/{id}/vagas` exige JWT de conta de recrutador (`company` ou conta legada `admin`)
+ativa e verificada, vínculo
 `recruiter` ativo com a empresa do caminho e empresa `active` não excluída. O corpo requer
 `reference` (chave operacional única por empresa), `title`, `description` e
 `matchProfile.values.type` (modalidade do catálogo publicado). `location` é opcional e, quando
@@ -430,7 +432,7 @@ versão do catálogo. `origin`, `status`, `company` e `createdBy` são definidos
 tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa retorna **409**.
 O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
 com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
-ativação válida em história posterior.
+aprovação do perfil Master. Enquanto estiver `pending`, ela não participa de rankings.
 
 ## Origem e Perfil de Match das vagas — VJ-43
 
@@ -453,7 +455,7 @@ modificar o banco, execute `npm run vacancies:audit-origins` com `MONGODB_URI` c
 ## Status e prazo das vagas — VJ-44
 
 `PATCH /vagas/{id}/status` recebe apenas `{ "status": "active", "reason": "Revisão aprovada" }`.
-Vagas novas começam `pending`. O administrador pode publicar, rejeitar, pausar, expirar ou
+Vagas novas começam `pending`. O perfil Master pode publicar, rejeitar, pausar, expirar ou
 remover; a publicação valida dados essenciais, catálogo versionado e empresa ativa quando a
 origem é `COMPANY`. O recrutador ativo e vinculado pode apenas pausar, retomar ou remover
 vagas próprias. A reativação de `expired` é reservada ao administrador, requer prazo futuro
@@ -646,7 +648,7 @@ existir configuração consolidada vigente.
 
 ## Administração de vagas — VJ-80
 
-`PUT /admin/vagas/{id}` permite somente a uma conta administrativa ativa cadastrar uma vaga de
+`PUT /admin/vagas/{id}` permite somente a uma conta Master ativa cadastrar uma vaga de
 origem `ADMIN` com o identificador informado ou revisar uma vaga existente. O corpo representa a vaga
 completa e inclui `version`, `reason`, `origin`, `status`, dados da oportunidade e o Perfil de Match.
 Novas vagas devem começar com `version: 1`, origem `ADMIN` e status `pending`.

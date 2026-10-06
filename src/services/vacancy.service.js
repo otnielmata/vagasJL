@@ -9,13 +9,15 @@ const ApiError = require('../errors/api.error');
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 async function registerCompanyVacancy(actor, companyId, input) {
-  if (actor?.role !== 'company') throw new ApiError(403, 'Apenas recrutadores podem cadastrar vagas proprias');
+  if (!['company', 'admin'].includes(actor?.role)) {
+    throw new ApiError(403, 'Apenas recrutadores podem cadastrar vagas proprias');
+  }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
     throw new ApiError(400, 'Identificador de empresa invalido');
   }
   const data = normalizeVacancyInput(input);
   const account = await User.findOne({
-    _id: actor.id, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+    _id: actor.id, role: actor.role, status: 'active', emailVerifiedAt: { $type: 'date' },
   }).select('_id');
   const company = account && await Company.findOne({
     _id: companyId, status: 'active', deletedAt: null,

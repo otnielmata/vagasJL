@@ -69,7 +69,7 @@ function existingVacancy(overrides = {}) {
 
 test('creates prescribed vacancy as ADMIN and PENDING with private complete audit', async (context) => {
   const { create, update } = setup(context);
-  const result = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId, input(), now);
+  const result = await manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId, input(), now);
 
   assert.equal(result.created, true);
   assert.equal(result.changed, true);
@@ -95,7 +95,7 @@ test('administrator cannot change status while reviewing vacancy content', async
     minimumProfileCompletionPercentage: null, effectiveAt: now,
     recalculation: { policy: 'affected_matches' } };
   const { update } = setup(context, existing, engine);
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 2, status: 'active', reason: 'Perfil revisado e aprovado' }), now),
   { statusCode: 403 });
   assert.equal(update.mock.callCount(), 0);
@@ -104,7 +104,7 @@ test('administrator cannot change status while reviewing vacancy content', async
 test('administrator can save an incomplete pending draft without publishing it', async (context) => {
   const existing = existingVacancy();
   const { update } = setup(context, existing);
-  const result = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  const result = await manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 2, matchProfile: {
       values: { type: 'remote', automation: 'cypress' },
       requirements: [{ field: 'type', id: 'remote', importance: 'required' }],
@@ -116,7 +116,7 @@ test('administrator can save an incomplete pending draft without publishing it',
 test('administrator cannot remove an active vacancy', async (context) => {
   const existing = existingVacancy({ status: 'active' });
   const { update } = setup(context, existing);
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 2, status: 'removed', reason: 'Oportunidade encerrada' }), now),
   { statusCode: 403 });
   assert.equal(update.mock.callCount(), 0);
@@ -128,7 +128,7 @@ test('preserves COMPANY and IMPORTED origins before catalog processing', async (
       ? { company: '6512f1e2b3a1c2d3e4f5a6b9' }
       : { createdBy: null, importSource: 'board', importSourceId: 'job-1' }) });
     const { update } = setup(context, existing);
-    await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+    await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
       input({ version: 2, origin: 'ADMIN' }), now), { statusCode: 409 });
     assert.equal(existing.origin, origin);
     assert.equal(update.mock.callCount(), 0);
@@ -139,7 +139,7 @@ test('reviews a company vacancy without changing its origin or technical provena
   const existing = existingVacancy({ origin: 'COMPANY',
     company: '6512f1e2b3a1c2d3e4f5a6b9' });
   const { update } = setup(context, existing);
-  const result = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  const result = await manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 2, origin: 'COMPANY', title: 'Pessoa QA revisada' }), now);
 
   assert.equal(result.vacancy.origin, 'COMPANY');
@@ -151,12 +151,12 @@ test('reviews a company vacancy without changing its origin or technical provena
 test('same version and representation is idempotent while conflicting versions return 409', async (context) => {
   const existing = existingVacancy();
   const { update } = setup(context, existing);
-  const repeated = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId, input(), now);
+  const repeated = await manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId, input(), now);
   assert.equal(repeated.changed, false);
   assert.equal(repeated.vacancy, existing);
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ title: 'Outro titulo' }), now), { statusCode: 409 });
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 3, title: 'Outro titulo' }), now), { statusCode: 409 });
   assert.equal(update.mock.callCount(), 0);
 });
@@ -165,11 +165,11 @@ test('requires an active administrator and validates create origin, initial stat
   const { create } = setup(context);
   await assert.rejects(manageAdminVacancy({ id: adminId, role: 'company' }, vacancyId, input(), now),
     { statusCode: 403 });
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ origin: 'COMPANY' }), now), { statusCode: 409 });
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ status: 'active' }), now), { statusCode: 422 });
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId,
     input({ version: 2 }), now), { statusCode: 409 });
   assert.equal(create.mock.callCount(), 0);
 });
@@ -178,7 +178,7 @@ test('inactive administrator is rejected before vacancy or catalog access', asyn
   context.mock.method(User, 'findOne', () => ({ select: async () => null }));
   const find = context.mock.method(Vacancy, 'findById', () => assert.fail('must not query vacancy'));
   const catalog = context.mock.method(Configuration, 'findOne', () => assert.fail('must not query catalog'));
-  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId, input(), now),
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'master' }, vacancyId, input(), now),
     { statusCode: 403 });
   assert.equal(find.mock.callCount(), 0);
   assert.equal(catalog.mock.callCount(), 0);

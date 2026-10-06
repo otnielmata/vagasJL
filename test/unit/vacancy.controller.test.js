@@ -9,7 +9,7 @@ const service = require('../../src/services/vacancy.service');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('POST company vacancy is mounted and requires active company JWT', () => {
+test('POST company vacancy is mounted for linked recruiter roles', () => {
   assert.ok(app._router.stack.some((layer) => layer.regexp.test('/empresas')));
   const route = router.stack.find((layer) => layer.route?.path === '/:id/vagas').route;
   const handlers = route.stack.map((layer) => layer.handle);
@@ -21,6 +21,11 @@ test('POST company vacancy is mounted and requires active company JWT', () => {
   assert.equal(response.code, 401);
   handlers[1]({ user: { role: 'candidate' } }, response, () => assert.fail('candidate must stop'));
   assert.equal(response.code, 403);
+  for (const role of ['company', 'admin']) {
+    let passed = false;
+    handlers[1]({ user: { role } }, response, () => { passed = true; });
+    assert.equal(passed, true);
+  }
 });
 
 test('controller returns 201 with safe vacancy and forwards errors', async (context) => {

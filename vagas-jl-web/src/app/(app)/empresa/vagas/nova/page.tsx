@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send } from 'lucide-react';
-import { adminService, companyService } from '@/lib/api/services';
+import { companyService } from '@/lib/api/services';
 import type { Importance, MatchFieldKey, MatchValues, VacancyRequirement } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
 import { MATCH_FIELDS } from '@/config/match-catalog';
@@ -76,13 +76,7 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
         ...(Object.keys(location).length ? { location } : {}),
         matchProfile: buildMatchProfile(),
       };
-      if (admin) {
-        const vacancyId = Array.from(crypto.getRandomValues(new Uint8Array(12)),
-          (byte) => byte.toString(16).padStart(2, '0')).join('');
-        await adminService.createVacancy(vacancyId, input);
-      } else {
-        await companyService.createVacancy(companyId!, input);
-      }
+      await companyService.createVacancy(companyId!, input);
       toast('success', 'Vaga criada e enviada para revisão.');
       router.push(admin ? '/admin/vagas' : '/empresa/vagas');
     } catch (err) {

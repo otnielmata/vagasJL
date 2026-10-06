@@ -68,13 +68,14 @@ function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin:
   );
 }
 
-export function VacancyBrowser({ admin = false, company = false, hideOrigin = false }: {
+export function VacancyBrowser({ admin = false, company = false, hideOrigin = false, initialFilters = EMPTY }: {
   admin?: boolean;
   company?: boolean;
   hideOrigin?: boolean;
+  initialFilters?: VacancyListFilters;
 }) {
-  const [draft, setDraft] = useState<VacancyListFilters>(EMPTY);
-  const [filters, setFilters] = useState<VacancyListFilters>(EMPTY);
+  const [draft, setDraft] = useState<VacancyListFilters>(initialFilters);
+  const [filters, setFilters] = useState<VacancyListFilters>(initialFilters);
   const [page, setPage] = useState(1);
   const { data, error, loading } = useAsync(() => vacancyService.list({ ...filters, page }), [filters, page]);
 

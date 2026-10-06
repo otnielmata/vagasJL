@@ -34,11 +34,11 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   const { page, limit, all } = rankingPagination(query);
   const vacancy = await Vacancy.findById(id).select('+createdBy +deletedAt');
   if (!vacancy || vacancy.deletedAt) throw new ApiError(404, 'Vaga nao encontrada');
-  if (actor.role === 'company') {
-    if (vacancy.origin !== 'COMPANY') throw new ApiError(403, 'Acesso negado a esta vaga');
+  if (vacancy.origin === 'COMPANY') {
     await ensureCompanyAuthorized(actor, vacancy);
-  } else if (vacancy.origin !== 'ADMIN' || String(vacancy.createdBy) !== actor.id) {
-    throw new ApiError(403, 'Administrador pode consultar somente o ranking das vagas que cadastrou');
+  } else if (actor.role !== 'admin' || vacancy.origin !== 'ADMIN' ||
+      String(vacancy.createdBy) !== actor.id) {
+    throw new ApiError(403, 'Acesso negado a esta vaga');
   }
   if (vacancy.origin === 'COMPANY') {
     const company = await Company.findOne({ _id: vacancy.company, status: 'active',

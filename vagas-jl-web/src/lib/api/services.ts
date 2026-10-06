@@ -114,14 +114,6 @@ export const vacancyService = {
 };
 
 export const adminService = {
-  createVacancy: (vacancyId: string, input: CompanyVacancyInput) =>
-    api.put<{ vacancy: Vacancy; created: boolean; changed: boolean }>(`/admin/vagas/${vacancyId}`, {
-      ...input,
-      version: 1,
-      reason: 'Cadastro da vaga pelo painel administrativo',
-      origin: 'ADMIN',
-      status: 'pending',
-    }),
   setCompanyStatus: (id: string, status: CompanyStatus, reason: string) =>
     api.patch<{ company: { _id: string; status: CompanyStatus }; previousStatus: CompanyStatus; changed: boolean }>(
       `/admin/empresas/${id}/status`,

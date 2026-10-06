@@ -37,6 +37,9 @@ test('GET /empresas/me/cadastro resolves the authenticated recruiter membership'
   let companyPassed = false;
   handlers[1]({ user: { role: 'company' } }, {}, () => { companyPassed = true; });
   assert.equal(companyPassed, true);
+  let adminPassed = false;
+  handlers[1]({ user: { role: 'admin' } }, {}, () => { adminPassed = true; });
+  assert.equal(adminPassed, true);
   let masterPassed = false;
   const response = { status(code) { this.code = code; return this; }, json() {} };
   handlers[1]({ user: { role: 'master' } }, response, () => { masterPassed = true; });

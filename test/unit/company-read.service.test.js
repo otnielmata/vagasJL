@@ -13,6 +13,7 @@ const recruiterId = '6512f1e2b3a1c2d3e4f5a6b8';
 const otherId = '6512f1e2b3a1c2d3e4f5a6b9';
 const recruiter = { id: recruiterId, role: 'company' };
 const admin = { id: otherId, role: 'admin' };
+const master = { id: otherId, role: 'master' };
 
 function query(result) {
   return {
@@ -48,7 +49,7 @@ function setup(context, status = 'active') {
   const saveCompany = context.mock.method(Company.prototype, 'save', async () => assert.fail('read only'));
   const saveUser = context.mock.method(User.prototype, 'save', async () => assert.fail('read only'));
   const findCandidate = context.mock.method(Candidate, 'findOne', () => assert.fail('no candidate read'));
-  return { company, companyQuery, accountQuery, membershipQuery, membershipsQuery, usersQuery,
+  return { company, account, membership, companyQuery, accountQuery, membershipQuery, membershipsQuery, usersQuery,
     findCompany, findAccount, findMembership, findMemberships, findUsers,
     saveCompany, saveUser, findCandidate };
 }
@@ -81,9 +82,9 @@ for (const status of ['pending', 'active', 'inactive', 'blocked']) {
   });
 }
 
-test('admin sees pending company and allowed public linked users without mutation', async (context) => {
+test('master sees pending company and allowed public linked users without mutation', async (context) => {
   const { findAccount, findMembership, findMemberships, saveCompany } = setup(context, 'pending');
-  const result = await getRegistration(admin, companyId);
+  const result = await getRegistration(master, companyId);
   assert.equal(result.company.status, 'pending');
   assert.equal(result.usuarios.length, 1);
   assert.equal(findAccount.mock.callCount(), 0);
@@ -94,14 +95,14 @@ test('admin sees pending company and allowed public linked users without mutatio
   assert.equal(saveCompany.mock.callCount(), 0);
 });
 
-test('admin response keeps a users list for future recruiter expansion', async (context) => {
+test('master response keeps a users list for future recruiter expansion', async (context) => {
   const { membershipsQuery, usersQuery } = setup(context);
   membershipsQuery.lean = async () => [{ user: recruiterId }, { user: otherId }];
   usersQuery.lean = async () => [
     { _id: recruiterId, name: 'Ana', email: 'ana@example.com' },
     { _id: otherId, name: 'Bia', email: 'bia@example.com' },
   ];
-  const result = await getRegistration(admin, companyId);
+  const result = await getRegistration(master, companyId);
   assert.deepEqual(result.usuarios.map((user) => user.name), ['Ana', 'Bia']);
 });
 
@@ -134,10 +135,10 @@ test('missing or deleted company returns 404', async (context) => {
   assert.equal(findAccount.mock.callCount(), 0);
 });
 
-test('admin sees empty users list when no active membership exists', async (context) => {
+test('master sees empty users list when no active membership exists', async (context) => {
   const { membershipsQuery, findUsers } = setup(context);
   membershipsQuery.lean = async () => [];
-  const result = await getRegistration(admin, companyId);
+  const result = await getRegistration(master, companyId);
   assert.deepEqual(result.usuarios, []);
   assert.equal(findUsers.mock.callCount(), 0);
 });
@@ -148,4 +149,16 @@ test('recruiter resolves linked company without submitting a company identifier'
   assert.equal(result.company._id, companyId);
   assert.equal(result.usuarios[0]._id, recruiterId);
   assert.equal(findMembership.mock.calls[0].arguments[0].user, recruiterId);
+});
+
+test('legacy admin recruiter resolves the company through the same active membership', async (context) => {
+  const { account, accountQuery, membership, membershipQuery, findMembership } = setup(context);
+  account._id = otherId;
+  account.role = 'admin';
+  membership.user = otherId;
+  accountQuery.lean = async () => account;
+  membershipQuery.lean = async () => membership;
+  const result = await getMyRegistration(admin);
+  assert.equal(result.company._id, companyId);
+  assert.equal(findMembership.mock.calls[0].arguments[0].user, otherId);
 });

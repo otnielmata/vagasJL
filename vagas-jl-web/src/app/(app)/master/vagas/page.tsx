@@ -18,7 +18,7 @@ export default function MasterVacanciesPage() {
         description="Consulte as vagas importadas e cadastradas, seus status e dados estruturados usando os filtros disponíveis."
       />
       <div className="space-y-6">
-        <VacancyBrowser admin />
+        <VacancyBrowser admin initialFilters={{ status: 'pending' }} />
         <StatusChangeForm<Target>
           title="Revisar status da vaga"
           description="Aprovar (ativar), pausar, expirar, remover ou rejeitar qualquer vaga cadastrada."

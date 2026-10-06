@@ -47,6 +47,14 @@ test('admin links verified company user without creating credentials or leaking 
   assert.equal(createUser.mock.callCount(), 0);
 });
 
+test('master can link a verified legacy admin account as recruiter', async (context) => {
+  const { account, createMembership } = setup(context);
+  account.role = 'admin';
+  const result = await linkRecruiter({ ...operator, role: 'master' }, companyId, { userId });
+  assert.equal(result.membership.role, 'recruiter');
+  assert.equal(createMembership.mock.callCount(), 1);
+});
+
 test('rejects malformed input and non-admin before database access', async (context) => {
   const { findCompany, createMembership } = setup(context);
   for (const body of [{}, { userId: 'bad' }, { userId: 123 },

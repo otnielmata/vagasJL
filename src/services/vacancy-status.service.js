@@ -34,7 +34,7 @@ async function ensureCompanyAuthorized(actor, vacancy) {
   if (vacancy.origin !== 'COMPANY' || !vacancy.company) {
     throw new ApiError(403, 'Acesso negado a esta vaga');
   }
-  const account = await User.findOne({ _id: actor.id, role: 'company', status: 'active',
+  const account = await User.findOne({ _id: actor.id, role: actor.role, status: 'active',
     emailVerifiedAt: { $type: 'date' } }).select('_id');
   const company = account && await Company.findOne({ _id: vacancy.company,
     status: 'active', deletedAt: null }).select('_id');

@@ -62,14 +62,18 @@ test('candidate lists ten active unexpired vacancies without Match calculation',
   assert.deepEqual(state.countFilter, state.filter);
 });
 
-test('admin lists only own ADMIN vacancies and combines textual and structured filters', async (context) => {
+test('admin recruiter lists only COMPANY vacancies from the linked company', async (context) => {
+  const companyId = '6512f1e2b3a1c2d3e4f5a6bb';
+  context.mock.method(CompanyUser, 'find', () => ({
+    select: () => ({ lean: async () => [{ company: companyId }] }),
+  }));
   const { state } = setup(context);
-  await listVacancies(admin, { q: 'automação', status: 'pending', origin: 'ADMIN',
+  await listVacancies(admin, { q: 'automação', status: 'pending', origin: 'COMPANY',
     level: 'senior', role: 'qa_engineer', specialization: 'test_automation', country: 'Brasil' }, now);
 
   assert.equal(state.filter.status, 'pending');
-  assert.equal(state.filter.origin, 'ADMIN');
-  assert.equal(state.filter.createdBy, admin.id);
+  assert.equal(state.filter.origin, 'COMPANY');
+  assert.deepEqual(state.filter.company, { $in: [companyId] });
   assert.equal(state.filter['matchProfile.values.level'], 'senior');
   assert.equal(state.filter['matchProfile.values.role'], 'qa_engineer');
   assert.equal(state.filter['matchProfile.values.specialization'], 'test_automation');
@@ -114,6 +118,9 @@ test('rejects unsupported filters, invalid pagination and restricted candidate s
 });
 
 test('escapes regex metacharacters in free-text filters', async (context) => {
+  context.mock.method(CompanyUser, 'find', () => ({
+    select: () => ({ lean: async () => [] }),
+  }));
   const { state } = setup(context);
   await listVacancies(admin, { q: 'QA (API)+', city: 'S.*P' }, now);
   assert.equal(state.filter.$or[0].title.source, 'QA \\(API\\)\\+');

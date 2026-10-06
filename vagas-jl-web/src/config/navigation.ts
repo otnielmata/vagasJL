@@ -33,7 +33,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   ],
   company: [
     { href: '/empresa', label: 'Visão geral', icon: LayoutDashboard },
-    { href: '/empresa/vagas/nova', label: 'Nova vaga', icon: Briefcase },
     { href: '/empresa/vagas', label: 'Vagas cadastradas', icon: FileSearch },
     { href: '/empresa/candidatos', label: 'Candidatos', icon: Users },
     { href: '/empresa/cadastro', label: 'Meus dados', icon: UserRound },
@@ -42,7 +41,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/admin', label: 'Visão geral', icon: LayoutDashboard },
     { href: '/admin/perfil', label: 'Meus dados', icon: UserRound },
     { href: '/admin/candidatos', label: 'Candidatos', icon: Users },
-    { href: '/admin/vagas/nova', label: 'Nova vaga', icon: Briefcase },
     { href: '/admin/vagas', label: 'Vagas', icon: FileSearch },
     { href: '/admin/configuracoes', label: 'Parâmetros do Match', icon: SlidersHorizontal },
   ],

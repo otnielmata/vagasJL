@@ -59,8 +59,8 @@ function parseQuery(actor, query = {}) {
   if (actor.role === 'company' && filters.origin && filters.origin !== 'COMPANY') {
     throw new ApiError(400, 'Empresas podem consultar somente suas proprias vagas');
   }
-  if (actor.role === 'admin' && filters.origin && filters.origin !== 'ADMIN') {
-    throw new ApiError(400, 'Administradores podem consultar somente as vagas que cadastraram');
+  if (actor.role === 'admin' && filters.origin && filters.origin !== 'COMPANY') {
+    throw new ApiError(400, 'Recrutadores podem consultar somente as vagas da empresa vinculada');
   }
   return { page, filters };
 }
@@ -105,14 +105,11 @@ function buildFilter(actor, filters, now) {
 async function listVacancies(actor, query = {}, now = new Date()) {
   const { page, filters } = parseQuery(actor, query);
   const filter = buildFilter(actor, filters, now);
-  if (actor.role === 'company') {
+  if (['company', 'admin'].includes(actor.role)) {
     const memberships = await CompanyUser.find({ user: actor.id, role: 'recruiter', status: 'active' })
       .select('company').lean();
     filter.origin = 'COMPANY';
     filter.company = { $in: memberships.map((membership) => membership.company) };
-  } else if (actor.role === 'admin') {
-    filter.origin = 'ADMIN';
-    filter.createdBy = actor.id;
   }
   const projection = actor.role === 'candidate'
     ? '-applicationChannel -statusHistory -requirementsHistory'

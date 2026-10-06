@@ -25,8 +25,9 @@ async function linkRecruiter(operator, companyId, input) {
   }
 
   const user = await User.findById(input.userId).select('+emailVerifiedAt name email role status');
-  if (!user || user.role !== 'company' || user.status !== 'active' || !user.emailVerifiedAt) {
-    throw new ApiError(403, 'Conta empresarial ativa e identidade verificada sao obrigatorias');
+  if (!user || !['company', 'admin'].includes(user.role) || user.status !== 'active' ||
+      !user.emailVerifiedAt) {
+    throw new ApiError(403, 'Conta de recrutador ativa e identidade verificada sao obrigatorias');
   }
 
   await CompanyUser.init();

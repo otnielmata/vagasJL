@@ -51,8 +51,8 @@ function fingerprint(value) {
 }
 
 function validateRequest(actor, id, input) {
-  if (actor?.role !== 'admin' || typeof actor.id !== 'string' || !OBJECT_ID.test(actor.id)) {
-    throw new ApiError(403, 'Apenas administradores podem gerenciar vagas');
+  if (actor?.role !== 'master' || typeof actor.id !== 'string' || !OBJECT_ID.test(actor.id)) {
+    throw new ApiError(403, 'Apenas o perfil master pode gerenciar vagas administrativas');
   }
   if (typeof id !== 'string' || !OBJECT_ID.test(id)) {
     throw new ApiError(400, 'Identificador da vaga invalido');
@@ -198,8 +198,8 @@ async function updateVacancy(actor, request, input, existing, prepared, now) {
 
 async function manageAdminVacancy(actor, id, input, now = new Date()) {
   const request = validateRequest(actor, id, input);
-  const account = await User.findOne({ _id: actor.id, role: 'admin', status: 'active' }).select('_id');
-  if (!account) throw new ApiError(403, 'Conta administrativa inativa ou inexistente');
+  const account = await User.findOne({ _id: actor.id, role: 'master', status: 'active' }).select('_id');
+  if (!account) throw new ApiError(403, 'Conta master inativa ou inexistente');
   const existing = await Vacancy.findById(request.id)
     .select('+createdBy +deletedAt +adminContentFingerprint +adminHistory');
   if (existing?.deletedAt) throw new ApiError(404, 'Vaga nao encontrada');

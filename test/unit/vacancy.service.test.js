@@ -87,6 +87,17 @@ test('active linked recruiter creates pending COMPANY vacancy with canonical Mat
   });
 });
 
+test('legacy admin recruiter also creates a pending vacancy only through the linked company', async (context) => {
+  const { findUser } = setup(context);
+  const vacancy = await registerCompanyVacancy({ ...actor, role: 'admin' }, companyId, minimum);
+  assert.equal(vacancy.origin, 'COMPANY');
+  assert.equal(vacancy.status, 'pending');
+  assert.equal(vacancy.company.toString(), companyId);
+  assert.deepEqual(findUser.mock.calls[0].arguments[0], {
+    _id: userId, role: 'admin', status: 'active', emailVerifiedAt: { $type: 'date' },
+  });
+});
+
 test('location and numeric experience are accepted without Match score', async (context) => {
   setup(context);
   const vacancy = await registerCompanyVacancy(actor, companyId, {
