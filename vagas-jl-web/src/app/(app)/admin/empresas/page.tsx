@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Copy, Plus, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Plus, Search, UserCheck, UserX, X } from 'lucide-react';
 import { adminService, companyService, masterService } from '@/lib/api/services';
 import type { CompanyInput, CompanyStatus } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
@@ -71,6 +71,10 @@ function CompanyDirectory({ refreshKey }: { refreshKey: number }) {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted">ID da empresa</p>
                   <code className="block truncate text-xs">{company._id}</code>
+                  <p className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${company.hasRecruiter ? 'text-success' : 'text-muted'}`}>
+                    {company.hasRecruiter ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                    {company.hasRecruiter ? 'Com recrutador vinculado' : 'Sem recrutador vinculado'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <CompanyStatusBadge value={company.status} />

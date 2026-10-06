@@ -1,4 +1,5 @@
 const Company = require('../models/company.model');
+const CompanyUser = require('../models/company-user.model');
 const User = require('../models/user.model');
 const ApiError = require('../errors/api.error');
 
@@ -41,10 +42,25 @@ async function listCompanies(actor, query = {}) {
     const pattern = new RegExp(escaped(q), 'i');
     filter.$or = [{ legalName: pattern }, { tradeName: pattern }, { email: pattern }];
   }
-  return paged(Company, filter, {
+  const result = await paged(Company, filter, {
     _id: 1, legalName: 1, tradeName: 1, email: 1, city: 1, state: 1, country: 1,
     responsibleName: 1, status: 1, createdAt: 1, updatedAt: 1,
   }, page);
+  if (!result.items.length) return result;
+
+  const linkedCompanyIds = await CompanyUser.distinct('company', {
+    company: { $in: result.items.map((company) => company._id) },
+    role: 'recruiter',
+    status: 'active',
+  });
+  const linked = new Set(linkedCompanyIds.map(String));
+  return {
+    ...result,
+    items: result.items.map((company) => ({
+      ...company,
+      hasRecruiter: linked.has(String(company._id)),
+    })),
+  };
 }
 
 async function listRecruiters(actor, query = {}) {

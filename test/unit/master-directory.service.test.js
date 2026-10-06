@@ -3,6 +3,7 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Company = require('../../src/models/company.model');
+const CompanyUser = require('../../src/models/company-user.model');
 const User = require('../../src/models/user.model');
 const { listCompanies, listRecruiters, parseQuery, PAGE_SIZE } =
   require('../../src/services/master-directory.service');
@@ -27,7 +28,12 @@ function mockList(context, model, items, total = items.length) {
 }
 
 test('master lists every current company with identifiers and searchable public fields', async (context) => {
-  const state = mockList(context, Company, [{ _id: 'company', legalName: 'JL' }], 12);
+  const companies = [
+    { _id: '6512f1e2b3a1c2d3e4f5a6b7', legalName: 'JL' },
+    { _id: '6512f1e2b3a1c2d3e4f5a6b8', legalName: 'QA' },
+  ];
+  const state = mockList(context, Company, companies, 12);
+  const distinct = context.mock.method(CompanyUser, 'distinct', async () => [companies[0]._id]);
   const result = await listCompanies(master, { page: '2', q: 'JL (QA)+' });
   assert.equal(result.limit, PAGE_SIZE);
   assert.equal(result.pages, 2);
@@ -38,6 +44,20 @@ test('master lists every current company with identifiers and searchable public 
   assert.equal(state.projection._id, 1);
   assert.equal(state.projection.legalName, 1);
   assert.deepEqual(state.countFilter, state.filter);
+  assert.equal(result.items[0].hasRecruiter, true);
+  assert.equal(result.items[1].hasRecruiter, false);
+  assert.deepEqual(distinct.mock.calls[0].arguments, ['company', {
+    company: { $in: companies.map((company) => company._id) },
+    role: 'recruiter', status: 'active',
+  }]);
+});
+
+test('empty company page does not query recruiter memberships', async (context) => {
+  mockList(context, Company, [], 0);
+  const distinct = context.mock.method(CompanyUser, 'distinct', async () => []);
+  const result = await listCompanies(master);
+  assert.deepEqual(result.items, []);
+  assert.equal(distinct.mock.callCount(), 0);
 });
 
 test('master recruiter directory returns only admin profiles filtered by name or email', async (context) => {

@@ -134,7 +134,7 @@ export const adminService = {
 
 export const masterService = {
   listCompanies: (params: { page?: number; q?: string } = {}) =>
-    api.get<{ items: Company[]; page: number; limit: number; total: number; pages: number }>(
+    api.get<{ items: (Company & { hasRecruiter: boolean })[]; page: number; limit: number; total: number; pages: number }>(
       '/master/empresas', { query: params },
     ),
   listRecruiters: (params: { page?: number; q?: string } = {}) =>
