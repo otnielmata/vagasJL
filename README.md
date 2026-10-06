@@ -181,7 +181,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
 | POST   | `/empresas`        | Master (Bearer) | Registra empresa pendente (VJ-37) |
-| POST   | `/empresas/{id}/usuarios` | Master (Bearer) | Vincula recrutador verificado à empresa (VJ-38) |
+| POST   | `/empresas/{id}/usuarios` | Master (Bearer) | Vincula recrutador ativo à empresa ativa (VJ-38) |
 | PATCH  | `/empresas/{id}/cadastro` | Master (Bearer) | Edita dados cadastrais (VJ-39) |
 | GET    | `/empresas/{id}/cadastro` | Master (Bearer) | Consulta empresa e recrutadores vinculados (VJ-40) |
 | GET    | `/empresas/me/cadastro` | Recrutador vinculado (Bearer) | Resolve automaticamente a empresa do recrutador |
@@ -261,22 +261,16 @@ O acesso exige as condições descritas na VJ-38 abaixo.
 
 ## Usuário da empresa — VJ-38
 
-`POST /empresas/{id}/usuarios` exige JWT de administrador ativo e corpo `{ "userId": "<ObjectId>" }`.
-O usuário já deve existir com papel `company`, status `active` e identidade previamente verificada
-(`emailVerifiedAt` gravado por um processo confiável de verificação de titularidade). O registro
-público de usuários **não verifica e-mail** e não pode marcar essa data. Sem verificação confiável,
-o vínculo retorna **403**; não basta conhecer um e-mail ou informar que ele é seu. Esta história
-não implementa envio de convites nem fluxo de verificação de e-mail: até que esse processo seja
-disponibilizado, a identidade deve ser provisionada/verificada administrativamente de forma segura.
-
-A empresa deve existir e estar `pending` ou `active`. O endpoint cria somente um documento
+`POST /empresas/{id}/usuarios` exige JWT de perfil master ativo e corpo `{ "userId": "<ObjectId>" }`.
+O usuário já deve existir com papel de recrutador (`company` ou `admin`) e status `active`.
+A empresa deve existir e estar `active`; o vínculo não depende de `emailVerifiedAt`.
+O endpoint cria somente um documento
 `companyusers` com papel `recruiter` e status `active`; nunca cria outra credencial. A resposta
 **201** contém `{ "membership": { ... }, "user": { "_id", "name", "email" } }`, sem senha,
 hash, token, convite ou dados internos de auditoria. Dados inválidos retornam **400**, empresa
-inexistente **404**, e empresa inativa/bloqueada ou vínculo ativo duplicado **409**. Índices únicos
+inexistente **404**, e empresa não ativa ou vínculo ativo duplicado **409**. Índices únicos
 impedem mais de um vínculo ativo por empresa e que o mesmo usuário represente duas empresas.
-A troca do e-mail da conta invalida sua verificação; a exclusão da conta remove a associação na
-mesma transação.
+A exclusão da conta remove a associação na mesma transação.
 
 Em `GET /candidatos/{id}`, apenas conta `company` ativa com associação ativa e empresa `active`
 pode consultar candidato `active`. Empresas `pending`, `inactive`, `blocked` ou sem vínculo recebem

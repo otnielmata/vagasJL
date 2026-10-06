@@ -1205,12 +1205,11 @@ paths:
   /empresas/{id}/usuarios:
     post:
       tags: [Companies]
-      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      summary: Vincula o primeiro recrutador ativo a empresa ativa (VJ-38)
       description: >
-        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
-        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
-        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
-        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+        Exige conta master ativa. Vincula uma conta de recrutador existente e ativa a uma
+        empresa ativa. Nao exige emailVerifiedAt, nao cria credenciais e nao envia convite.
+        O MVP limita a um vinculo ativo por empresa e por usuario.
       security:
         - bearerAuth: []
       parameters:
@@ -1259,7 +1258,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          description: Perfil diferente de master ou conta de recrutador inativa/invalida
           content:
             application/json:
               schema:
@@ -1271,7 +1270,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          description: Empresa nao ativa ou vinculo ativo duplicado
           content:
             application/json:
               schema:

@@ -12,10 +12,10 @@ const userId = '6512f1e2b3a1c2d3e4f5a6b8';
 const operator = { id: '6512f1e2b3a1c2d3e4f5a6b9', role: 'admin' };
 
 function setup(context) {
-  const company = { _id: companyId, status: 'pending' };
+  const company = { _id: companyId, status: 'active' };
   const account = new User({
     _id: userId, name: 'Ana', email: 'ana@example.com', password: 'secure-password',
-    role: 'company', status: 'active', emailVerifiedAt: new Date(),
+    role: 'company', status: 'active',
   });
   const companyQuery = { select: async () => company };
   const userQuery = { select: async () => account };
@@ -28,7 +28,7 @@ function setup(context) {
     findMembership, createMembership };
 }
 
-test('admin links verified company user without creating credentials or leaking secrets', async (context) => {
+test('admin links active recruiter to active company without creating credentials or leaking secrets', async (context) => {
   const { findCompany, findUser, createMembership } = setup(context);
   const createUser = context.mock.method(User, 'create', async () => assert.fail('no credential creation'));
   const result = await linkRecruiter(operator, companyId, { userId });
@@ -47,7 +47,7 @@ test('admin links verified company user without creating credentials or leaking 
   assert.equal(createUser.mock.callCount(), 0);
 });
 
-test('master can link a verified legacy admin account as recruiter', async (context) => {
+test('master can link an active legacy admin account as recruiter', async (context) => {
   const { account, createMembership } = setup(context);
   account.role = 'admin';
   const result = await linkRecruiter({ ...operator, role: 'master' }, companyId, { userId });
@@ -67,9 +67,9 @@ test('rejects malformed input and non-admin before database access', async (cont
   assert.equal(createMembership.mock.callCount(), 0);
 });
 
-test('missing, inactive and blocked companies cannot receive a recruiter', async (context) => {
+test('missing, pending, inactive and blocked companies cannot receive a recruiter', async (context) => {
   const { company, companyQuery, findUser, createMembership } = setup(context);
-  for (const status of ['inactive', 'blocked']) {
+  for (const status of ['pending', 'inactive', 'blocked']) {
     company.status = status;
     await assert.rejects(linkRecruiter(operator, companyId, { userId }), { statusCode: 409 });
   }
@@ -79,11 +79,8 @@ test('missing, inactive and blocked companies cannot receive a recruiter', async
   assert.equal(createMembership.mock.callCount(), 0);
 });
 
-test('unverified, inactive, missing or non-company accounts cannot be linked', async (context) => {
+test('inactive, missing or unsupported accounts cannot be linked', async (context) => {
   const { account, userQuery, createMembership } = setup(context);
-  account.emailVerifiedAt = null;
-  await assert.rejects(linkRecruiter(operator, companyId, { userId }), { statusCode: 403 });
-  account.emailVerifiedAt = new Date();
   account.status = 'inactive';
   await assert.rejects(linkRecruiter(operator, companyId, { userId }), { statusCode: 403 });
   account.status = 'active';

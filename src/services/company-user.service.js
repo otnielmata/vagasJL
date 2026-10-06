@@ -20,14 +20,13 @@ async function linkRecruiter(operator, companyId, input) {
 
   const company = await Company.findOne({ _id: companyId, deletedAt: null }).select('status');
   if (!company) throw new ApiError(404, 'Empresa nao encontrada');
-  if (!['pending', 'active'].includes(company.status)) {
-    throw new ApiError(409, 'Empresa inativa ou bloqueada nao pode receber recrutador');
+  if (company.status !== 'active') {
+    throw new ApiError(409, 'A empresa precisa estar ativa para receber recrutador');
   }
 
-  const user = await User.findById(input.userId).select('+emailVerifiedAt name email role status');
-  if (!user || !['company', 'admin'].includes(user.role) || user.status !== 'active' ||
-      !user.emailVerifiedAt) {
-    throw new ApiError(403, 'Conta de recrutador ativa e identidade verificada sao obrigatorias');
+  const user = await User.findById(input.userId).select('name email role status');
+  if (!user || !['company', 'admin'].includes(user.role) || user.status !== 'active') {
+    throw new ApiError(403, 'Conta de recrutador ativa e obrigatoria');
   }
 
   await CompanyUser.init();

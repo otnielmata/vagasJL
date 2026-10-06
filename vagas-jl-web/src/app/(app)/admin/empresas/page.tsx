@@ -186,7 +186,7 @@ export default function MasterCompaniesPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Vincular recrutador" description="Associe o ID de um usuário do menu Recrutadores à empresa (MVP: um recrutador)." />
+          <CardHeader title="Vincular recrutador" description="Associe um recrutador Ativo a uma empresa Ativa (MVP: um recrutador)." />
           <CardBody>
             <form onSubmit={linkUser} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
               <Input label="ID da empresa" value={link.companyId} onChange={(e) => setLink((l) => ({ ...l, companyId: e.target.value }))} />
