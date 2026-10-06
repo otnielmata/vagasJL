@@ -180,6 +180,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
+| GET    | `/candidatos/me`   | Candidato (Bearer) | Recupera o cadastro do usuário autenticado |
 | POST   | `/empresas`        | Master (Bearer) | Registra empresa pendente (VJ-37) |
 | POST   | `/empresas/{id}/usuarios` | Master (Bearer) | Vincula recrutador ativo à empresa ativa (VJ-38) |
 | PATCH  | `/empresas/{id}/cadastro` | Master (Bearer) | Edita dados cadastrais (VJ-39) |

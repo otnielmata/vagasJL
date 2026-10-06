@@ -51,6 +51,7 @@ export const userService = {
 export const candidateService = {
   create: (input: CandidateInput & { name: string; email: string }) =>
     api.post<{ candidate: Candidate }>('/candidatos', input),
+  getMine: () => api.get<{ candidate: Candidate }>('/candidatos/me'),
   get: (id: string) => api.get<{ candidate: Candidate }>(`/candidatos/${id}`),
   update: (id: string, input: CandidateInput) => api.patch<{ candidate: Candidate }>(`/candidatos/${id}`, input),
   remove: (id: string) => api.delete<void>(`/candidatos/${id}`),

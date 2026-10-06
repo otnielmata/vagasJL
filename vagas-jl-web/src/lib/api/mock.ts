@@ -184,6 +184,9 @@ export async function mockRequest<T>(method: string, path: string, opts: Request
     case 'POST /candidatos':
       state.candidate = { ...makeCandidate(), ...(body as Partial<Candidate>) };
       return { candidate: state.candidate } as T;
+    case 'GET /candidatos/me':
+      state.candidate ??= makeCandidate();
+      return { candidate: state.candidate } as T;
     case 'GET /candidatos/:id':
     case 'PATCH /candidatos/:id':
       state.candidate = { ...(state.candidate ?? makeCandidate()), ...(body as Partial<Candidate>) };

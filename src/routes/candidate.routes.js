@@ -41,6 +41,7 @@ router.patch('/me/permissoes-exibicao', authenticate, authorize('candidate'),
   candidateDisplayPermissionsRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase,
   displayPermissionsController.update);
+router.get('/me', authenticate, authorize('candidate'), ensureDatabase, candidateController.showMine);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.get('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.show);

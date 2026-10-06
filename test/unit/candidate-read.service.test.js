@@ -7,7 +7,7 @@ const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const User = require('../../src/models/user.model');
 const engagementClient = require('../../src/services/engagement-client.service');
-const { getCandidateById } = require('../../src/services/candidate.service');
+const { getCandidateById, getOwnCandidate } = require('../../src/services/candidate.service');
 const { UNKNOWN, PROFILE_FIELDS, CANDIDATE_STATUS } = require('../../src/config/candidate');
 
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b6';
@@ -67,6 +67,23 @@ function isolateLookup(context, stored) {
   });
   return { findOne, query };
 }
+
+test('candidate resolves own current profile by authenticated user instead of browser state', async (context) => {
+  const stored = storedCandidate();
+  const { findOne, query } = isolateLookup(context, stored);
+  const result = await getOwnCandidate(ownerId);
+  assert.deepEqual(findOne.mock.calls[0].arguments[0], { user: ownerId, deletedAt: null });
+  assert.equal(query.projection.email, 1);
+  assert.equal(query.projection.password, undefined);
+  assert.equal(result._id, candidateId);
+  assert.equal(result.email, 'maria@example.com');
+  assert.equal(result.purchaseCode, undefined);
+});
+
+test('candidate self lookup returns 404 when authenticated user has no current profile', async (context) => {
+  isolateLookup(context, null);
+  await assert.rejects(getOwnCandidate(ownerId), { statusCode: 404 });
+});
 
 for (const status of Object.values(CANDIDATE_STATUS)) {
   test(`candidate owner can view own ${status} profile including status`, async (context) => {

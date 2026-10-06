@@ -359,6 +359,13 @@ async function getCandidateById(candidateId, requesterId, requesterRole) {
     : enterpriseCandidateData(candidate);
 }
 
+async function getOwnCandidate(userId) {
+  const candidate = await Candidate.findOne({ user: userId, deletedAt: null })
+    .select(CANDIDATE_READ_PROJECTION).lean();
+  if (!candidate) throw new ApiError(404, 'Candidato nao encontrado');
+  return publicCandidateData(candidate, true);
+}
+
 async function updateCandidateFields(candidate, updates) {
   const current = typeof candidate.toObject === 'function' ? candidate.toObject() : candidate;
   const status = statusForCandidate({ ...current, ...updates });
@@ -528,6 +535,7 @@ module.exports = {
   revalidatePendingCandidate,
   validateCandidateEligibility,
   getCandidateById,
+  getOwnCandidate,
   updateCandidate,
   deleteCandidate,
 };
