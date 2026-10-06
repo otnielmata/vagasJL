@@ -4,7 +4,7 @@ const MatchProfileConfiguration = require('../models/match-profile-configuration
 const User = require('../models/user.model');
 const ApiError = require('../errors/api.error');
 const { CANDIDATE_STATUS, CANDIDATE_MINIMUM_PROFILE_FIELDS, ELIGIBILITY_STATUS,
-  UNKNOWN } = require('../config/candidate');
+  ELIGIBILITY_METHOD, ELIGIBILITY_SOURCE, UNKNOWN } = require('../config/candidate');
 const { completionFor } = require('./candidate-match-profile.service');
 const { getPublishedProfileCompletionThreshold, meetsProfileCompletionThreshold } =
   require('./profile-completion-threshold-configuration.service');
@@ -65,8 +65,9 @@ async function ensureMatchProfileCompletion(candidate) {
   }
 }
 
-async function ensureActivationReady(candidate) {
-  if (candidate.eligibility?.status !== ELIGIBILITY_STATUS.APPROVED) {
+async function ensureActivationReady(candidate, allowAdministrativeApproval = false) {
+  if (candidate.eligibility?.status === ELIGIBILITY_STATUS.REJECTED ||
+      candidate.eligibility?.status !== ELIGIBILITY_STATUS.APPROVED && !allowAdministrativeApproval) {
     throw new ApiError(409, 'Candidato sem elegibilidade aprovada');
   }
   if (!hasCompleteProfessionalProfile(candidate)) {
@@ -89,15 +90,25 @@ function result(candidate, previousStatus, changed, changedAt = null) {
   };
 }
 
-function statusUpdate(previousStatus, status, actor, reason, now) {
+function statusUpdate(candidate, status, actor, reason, now) {
   const set = {
     status,
     opportunitySearchCacheInvalidatedAt: now,
   };
   const increment = { opportunitySearchCacheVersion: 1 };
   const push = { statusHistory: {
-    from: previousStatus, to: status, actor: actor.id, changedAt: now, reason,
+    from: candidate.status, to: status, actor: actor.id, changedAt: now, reason,
   } };
+  if (status === CANDIDATE_STATUS.ACTIVE &&
+      candidate.eligibility?.status !== ELIGIBILITY_STATUS.APPROVED) {
+    Object.assign(set, {
+      'eligibility.status': ELIGIBILITY_STATUS.APPROVED,
+      'eligibility.method': ELIGIBILITY_METHOD.TRUSTED_IDENTIFIER,
+      'eligibility.source': ELIGIBILITY_SOURCE.MONGODB,
+      'eligibility.lastAttemptAt': now,
+      'eligibility.approvedAt': now,
+    });
+  }
   if (status === CANDIDATE_STATUS.BLOCKED) {
     Object.assign(set, {
       availableForOpportunities: false,
@@ -131,7 +142,7 @@ function statusUpdate(previousStatus, status, actor, reason, now) {
 }
 
 async function persistStatus(candidate, status, actor, reason, now, session) {
-  const update = statusUpdate(candidate.status, status, actor, reason, now);
+  const update = statusUpdate(candidate, status, actor, reason, now);
   const options = { new: true, runValidators: true, ...(session ? { session } : {}) };
   const updated = await Candidate.findOneAndUpdate({
     _id: candidate._id, status: candidate.status, updatedAt: candidate.updatedAt, deletedAt: null,
@@ -161,7 +172,7 @@ async function updateCandidateStatus(actor, candidateId, input, now = new Date()
   if (!TRANSITIONS[previousStatus]?.includes(status)) {
     throw new ApiError(409, 'Transicao de status de candidato nao permitida');
   }
-  if (status === CANDIDATE_STATUS.ACTIVE) await ensureActivationReady(candidate);
+  if (status === CANDIDATE_STATUS.ACTIVE) await ensureActivationReady(candidate, true);
 
   let updated;
   if (status === CANDIDATE_STATUS.BLOCKED) {
