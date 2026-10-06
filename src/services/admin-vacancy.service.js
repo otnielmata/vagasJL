@@ -147,8 +147,8 @@ async function createVacancy(actor, request, input, prepared, now) {
 async function updateVacancy(actor, request, input, existing, prepared, now) {
   if (input.origin !== existing.origin) throw new ApiError(409, 'Origem da vaga e imutavel');
   if (['removed', 'rejected'].includes(existing.status)) throw new ApiError(409, 'Vaga encerrada');
-  if (input.status !== existing.status && !TRANSITIONS[existing.status]?.includes(input.status)) {
-    throw new ApiError(409, 'Transicao de status invalida');
+  if (input.status !== existing.status) {
+    throw new ApiError(403, 'Revisao de status reservada ao perfil master');
   }
   if (input.status === 'expired' && (!prepared.expiresAt || new Date(prepared.expiresAt) > now)) {
     throw new ApiError(422, 'Vaga so pode expirar quando seu prazo estiver encerrado');

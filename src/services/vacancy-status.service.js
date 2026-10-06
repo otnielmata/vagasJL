@@ -114,10 +114,9 @@ async function updateStatus(actor, id, input, now = new Date()) {
       throw new ApiError(403, 'Transicao reservada a administracao');
     }
   } else if (actor?.role === 'master') {
-    if (vacancy.origin !== 'IMPORTED' || status !== 'active') {
-      throw new ApiError(403, 'Perfil master pode publicar somente vagas importadas');
-    }
-  } else if (actor?.role !== 'admin') {
+    const account = await User.findOne({ _id: actor.id, role: 'master', status: 'active' }).select('_id');
+    if (!account) throw new ApiError(403, 'Conta master inativa ou inexistente');
+  } else {
     throw new ApiError(403, 'Acesso negado');
   }
   if (!TRANSITIONS[vacancy.status]?.includes(status)) {

@@ -59,6 +59,9 @@ function parseQuery(actor, query = {}) {
   if (actor.role === 'company' && filters.origin && filters.origin !== 'COMPANY') {
     throw new ApiError(400, 'Empresas podem consultar somente suas proprias vagas');
   }
+  if (actor.role === 'admin' && filters.origin && filters.origin !== 'ADMIN') {
+    throw new ApiError(400, 'Administradores podem consultar somente as vagas que cadastraram');
+  }
   return { page, filters };
 }
 
@@ -107,6 +110,9 @@ async function listVacancies(actor, query = {}, now = new Date()) {
       .select('company').lean();
     filter.origin = 'COMPANY';
     filter.company = { $in: memberships.map((membership) => membership.company) };
+  } else if (actor.role === 'admin') {
+    filter.origin = 'ADMIN';
+    filter.createdBy = actor.id;
   }
   const projection = actor.role === 'candidate'
     ? '-applicationChannel -statusHistory -requirementsHistory'

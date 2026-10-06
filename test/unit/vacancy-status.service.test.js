@@ -40,9 +40,9 @@ function setup(context, overrides = {}) {
   return { vacancy, update, companyQuery, memberQuery };
 }
 
-test('admin publishes validated pending vacancy atomically without changing technical profile or origin', async (context) => {
+test('master publishes validated pending vacancy atomically without changing technical profile or origin', async (context) => {
   const { update, vacancy } = setup(context);
-  const result = await updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  const result = await updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Revisao aprovada' }, now);
   assert.equal(result.status, 'active');
   assert.equal(result.origin, 'COMPANY');
@@ -56,7 +56,7 @@ test('vacancy with explicit geographic restrictions cannot activate without publ
   const { update } = setup(context, { geographicRestrictions: {
     country: { value: 'brasil', importance: 'required' },
   } });
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Revisao aprovada' }, now), { statusCode: 409 });
   assert.equal(update.mock.callCount(), 0);
 });
@@ -66,7 +66,7 @@ test('imported vacancy can activate with classified identified field after false
     importSource: 'board', importSourceId: 'job-1',
     matchProfile: { configurationVersion: 1, values: { automation: ['automation'] },
       requirements: [{ field: 'automation', id: 'automation', importance: 'required' }] } });
-  const result = await updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  const result = await updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Revisao da importacao' }, now);
   assert.equal(result.status, 'active');
   assert.equal(result.origin, 'IMPORTED');
@@ -77,7 +77,7 @@ test('imported vacancy with only unidentified false fields cannot activate', asy
   const { update } = setup(context, { origin: 'IMPORTED', company: null, createdBy: null,
     importSource: 'board', importSourceId: 'job-2',
     matchProfile: { configurationVersion: 1, values: {}, requirements: [] } });
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Tentar publicar' }, now), { statusCode: 409 });
   assert.equal(update.mock.callCount(), 0);
 });
@@ -101,14 +101,21 @@ test('company cannot publish, reject or change another origin', async (context) 
   assert.equal(update.mock.callCount(), 0);
 });
 
+test('administrator cannot review vacancy status', async (context) => {
+  const { update } = setup(context);
+  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+    { status: 'active', reason: 'Tentar revisar' }, now), { statusCode: 403 });
+  assert.equal(update.mock.callCount(), 0);
+});
+
 test('terminal and stale transitions fail without writing', async (context) => {
   const { update } = setup(context, { status: 'removed' });
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Reabrir' }, now), { statusCode: 409 });
   assert.equal(update.mock.callCount(), 0);
   const { update: staleUpdate } = setup(context, { status: 'paused' });
   staleUpdate.mock.mockImplementation(async () => null);
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Retomar' }, now), { statusCode: 409 });
 });
 
@@ -117,7 +124,7 @@ test('invalid identifiers and forbidden body fields fail before writes', async (
   await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, 'bad',
     { status: 'active', reason: 'OK' }, now), { statusCode: 400 });
   for (const field of ['origin', 'matchProfile', 'company']) {
-    await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+    await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
       { status: 'active', reason: 'OK', [field]: 'forged' }, now), { statusCode: 400 });
   }
   assert.equal(update.mock.callCount(), 0);
@@ -134,15 +141,15 @@ test('deadline blocks ranking before materialization and batch expiry records pr
   assert.equal(update.mock.calls[0].arguments[1].$push.statusHistory.process, 'deadline');
 });
 
-test('expired vacancy requires administrator and express revalidation before reactivation', async (context) => {
+test('expired vacancy requires master and express revalidation before reactivation', async (context) => {
   const { vacancy, update } = setup(context, { status: 'expired',
     expiresAt: new Date('2026-09-17T11:00:00Z') });
   await assert.rejects(updateStatus({ id: actorId, role: 'company' }, vacancyId,
     { status: 'active', reason: 'Retomar' }, now), { statusCode: 403 });
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Revalidado' }, now), { statusCode: 409 });
   vacancy.expiresAt = new Date('2026-09-20T00:00:00Z');
-  const result = await updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  const result = await updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Prazo prorrogado e perfil revalidado' }, now);
   assert.equal(result.status, 'active');
   assert.equal(update.mock.callCount(), 1);
@@ -151,11 +158,11 @@ test('expired vacancy requires administrator and express revalidation before rea
 test('publication rejects vacancy without identifiable provenance or valid catalog', async (context) => {
   const { vacancy, update } = setup(context);
   vacancy.origin = null;
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Publicar' }, now), { statusCode: 409 });
   vacancy.origin = 'COMPANY';
   vacancy.matchProfile = { configurationVersion: 1, values: { type: ['invented'] } };
-  await assert.rejects(updateStatus({ id: actorId, role: 'admin' }, vacancyId,
+  await assert.rejects(updateStatus({ id: actorId, role: 'master' }, vacancyId,
     { status: 'active', reason: 'Publicar' }, now), { statusCode: 409 });
   assert.equal(update.mock.callCount(), 0);
 });

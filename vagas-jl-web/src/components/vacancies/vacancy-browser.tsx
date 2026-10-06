@@ -68,7 +68,11 @@ function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin:
   );
 }
 
-export function VacancyBrowser({ admin = false, company = false }: { admin?: boolean; company?: boolean }) {
+export function VacancyBrowser({ admin = false, company = false, hideOrigin = false }: {
+  admin?: boolean;
+  company?: boolean;
+  hideOrigin?: boolean;
+}) {
   const [draft, setDraft] = useState<VacancyListFilters>(EMPTY);
   const [filters, setFilters] = useState<VacancyListFilters>(EMPTY);
   const [page, setPage] = useState(1);
@@ -93,7 +97,7 @@ export function VacancyBrowser({ admin = false, company = false }: { admin?: boo
         <CardBody>
           <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={apply}>
             <Input wrapperClassName="md:col-span-2" label="Pesquisar" placeholder="Título, descrição, referência ou localização" value={draft.q ?? ''} onChange={(event) => set('q', event.target.value)} />
-            {!company && <Select label="Origem" value={draft.origin ?? ''} onChange={(event) => set('origin', event.target.value)}>
+            {!company && !hideOrigin && <Select label="Origem" value={draft.origin ?? ''} onChange={(event) => set('origin', event.target.value)}>
               <option value="">Todas</option>
               <option value="IMPORTED">Importada</option><option value="COMPANY">Empresa</option><option value="ADMIN">Administração</option>
             </Select>}

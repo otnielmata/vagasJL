@@ -11,7 +11,7 @@ router.post('/:id/normalizacao', authenticate, authorize('admin', 'company'), en
   controller.normalizeDescription);
 router.get('/:id/candidatos/ranking', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.rankCandidates);
-router.patch('/:id/status', authenticate, authorize('admin', 'company'), ensureDatabase,
+router.patch('/:id/status', authenticate, authorize('master', 'company'), ensureDatabase,
   controller.updateStatus);
 router.patch('/:id/requisitos', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.updateRequirements);

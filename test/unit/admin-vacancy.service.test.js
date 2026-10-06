@@ -8,7 +8,6 @@ const Configuration = require('../../src/models/match-profile-configuration.mode
 const MatchEngineConfiguration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { manageAdminVacancy } = require('../../src/services/admin-vacancy.service');
-const { assessVacancyForMatch } = require('../../src/services/vacancy-origin.service');
 
 const vacancyId = '6512f1e2b3a1c2d3e4f5a6b7';
 const adminId = '6512f1e2b3a1c2d3e4f5a6b8';
@@ -87,7 +86,7 @@ test('creates prescribed vacancy as ADMIN and PENDING with private complete audi
   assert.equal(update.mock.callCount(), 0);
 });
 
-test('approves a complete pending vacancy and schedules affected Match recalculation', async (context) => {
+test('administrator cannot change status while reviewing vacancy content', async (context) => {
   const existing = existingVacancy();
   const engine = { version: 'MATCH_V2', revision: 2, state: 'published',
     weights: INITIAL_MATCH_WEIGHTS,
@@ -96,43 +95,31 @@ test('approves a complete pending vacancy and schedules affected Match recalcula
     minimumProfileCompletionPercentage: null, effectiveAt: now,
     recalculation: { policy: 'affected_matches' } };
   const { update } = setup(context, existing, engine);
-  const result = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
-    input({ version: 2, status: 'active', reason: 'Perfil revisado e aprovado' }), now);
-
-  assert.equal(result.vacancy.status, 'active');
-  assert.equal(result.vacancy.origin, 'ADMIN');
-  assert.equal(result.vacancy.adminRevision, 2);
-  assert.equal(result.vacancy.adminHistory.at(-1).before.status, 'pending');
-  assert.equal(result.vacancy.adminHistory.at(-1).after.status, 'active');
-  assert.equal(result.vacancy.adminHistory.at(-1).recalculation.status, 'scheduled');
-  assert.equal(result.vacancy.adminHistory.at(-1).recalculation.engineVersion, 'MATCH_V2');
-  assert.equal(update.mock.calls[0].arguments[1].$push.statusHistory.to, 'active');
-  assert.equal(assessVacancyForMatch(result.vacancy, now).eligible, true);
-});
-
-test('rejects activation with incomplete requirement classification using 422 and no write', async (context) => {
-  const existing = existingVacancy();
-  const { update } = setup(context, existing);
   await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
-    input({ version: 2, status: 'active', matchProfile: {
-      values: { type: 'remote', automation: 'cypress' },
-      requirements: [{ field: 'type', id: 'remote', importance: 'required' }],
-    } }), now), { statusCode: 422 });
+    input({ version: 2, status: 'active', reason: 'Perfil revisado e aprovado' }), now),
+  { statusCode: 403 });
   assert.equal(update.mock.callCount(), 0);
 });
 
-test('removes an active vacancy without physical deletion and keeps before and after history', async (context) => {
-  const existing = existingVacancy({ status: 'active' });
+test('administrator can save an incomplete pending draft without publishing it', async (context) => {
+  const existing = existingVacancy();
   const { update } = setup(context, existing);
   const result = await manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
-    input({ version: 2, status: 'removed', reason: 'Oportunidade encerrada' }), now);
-
-  assert.equal(result.vacancy.status, 'removed');
-  assert.equal(result.vacancy.deletedAt, null);
-  assert.equal(result.vacancy.adminHistory.at(-1).before.status, 'active');
-  assert.equal(result.vacancy.adminHistory.at(-1).after.status, 'removed');
-  assert.equal(assessVacancyForMatch(result.vacancy, now).eligible, false);
+    input({ version: 2, matchProfile: {
+      values: { type: 'remote', automation: 'cypress' },
+      requirements: [{ field: 'type', id: 'remote', importance: 'required' }],
+    } }), now);
+  assert.equal(result.vacancy.status, 'pending');
   assert.equal(update.mock.callCount(), 1);
+});
+
+test('administrator cannot remove an active vacancy', async (context) => {
+  const existing = existingVacancy({ status: 'active' });
+  const { update } = setup(context, existing);
+  await assert.rejects(manageAdminVacancy({ id: adminId, role: 'admin' }, vacancyId,
+    input({ version: 2, status: 'removed', reason: 'Oportunidade encerrada' }), now),
+  { statusCode: 403 });
+  assert.equal(update.mock.callCount(), 0);
 });
 
 test('preserves COMPANY and IMPORTED origins before catalog processing', async (context) => {

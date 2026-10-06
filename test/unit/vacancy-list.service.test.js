@@ -62,13 +62,14 @@ test('candidate lists ten active unexpired vacancies without Match calculation',
   assert.deepEqual(state.countFilter, state.filter);
 });
 
-test('admin can list every status and combine textual and structured filters', async (context) => {
+test('admin lists only own ADMIN vacancies and combines textual and structured filters', async (context) => {
   const { state } = setup(context);
   await listVacancies(admin, { q: 'automação', status: 'pending', origin: 'ADMIN',
     level: 'senior', role: 'qa_engineer', specialization: 'test_automation', country: 'Brasil' }, now);
 
   assert.equal(state.filter.status, 'pending');
   assert.equal(state.filter.origin, 'ADMIN');
+  assert.equal(state.filter.createdBy, admin.id);
   assert.equal(state.filter['matchProfile.values.level'], 'senior');
   assert.equal(state.filter['matchProfile.values.role'], 'qa_engineer');
   assert.equal(state.filter['matchProfile.values.specialization'], 'test_automation');
@@ -77,6 +78,7 @@ test('admin can list every status and combine textual and structured filters', a
   assert.ok(state.filter.$or.some((condition) => condition.sourceCompanyName));
   assert.equal(state.filter.$and, undefined);
   assert.equal(state.select, '-statusHistory -requirementsHistory');
+  assert.throws(() => parseQuery(admin, { origin: 'IMPORTED' }), { statusCode: 400 });
 });
 
 test('master can list registered vacancies from every status with the same protected projection', async (context) => {

@@ -24,3 +24,19 @@ test('GET /vagas is mounted for candidates, companies, administrators and master
     assert.equal(continued, true);
   }
 });
+
+test('PATCH /vagas/:id/status is restricted to master and company profiles', () => {
+  const route = router.stack.find((layer) => layer.route?.path === '/:id/status' &&
+    layer.route.methods.patch).route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  const response = { status(code) { this.code = code; return this; }, json() {} };
+  for (const role of ['master', 'company']) {
+    let continued = false;
+    handlers[1]({ user: { role } }, response, () => { continued = true; });
+    assert.equal(continued, true);
+  }
+  let continued = false;
+  handlers[1]({ user: { role: 'admin' } }, response, () => { continued = true; });
+  assert.equal(continued, false);
+  assert.equal(response.code, 403);
+});
