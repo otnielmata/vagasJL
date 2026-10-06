@@ -190,6 +190,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/admin/candidatos/{id}/status` | Master (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
 | GET    | `/master/empresas` | Master (Bearer) | Lista empresas atuais com ID e pesquisa por nome ou e-mail |
 | GET    | `/master/recrutadores` | Master (Bearer) | Lista somente usuários `admin` com ID, nome e e-mail |
+| GET    | `/master/candidatos` | Master (Bearer) | Lista candidatos em páginas de 15, com busca por nome/e-mail |
 | PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
 | PUT    | `/admin/vagas/{id}` | Master (Bearer) | Gerencia vaga administrativa com versão e auditoria (VJ-80) |
 | PUT    | `/admin/catalogos/{categoria}/{id}` | Admin (Bearer) | Publica item canônico do Catálogo Mestre (VJ-81) |

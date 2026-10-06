@@ -16,4 +16,12 @@ async function listRecruiters(req, res, next) {
   }
 }
 
-module.exports = { listCompanies, listRecruiters };
+async function listCandidates(req, res, next) {
+  try {
+    return res.status(200).json(await service.listCandidates(req.user, req.query));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { listCompanies, listRecruiters, listCandidates };

@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
+const Candidate = require('../../src/models/candidate.model');
 const User = require('../../src/models/user.model');
-const { listCompanies, listRecruiters, parseQuery, PAGE_SIZE } =
+const { listCompanies, listRecruiters, listCandidates, parseQuery, PAGE_SIZE, CANDIDATE_PAGE_SIZE } =
   require('../../src/services/master-directory.service');
 
 const master = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'master' };
@@ -72,9 +73,27 @@ test('master recruiter directory returns only admin profiles filtered by name or
   assert.equal(state.projection.password, undefined);
 });
 
+test('master candidate directory returns 15 current candidates filtered by name or email', async (context) => {
+  const state = mockList(context, Candidate, [{
+    _id: 'candidate', name: 'Maria', email: 'maria@example.com', phone: '11999999999', status: 'active',
+  }], 31);
+  const result = await listCandidates(master, { page: '2', q: 'Maria QA' });
+  assert.equal(result.limit, CANDIDATE_PAGE_SIZE);
+  assert.equal(result.pages, 3);
+  assert.equal(state.skip, 15);
+  assert.equal(state.limit, 15);
+  assert.equal(state.filter.deletedAt, null);
+  assert.equal(state.filter.$or[0].name.source, 'Maria QA');
+  assert.equal(state.filter.$or[1].email.source, 'Maria QA');
+  assert.equal(state.projection._id, 1);
+  assert.equal(state.projection.phone, 1);
+  assert.equal(state.projection.status, 1);
+});
+
 test('directory rejects non-master actors and invalid filters before storage', async () => {
   await assert.rejects(listCompanies({ role: 'admin' }), { statusCode: 403 });
   await assert.rejects(listRecruiters({ role: 'company' }), { statusCode: 403 });
+  await assert.rejects(listCandidates({ role: 'candidate' }), { statusCode: 403 });
   assert.throws(() => parseQuery({ page: '0' }), { statusCode: 400 });
   assert.throws(() => parseQuery({ q: ' ' }), { statusCode: 400 });
   assert.throws(() => parseQuery({ status: 'active' }), { statusCode: 400 });

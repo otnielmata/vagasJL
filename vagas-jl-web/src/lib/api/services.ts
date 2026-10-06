@@ -141,6 +141,10 @@ export const masterService = {
     api.get<{ items: User[]; page: number; limit: number; total: number; pages: number }>(
       '/master/recrutadores', { query: params },
     ),
+  listCandidates: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: Pick<Candidate, '_id' | 'name' | 'email' | 'phone' | 'status'>[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/candidatos', { query: params },
+    ),
   importVacancies: (file: File, options: { dryRun?: boolean; activatePending?: boolean } = {}) => {
     const body = new FormData();
     body.append('file', file);
