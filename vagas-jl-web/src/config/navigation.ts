@@ -34,7 +34,8 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   company: [
     { href: '/empresa', label: 'Visão geral', icon: LayoutDashboard },
     { href: '/empresa/vagas/nova', label: 'Nova vaga', icon: Briefcase },
-    { href: '/empresa/ranking', label: 'Top candidatos', icon: Users },
+    { href: '/empresa/vagas', label: 'Vagas cadastradas', icon: FileSearch },
+    { href: '/empresa/candidatos', label: 'Candidatos', icon: Users },
     { href: '/empresa/cadastro', label: 'Dados da empresa', icon: Building2 },
   ],
   admin: [

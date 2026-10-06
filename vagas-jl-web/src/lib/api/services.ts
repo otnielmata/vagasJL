@@ -101,7 +101,7 @@ export const companyService = {
 export const vacancyService = {
   list: (params: VacancyListFilters & { page?: number } = {}) =>
     api.get<VacancyListResponse>('/vagas', { query: { ...params } }),
-  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number } = {}) =>
+  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all' } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>
     api.patch<{ vacancy: Vacancy }>(`/vagas/${vacancyId}/status`, { status, reason }),

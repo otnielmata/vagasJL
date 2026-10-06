@@ -24,7 +24,7 @@ function asArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : value == null ? [] : [String(value)];
 }
 
-function VacancyListCard({ vacancy, admin }: { vacancy: Vacancy; admin: boolean }) {
+function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin: boolean; company: boolean }) {
   const values = vacancy.matchProfile?.values ?? {};
   const location = [vacancy.location?.city, vacancy.location?.state, vacancy.location?.country]
     .filter(Boolean).join(', ');
@@ -54,6 +54,11 @@ function VacancyListCard({ vacancy, admin }: { vacancy: Vacancy; admin: boolean 
               Ver detalhes <ArrowUpRight className="h-4 w-4" />
             </Link>
           )}
+          {company && vacancy.status === 'active' && (
+            <Link className={buttonClasses('outline', 'sm')} href={`/empresa/candidatos?vaga=${vacancy._id}`}>
+              Ver candidatos <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          )}
         </div>
         {vacancy.description && <p className="line-clamp-3 text-sm text-muted">{vacancy.description}</p>}
         {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}</div>}
@@ -63,7 +68,7 @@ function VacancyListCard({ vacancy, admin }: { vacancy: Vacancy; admin: boolean 
   );
 }
 
-export function VacancyBrowser({ admin = false }: { admin?: boolean }) {
+export function VacancyBrowser({ admin = false, company = false }: { admin?: boolean; company?: boolean }) {
   const [draft, setDraft] = useState<VacancyListFilters>(EMPTY);
   const [filters, setFilters] = useState<VacancyListFilters>(EMPTY);
   const [page, setPage] = useState(1);
@@ -88,10 +93,10 @@ export function VacancyBrowser({ admin = false }: { admin?: boolean }) {
         <CardBody>
           <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={apply}>
             <Input wrapperClassName="md:col-span-2" label="Pesquisar" placeholder="Título, descrição, referência ou localização" value={draft.q ?? ''} onChange={(event) => set('q', event.target.value)} />
-            <Select label="Origem" value={draft.origin ?? ''} onChange={(event) => set('origin', event.target.value)}>
+            {!company && <Select label="Origem" value={draft.origin ?? ''} onChange={(event) => set('origin', event.target.value)}>
               <option value="">Todas</option>
               <option value="IMPORTED">Importada</option><option value="COMPANY">Empresa</option><option value="ADMIN">Administração</option>
-            </Select>
+            </Select>}
             {admin && (
               <Select label="Status" value={draft.status ?? ''} onChange={(event) => set('status', event.target.value)}>
                 <option value="">Todos</option>
@@ -130,7 +135,7 @@ export function VacancyBrowser({ admin = false }: { admin?: boolean }) {
       ) : data?.items.length ? (
         <>
           <p className="text-sm text-muted">{data.total} vaga(s) encontrada(s) · 10 por página</p>
-          <div className="grid gap-4">{data.items.map((vacancy) => <VacancyListCard key={vacancy._id} vacancy={vacancy} admin={admin} />)}</div>
+          <div className="grid gap-4">{data.items.map((vacancy) => <VacancyListCard key={vacancy._id} vacancy={vacancy} admin={admin} company={company} />)}</div>
           <nav aria-label="Paginação das vagas" className="flex items-center justify-center gap-3">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft className="h-4 w-4" />Anterior</Button>
             <span className="text-sm text-muted">Página {data.page} de {Math.max(data.pages, 1)}</span>

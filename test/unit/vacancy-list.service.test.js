@@ -3,11 +3,13 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Vacancy = require('../../src/models/vacancy.model');
+const CompanyUser = require('../../src/models/company-user.model');
 const { listVacancies, parseQuery, PAGE_SIZE } = require('../../src/services/vacancy-list.service');
 
 const candidate = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'candidate' };
 const admin = { id: '6512f1e2b3a1c2d3e4f5a6b8', role: 'admin' };
 const master = { id: '6512f1e2b3a1c2d3e4f5a6b9', role: 'master' };
+const company = { id: '6512f1e2b3a1c2d3e4f5a6ba', role: 'company' };
 const now = new Date('2026-09-28T12:00:00Z');
 
 function setup(context, rows = [], total = rows.length) {
@@ -87,12 +89,26 @@ test('master can list registered vacancies from every status with the same prote
   assert.equal(state.select, '-statusHistory -requirementsHistory');
 });
 
+test('company lists only vacancies from its active recruiter memberships', async (context) => {
+  const companyId = '6512f1e2b3a1c2d3e4f5a6bb';
+  context.mock.method(CompanyUser, 'find', () => ({
+    select: () => ({ lean: async () => [{ company: companyId }] }),
+  }));
+  const { state } = setup(context, [{ _id: 'own' }], 1);
+  const result = await listVacancies(company, { status: 'active' }, now);
+  assert.equal(result.total, 1);
+  assert.equal(state.filter.origin, 'COMPANY');
+  assert.deepEqual(state.filter.company, { $in: [companyId] });
+  assert.equal(state.filter.status, 'active');
+  assert.throws(() => parseQuery(company, { origin: 'IMPORTED' }), { statusCode: 400 });
+});
+
 test('rejects unsupported filters, invalid pagination and restricted candidate status', () => {
   assert.throws(() => parseQuery(candidate, { unexpected: 'x' }), { statusCode: 400 });
   assert.throws(() => parseQuery(candidate, { page: '0' }), { statusCode: 400 });
   assert.throws(() => parseQuery(candidate, { status: 'pending' }), { statusCode: 400 });
   assert.throws(() => parseQuery(admin, { origin: 'UNKNOWN' }), { statusCode: 400 });
-  assert.throws(() => parseQuery({ role: 'company' }, {}), { statusCode: 403 });
+  assert.throws(() => parseQuery({ role: 'unknown' }, {}), { statusCode: 403 });
 });
 
 test('escapes regex metacharacters in free-text filters', async (context) => {

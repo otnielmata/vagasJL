@@ -115,7 +115,7 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(second.items[0].percentage, 50);
 });
 
-test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit', async (context) => {
+test('company ranking accepts Top 3, Top 5, Top 10 and all candidates', async (context) => {
   const { candidates, profiles } = setup(context);
   candidates.splice(0, candidates.length);
   profiles.splice(0, profiles.length);
@@ -131,6 +131,11 @@ test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit
     assert.equal(result.total, 10);
     assert.equal(result.limit, limit);
   }
+  const all = await rankCandidates({ role: 'admin' }, vacancyId, { limit: 'all' }, now);
+  assert.equal(all.items.length, 10);
+  assert.equal(all.total, 10);
+  assert.equal(all.limit, 10);
+  assert.equal(all.pages, 1);
 });
 
 test('company ranking applies published cutoff before total and pagination', async (context) => {

@@ -19,10 +19,19 @@ const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
+function rankingPagination(query = {}) {
+  if (query.limit !== 'all') return { ...pagination(query), all: false };
+  if (Object.keys(query).some((key) => !['page', 'limit'].includes(key)) ||
+      query.page !== undefined && query.page !== '1') {
+    throw new ApiError(400, 'Parametros de paginacao invalidos');
+  }
+  return { page: 1, limit: null, all: true };
+}
+
 async function rankCandidates(actor, id, query = {}, now = new Date(), auditContext = {}) {
   if (!['admin', 'company'].includes(actor?.role)) throw new ApiError(403, 'Acesso negado ao ranking');
   if (typeof id !== 'string' || !OBJECT_ID.test(id)) throw new ApiError(400, 'Identificador da vaga invalido');
-  const { page, limit } = pagination(query);
+  const { page, limit, all } = rankingPagination(query);
   const vacancy = await Vacancy.findById(id).select('+createdBy +deletedAt');
   if (!vacancy || vacancy.deletedAt) throw new ApiError(404, 'Vaga nao encontrada');
   if (actor.role === 'company') {
@@ -86,11 +95,11 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   const ranked = evaluated.filter(Boolean);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
-  return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
-    total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
+  return { items: (all ? ranked : ranked.slice((page - 1) * limit, page * limit)).map((row) => row.item),
+    total, page, limit: all ? total : limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
     rankingThresholdVersion: rankingThreshold?.version ?? null,
     engineConfigurationVersion: engineConfiguration?.version ?? null,
-    pages: Math.ceil(total / limit) };
+    pages: all ? (total ? 1 : 0) : Math.ceil(total / limit) };
 }
 
-module.exports = { rankCandidates };
+module.exports = { rankCandidates, rankingPagination };

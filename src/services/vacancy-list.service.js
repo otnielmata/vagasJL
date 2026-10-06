@@ -1,4 +1,5 @@
 const Vacancy = require('../models/vacancy.model');
+const CompanyUser = require('../models/company-user.model');
 const ApiError = require('../errors/api.error');
 
 const PAGE_SIZE = 10;
@@ -26,8 +27,8 @@ function escaped(value) {
 }
 
 function parseQuery(actor, query = {}) {
-  if (!['candidate', 'admin', 'master'].includes(actor?.role)) {
-    throw new ApiError(403, 'Apenas candidatos, administradores e master podem listar vagas');
+  if (!['candidate', 'company', 'admin', 'master'].includes(actor?.role)) {
+    throw new ApiError(403, 'Papel sem permissao para listar vagas');
   }
   if (Object.keys(query).some((key) => !ALLOWED_FILTERS.has(key))) {
     throw new ApiError(400, 'Filtros de vagas invalidos');
@@ -54,6 +55,9 @@ function parseQuery(actor, query = {}) {
   if (filters.status && !STATUSES.has(filters.status)) throw new ApiError(400, 'Status invalido');
   if (actor.role === 'candidate' && filters.status && filters.status !== 'active') {
     throw new ApiError(400, 'Candidatos podem consultar somente vagas ativas');
+  }
+  if (actor.role === 'company' && filters.origin && filters.origin !== 'COMPANY') {
+    throw new ApiError(400, 'Empresas podem consultar somente suas proprias vagas');
   }
   return { page, filters };
 }
@@ -98,6 +102,12 @@ function buildFilter(actor, filters, now) {
 async function listVacancies(actor, query = {}, now = new Date()) {
   const { page, filters } = parseQuery(actor, query);
   const filter = buildFilter(actor, filters, now);
+  if (actor.role === 'company') {
+    const memberships = await CompanyUser.find({ user: actor.id, role: 'recruiter', status: 'active' })
+      .select('company').lean();
+    filter.origin = 'COMPANY';
+    filter.company = { $in: memberships.map((membership) => membership.company) };
+  }
   const projection = actor.role === 'candidate'
     ? '-applicationChannel -statusHistory -requirementsHistory'
     : '-statusHistory -requirementsHistory';
