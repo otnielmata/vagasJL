@@ -36,7 +36,7 @@ export default function CadastroPage() {
 
   const roles: { value: RoleOpt; title: string; text: string; icon: typeof Briefcase }[] = [
     { value: 'candidate', title: 'Sou profissional de QA', text: 'Quero vagas compatíveis', icon: GraduationCap },
-    { value: 'company', title: 'Sou empresa', text: 'Quero encontrar talentos', icon: Briefcase },
+    { value: 'company', title: 'Sou recrutador', text: 'Quero encontrar talentos', icon: Briefcase },
   ];
 
   return (
@@ -70,7 +70,7 @@ export default function CadastroPage() {
         <Input label="Senha" type="password" autoComplete="new-password" minLength={8} required value={form.password} onChange={set('password')}
           hint="Mínimo de 8 caracteres." error={error?.fieldError('password')} />
         {role === 'company' && (
-          <Alert tone="info">Após criar a conta, a administração vincula você à empresa e libera o acesso aos candidatos.</Alert>
+          <Alert tone="info">Após criar a conta, o perfil Master vincula você à empresa e libera o acesso às vagas e candidatos.</Alert>
         )}
         {error && !error.errors?.length && <Alert tone="danger">{error.message}</Alert>}
         <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!form.name || !form.email || form.password.length < 8}>

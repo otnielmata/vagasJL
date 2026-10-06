@@ -1,19 +1,34 @@
+'use client';
+
 import Link from 'next/link';
-import { ArrowRight, Building2, FileSearch, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowRight, FileSearch, SlidersHorizontal, UserRound, Users } from 'lucide-react';
+import { useAuth } from '@/lib/auth/auth-context';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody } from '@/components/ui/card';
 
 const SECTIONS = [
-  { href: '/admin/empresas', icon: Building2, title: 'Empresas', text: 'Cadastrar, vincular recrutadores e ativar, inativar ou bloquear.' },
   { href: '/admin/candidatos', icon: Users, title: 'Candidatos', text: 'Visualizar o ranking de candidatos das vagas cadastradas por você.' },
   { href: '/admin/vagas', icon: FileSearch, title: 'Vagas', text: 'Cadastrar e consultar somente as suas vagas.' },
   { href: '/admin/configuracoes', icon: SlidersHorizontal, title: 'Parâmetros do Match', text: 'Match mínimo, completude mínima e multiplicadores.' },
 ];
 
 export default function AdminHome() {
+  const { user } = useAuth();
   return (
     <>
-      <PageHeader eyebrow="Administração" title="Painel administrativo" description="Gestão de candidatos, empresas, vagas, catálogos e parâmetros do Motor de Match." />
+      <PageHeader eyebrow="Recrutador" title={user?.name || 'Visão geral'}
+        description="Cadastre suas vagas e consulte os candidatos com maior compatibilidade." />
+      <Card className="mb-6">
+        <CardBody className="flex items-center gap-4">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-soft text-primary">
+            <UserRound className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="font-display font-semibold">{user?.name}</p>
+            <p className="text-sm text-muted">{user?.email}</p>
+          </div>
+        </CardBody>
+      </Card>
       <div className="grid gap-4 sm:grid-cols-2">
         {SECTIONS.map(({ href, icon: Icon, title, text }) => (
           <Link key={href} href={href} className="group">

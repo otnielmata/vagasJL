@@ -30,8 +30,8 @@ const TRANSITIONS = Object.freeze({
 });
 
 function validateRequest(actor, candidateId, input) {
-  if (actor?.role !== 'admin') {
-    throw new ApiError(403, 'Apenas administradores podem alterar o status do candidato');
+  if (!['master', 'admin'].includes(actor?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode alterar o status do candidato');
   }
   if (typeof candidateId !== 'string' || !OBJECT_ID.test(candidateId)) {
     throw new ApiError(400, 'Identificador de candidato invalido');

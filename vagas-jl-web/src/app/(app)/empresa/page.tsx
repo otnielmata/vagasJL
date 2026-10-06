@@ -11,8 +11,10 @@ import { Alert, EmptyState, Skeleton } from '@/components/ui/feedback';
 import { buttonClasses } from '@/components/ui/button';
 import { CompanyGate } from '@/components/company/company-gate';
 import { CompanyStatusBadge } from '@/components/match/status-badges';
+import { useAuth } from '@/lib/auth/auth-context';
 
 function Dashboard({ companyId }: { companyId: string }) {
+  const { user } = useAuth();
   const { data, error, loading } = useAsync(() => companyService.get(companyId), [companyId]);
   const vacancies = useAsync(() => vacancyService.list({ page: 1 }), []);
   const company = data?.company;
@@ -21,8 +23,8 @@ function Dashboard({ companyId }: { companyId: string }) {
     <>
       <PageHeader
         eyebrow="Visão geral"
-        title={company?.tradeName || company?.legalName || 'Sua empresa'}
-        description="Cadastre vagas com requisitos estruturados e veja os candidatos mais compatíveis."
+        title={user?.name || 'Recrutador'}
+        description={`Vinculado a ${company?.tradeName || company?.legalName || 'uma empresa'}. Cadastre vagas e veja os candidatos mais compatíveis.`}
         actions={
           <Link href="/empresa/vagas/nova" className={buttonClasses()}>
             <Plus className="h-4 w-4" /> Nova vaga
@@ -41,7 +43,14 @@ function Dashboard({ companyId }: { companyId: string }) {
       ) : null}
 
       {company && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-6 grid gap-4 sm:grid-cols-4">
+          <Card>
+            <CardBody>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">Recrutador</p>
+              <p className="mt-2 truncate font-display text-lg font-semibold">{user?.name}</p>
+              <p className="truncate text-xs text-muted">{user?.email}</p>
+            </CardBody>
+          </Card>
           <Card>
             <CardBody>
               <p className="text-xs font-medium uppercase tracking-wider text-muted">Status</p>

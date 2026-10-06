@@ -36,11 +36,11 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/empresa/vagas/nova', label: 'Nova vaga', icon: Briefcase },
     { href: '/empresa/vagas', label: 'Vagas cadastradas', icon: FileSearch },
     { href: '/empresa/candidatos', label: 'Candidatos', icon: Users },
-    { href: '/empresa/cadastro', label: 'Dados da empresa', icon: Building2 },
+    { href: '/empresa/cadastro', label: 'Meus dados', icon: UserRound },
   ],
   admin: [
     { href: '/admin', label: 'Visão geral', icon: LayoutDashboard },
-    { href: '/admin/empresas', label: 'Empresas', icon: Building2 },
+    { href: '/admin/perfil', label: 'Meus dados', icon: UserRound },
     { href: '/admin/candidatos', label: 'Candidatos', icon: Users },
     { href: '/admin/vagas/nova', label: 'Nova vaga', icon: Briefcase },
     { href: '/admin/vagas', label: 'Vagas', icon: FileSearch },
@@ -48,6 +48,8 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   ],
   master: [
     { href: '/master', label: 'Visão geral', icon: LayoutDashboard },
+    { href: '/master/empresas', label: 'Empresas', icon: Building2 },
+    { href: '/master/candidatos', label: 'Status dos candidatos', icon: Users },
     { href: '/master/importacao', label: 'Importar vagas', icon: UploadCloud },
     { href: '/master/vagas', label: 'Vagas cadastradas', icon: FileSearch },
   ],
@@ -55,7 +57,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
 
 export const ROLE_LABEL: Record<Role, string> = {
   candidate: 'Candidato',
-  company: 'Empresa',
-  admin: 'Administrador',
+  company: 'Recrutador',
+  admin: 'Recrutador',
   master: 'Master',
 };

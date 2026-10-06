@@ -6,7 +6,7 @@ const Company = require('../../src/models/company.model');
 const CompanyUser = require('../../src/models/company-user.model');
 const User = require('../../src/models/user.model');
 const Candidate = require('../../src/models/candidate.model');
-const { getRegistration } = require('../../src/services/company-read.service');
+const { getRegistration, getMyRegistration } = require('../../src/services/company-read.service');
 
 const companyId = '6512f1e2b3a1c2d3e4f5a6b7';
 const recruiterId = '6512f1e2b3a1c2d3e4f5a6b8';
@@ -140,4 +140,12 @@ test('admin sees empty users list when no active membership exists', async (cont
   const result = await getRegistration(admin, companyId);
   assert.deepEqual(result.usuarios, []);
   assert.equal(findUsers.mock.callCount(), 0);
+});
+
+test('recruiter resolves linked company without submitting a company identifier', async (context) => {
+  const { findMembership } = setup(context);
+  const result = await getMyRegistration(recruiter);
+  assert.equal(result.company._id, companyId);
+  assert.equal(result.usuarios[0]._id, recruiterId);
+  assert.equal(findMembership.mock.calls[0].arguments[0].user, recruiterId);
 });

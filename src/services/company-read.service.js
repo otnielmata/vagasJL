@@ -14,7 +14,7 @@ const COMPANY_PROJECTION = Object.freeze({
 });
 
 async function getRegistration(actor, companyId) {
-  if (!['admin', 'company'].includes(actor?.role)) {
+  if (!['master', 'admin', 'company'].includes(actor?.role)) {
     throw new ApiError(403, 'Perfil sem permissao para consultar empresa');
   }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
@@ -51,4 +51,12 @@ async function getRegistration(actor, companyId) {
   };
 }
 
-module.exports = { getRegistration };
+async function getMyRegistration(actor) {
+  if (actor?.role !== 'company') throw new ApiError(403, 'Apenas recrutadores podem consultar seu vinculo');
+  const membership = await CompanyUser.findOne({ user: actor.id, role: 'recruiter', status: 'active' })
+    .select({ company: 1 }).lean();
+  if (!membership) throw new ApiError(404, 'Recrutador ainda nao vinculado a uma empresa');
+  return getRegistration(actor, String(membership.company));
+}
+
+module.exports = { getRegistration, getMyRegistration };

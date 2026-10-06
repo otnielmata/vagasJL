@@ -6,7 +6,9 @@ const ApiError = require('../errors/api.error');
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 async function linkRecruiter(operator, companyId, input) {
-  if (operator?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem vincular recrutadores');
+  if (!['master', 'admin'].includes(operator?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode vincular recrutadores');
+  }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
     throw new ApiError(400, 'Identificador de empresa invalido');
   }

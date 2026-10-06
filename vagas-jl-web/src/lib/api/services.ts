@@ -90,6 +90,9 @@ export const companyService = {
   get: (id: string) => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
     `/empresas/${id}/cadastro`,
   ),
+  getMine: () => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
+    '/empresas/me/cadastro',
+  ),
   update: (id: string, input: { empresa?: Partial<CompanyInput>; usuarioAtual?: { name: string } }) =>
     api.patch<{ company: Company }>(`/empresas/${id}/cadastro`, input),
   remove: (id: string) => api.delete<void>(`/empresas/${id}/cadastro`),

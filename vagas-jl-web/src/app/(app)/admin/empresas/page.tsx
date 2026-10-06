@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Copy, Plus } from 'lucide-react';
 import { adminService, companyService } from '@/lib/api/services';
 import type { CompanyInput, CompanyStatus } from '@/lib/api/types';
@@ -13,10 +14,13 @@ import { Input } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { StatusChangeForm } from '@/components/admin/status-change-form';
 import { COMPANY_STATUS_LABEL } from '@/components/match/status-badges';
+import { useAuth } from '@/lib/auth/auth-context';
 
 const EMPTY = { legalName: '', tradeName: '', responsibleName: '', email: '', city: '', state: '', country: 'Brasil', website: '', segment: '' };
 
-export default function AdminCompaniesPage() {
+export default function MasterCompaniesPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [created, setCreated] = useState<string>();
@@ -24,6 +28,12 @@ export default function AdminCompaniesPage() {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState({ companyId: '', userId: '' });
   const [linkBusy, setLinkBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user?.role !== 'master') router.replace('/admin');
+  }, [loading, user, router]);
+
+  if (loading || user?.role !== 'master') return null;
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -61,7 +71,7 @@ export default function AdminCompaniesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Administração" title="Empresas" description="Somente empresas ativas consultam a base de candidatos." />
+      <PageHeader eyebrow="Perfil Master" title="Empresas" description="Cadastre empresas, vincule recrutadores e controle seus status." />
       <div className="space-y-6">
         <Card>
           <CardHeader title="Registrar empresa" description="A empresa é criada como Pendente." />
@@ -82,7 +92,7 @@ export default function AdminCompaniesPage() {
               {created && (
                 <Alert tone="success" className="sm:col-span-2" title="Empresa registrada"
                   action={<Button type="button" size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(created)}><Copy className="h-4 w-4" /> Copiar ID</Button>}>
-                  ID: <code className="font-mono">{created}</code> — envie ao recrutador para ele vincular a conta.
+                  ID: <code className="font-mono">{created}</code> — use este identificador para vincular o recrutador.
                 </Alert>
               )}
               <div className="flex justify-end sm:col-span-2">

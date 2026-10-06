@@ -16,7 +16,9 @@ const REQUIRED_COMPANY_FIELDS = Object.freeze([
 ]);
 
 function validateRequest(actor, companyId, input) {
-  if (actor?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem alterar o status da empresa');
+  if (!['master', 'admin'].includes(actor?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode alterar o status da empresa');
+  }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
     throw new ApiError(400, 'Identificador de empresa invalido');
   }
