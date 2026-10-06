@@ -359,7 +359,13 @@ test('email change atomically updates account and candidate and invalidates elig
   assert.ok(state.candidate.eligibilityHistory[0].invalidatedAt instanceof Date);
   assert.equal(result.email, 'new.email@example.com');
   assert.equal(result.status, CANDIDATE_STATUS.PENDING_VALIDATION);
-  for (const field of ['user', 'eligibility', 'eligibilityHistory', 'createdAt', 'updatedAt']) {
+  assert.deepEqual(result.eligibility, {
+    status: ELIGIBILITY_STATUS.PENDING,
+    method: ELIGIBILITY_METHOD.UNKNOWN,
+    lastAttemptAt: null,
+    approvedAt: null,
+  });
+  for (const field of ['user', 'eligibilityHistory', 'createdAt', 'updatedAt']) {
     assert.equal(result[field], undefined);
   }
   assert.equal(state.historyProjection, '+eligibilityHistory');

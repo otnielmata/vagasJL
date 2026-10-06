@@ -25,6 +25,7 @@ const CANDIDATE_READ_PROJECTION = Object.freeze({
   _id: 1,
   user: 1,
   status: 1,
+  eligibility: 1,
   ...Object.fromEntries(PUBLIC_CANDIDATE_FIELDS.map((field) => [field, 1])),
   enterpriseDisplayPermissions: 1,
 });
@@ -74,7 +75,15 @@ function publicCandidateData(candidate, includeStatus) {
       ? normalizePublicProfileValue(candidate[field])
       : candidate[field];
   }
-  if (includeStatus) result.status = candidate.status;
+  if (includeStatus) {
+    result.status = candidate.status;
+    result.eligibility = {
+      status: candidate.eligibility?.status || ELIGIBILITY_STATUS.PENDING,
+      method: candidate.eligibility?.method || ELIGIBILITY_METHOD.UNKNOWN,
+      lastAttemptAt: candidate.eligibility?.lastAttemptAt || null,
+      approvedAt: candidate.eligibility?.approvedAt || null,
+    };
+  }
   return result;
 }
 

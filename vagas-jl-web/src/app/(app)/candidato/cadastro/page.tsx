@@ -171,7 +171,7 @@ export default function CandidateRegistrationPage() {
                 {candidate && (
                   <div className="flex flex-wrap items-center gap-2">
                     <CandidateStatusBadge value={candidate.status} />
-                    {candidate.eligibility.status === 'approved' && (
+                    {candidate.eligibility?.status === 'approved' && (
                       <span className="inline-flex items-center gap-1 text-xs text-success">
                         <BadgeCheck className="h-4 w-4" /> Elegível
                       </span>
@@ -180,7 +180,7 @@ export default function CandidateRegistrationPage() {
                 )}
                 <Input label="Código da compra (opcional)" value={purchaseCode} onChange={(e) => setPurchaseCode(e.target.value)}
                   hint="Se o seu e-mail não for reconhecido, informe o código/hash da compra." />
-                {candidate && candidate.eligibility.status !== 'approved' && (
+                {candidate && candidate.eligibility?.status !== 'approved' && (
                   <Button variant="outline" className="w-full" onClick={validate} loading={validating}>
                     Validar elegibilidade
                   </Button>

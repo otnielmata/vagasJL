@@ -77,6 +77,9 @@ test('candidate resolves own current profile by authenticated user instead of br
   assert.equal(query.projection.password, undefined);
   assert.equal(result._id, candidateId);
   assert.equal(result.email, 'maria@example.com');
+  assert.deepEqual(result.eligibility, {
+    status: 'approved', method: 'purchase_code', lastAttemptAt: null, approvedAt: null,
+  });
   assert.equal(result.purchaseCode, undefined);
 });
 
