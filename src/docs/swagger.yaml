@@ -1068,11 +1068,12 @@ paths:
       tags: [Companies]
       summary: Administra o status empresarial com auditoria (VJ-77)
       description: >
-        Exige conta admin ativa. Ativacao requer cadastro minimo completo, vinculo recruiter
-        ativo e conta company ativa com email verificado. Inativacao e bloqueio invalidam
-        autorizacoes e impedem imediatamente consultas empresariais. Cada mudanca registra
-        estado anterior, novo estado, administrador, data e motivo. Repetir o estado atual e
-        idempotente e nao cria nova auditoria. Status nao pode ser alterado pelo endpoint de cadastro.
+        Exige conta master ativa. Ativacao requer apenas o cadastro minimo completo e independe
+        da existencia de vinculo com recrutador. A empresa pode retornar ao estado pending a
+        qualquer momento. Inativacao e bloqueio invalidam autorizacoes e impedem imediatamente
+        consultas empresariais. Cada mudanca registra estado anterior, novo estado, administrador,
+        data e motivo. Repetir o estado atual e idempotente e nao cria nova auditoria. Status nao
+        pode ser alterado pelo endpoint de cadastro.
       security:
         - bearerAuth: []
       parameters:
@@ -1098,9 +1099,9 @@ paths:
                 $ref: '#/components/schemas/CompanyStatusUpdateResponse'
         '400': { description: Identificador, status, motivo ou corpo invalidos }
         '401': { description: JWT ausente, invalido ou conta inativa }
-        '403': { description: Papel diferente de admin }
+        '403': { description: Papel diferente de master }
         '404': { description: Empresa inexistente ou excluida }
-        '409': { description: Empresa inapta, transicao proibida ou alteracao concorrente }
+        '409': { description: Cadastro minimo incompleto ou alteracao concorrente }
         '503':
           $ref: '#/components/responses/Unavailable'
 

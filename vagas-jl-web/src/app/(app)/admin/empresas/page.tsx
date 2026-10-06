@@ -198,7 +198,7 @@ export default function MasterCompaniesPage() {
 
         <StatusChangeForm<CompanyStatus>
           title="Alterar status da empresa"
-          description="Ativar, inativar ou bloquear com motivo auditado."
+          description="Defina Pendente, Ativa, Inativa ou Bloqueada independentemente de vínculo com recrutador."
           idLabel="ID da empresa"
           statuses={(Object.keys(COMPANY_STATUS_LABEL) as CompanyStatus[]).map((v) => ({ value: v, label: COMPANY_STATUS_LABEL[v] }))}
           onSubmit={async (id, status, reason) => {
