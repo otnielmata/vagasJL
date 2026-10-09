@@ -36,8 +36,8 @@ function setup(context, overrides = {}) {
   const memberQuery = { select: async () => ({ _id: 'membership' }) };
   context.mock.method(CompanyUser, 'findOne', () => memberQuery);
   const userQuery = { select: async () => ({ _id: actorId }) };
-  context.mock.method(User, 'findOne', () => userQuery);
-  return { vacancy, update, companyQuery, memberQuery };
+  const findUser = context.mock.method(User, 'findOne', () => userQuery);
+  return { vacancy, update, companyQuery, memberQuery, findUser };
 }
 
 test('master publishes validated pending vacancy atomically without changing technical profile or origin', async (context) => {
@@ -83,12 +83,15 @@ test('imported vacancy with only unidentified false fields cannot activate', asy
 });
 
 test('company pauses own active vacancy and ranking excludes it', async (context) => {
-  const { update } = setup(context, { status: 'active' });
+  const { update, findUser } = setup(context, { status: 'active' });
   const result = await updateStatus({ id: actorId, role: 'company' }, vacancyId,
     { status: 'paused', reason: 'Selecao suspensa' }, now);
   assert.equal(result.status, 'paused');
   assert.equal(assessVacancyForMatch(result, now).eligible, false);
   assert.equal(update.mock.callCount(), 1);
+  assert.deepEqual(findUser.mock.calls[0].arguments[0], {
+    _id: actorId, role: 'company', status: 'active',
+  });
 });
 
 test('company cannot publish, reject or change another origin', async (context) => {

@@ -31,7 +31,7 @@ export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
           <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
         ) : error ? (
           <Alert tone={error.status === 403 ? 'warning' : 'danger'}>
-            {error.status === 403 ? 'A vaga deve pertencer ao usuário autenticado.' : error.status === 404 ? 'Vaga inexistente ou ainda não ativa.' : error.message}
+            {error.status === 404 ? 'Vaga inexistente ou ainda não ativa.' : error.message}
           </Alert>
         ) : !data?.items.length ? (
           <EmptyState icon={Users} title="Nenhum candidato acima do Match mínimo" description="Revise a importância dos requisitos ou aguarde novos candidatos." />
