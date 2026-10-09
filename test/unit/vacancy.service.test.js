@@ -77,7 +77,7 @@ test('active linked recruiter creates pending COMPANY vacancy with canonical Mat
   assert.equal(createUser.mock.callCount(), 0);
   assert.equal(createCompany.mock.callCount(), 0);
   assert.deepEqual(findUser.mock.calls[0].arguments[0], {
-    _id: userId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
+    _id: userId, role: 'company', status: 'active',
   });
   assert.deepEqual(findCompany.mock.calls[0].arguments[0], {
     _id: companyId, status: 'active', deletedAt: null,
@@ -94,7 +94,7 @@ test('legacy admin recruiter also creates a pending vacancy only through the lin
   assert.equal(vacancy.status, 'pending');
   assert.equal(vacancy.company.toString(), companyId);
   assert.deepEqual(findUser.mock.calls[0].arguments[0], {
-    _id: userId, role: 'admin', status: 'active', emailVerifiedAt: { $type: 'date' },
+    _id: userId, role: 'admin', status: 'active',
   });
 });
 
@@ -189,7 +189,7 @@ test('pending, inactive, blocked and unlinked company receive 403', async (conte
   assert.equal(createVacancy.mock.callCount(), 0);
 });
 
-test('inactive or unverified account receives 403 before Match catalog lookup', async (context) => {
+test('missing or inactive account receives 403 before Match catalog lookup', async (context) => {
   const { accountQuery, findConfiguration, createVacancy } = setup(context);
   accountQuery.select = async () => null;
   await assert.rejects(registerCompanyVacancy(actor, companyId, minimum), { statusCode: 403 });

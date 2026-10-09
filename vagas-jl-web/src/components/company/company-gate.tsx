@@ -20,7 +20,11 @@ export function CompanyGate({ children }: { children: (companyId: string) => Rea
         </div>
         <h2 className="font-display text-lg font-semibold">Aguardando vínculo empresarial</h2>
         <p className="mt-1 text-sm text-muted">O perfil Master deve vincular sua conta de recrutador a uma empresa.</p>
-        {membership.error && <Alert tone="info" className="mt-5">Após o vínculo, o acesso será liberado automaticamente.</Alert>}
+        {membership.error && (
+          <Alert tone="info" className="mt-5">
+            {membership.error.message || 'Após o vínculo, o acesso será liberado automaticamente.'}
+          </Alert>
+        )}
       </CardBody>
     </Card>
   );

@@ -17,7 +17,7 @@ async function registerCompanyVacancy(actor, companyId, input) {
   }
   const data = normalizeVacancyInput(input);
   const account = await User.findOne({
-    _id: actor.id, role: actor.role, status: 'active', emailVerifiedAt: { $type: 'date' },
+    _id: actor.id, role: actor.role, status: 'active',
   }).select('_id');
   const company = account && await Company.findOne({
     _id: companyId, status: 'active', deletedAt: null,
