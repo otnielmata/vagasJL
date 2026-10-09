@@ -112,6 +112,16 @@ const applicationChannelSchema = new mongoose.Schema({
   type: { type: String, enum: ['https_url', 'email'], required: true },
   value: { type: String, required: true, trim: true, maxlength: 2000 },
 }, { _id: false });
+const importSourceDataSchema = new mongoose.Schema({
+  rawLocation: { type: String, default: null, maxlength: 2000 },
+  rawApplicationUrl: { type: String, default: null, maxlength: 2000 },
+  skillsRequiredCounter: { type: Number, default: null, min: 0 },
+  testingRelatedKeywords: { type: [String], default: [] },
+  amountOfTestingRelatedKeywords: { type: Number, default: null, min: 0 },
+  amountOfGenAITools: { type: Number, default: null, min: 0 },
+  hasGenAI: { type: Boolean, default: null },
+  isTestingRelated: { type: Boolean, default: null },
+}, { _id: false });
 
 const vacancySchema = new mongoose.Schema({
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, immutable: true },
@@ -119,6 +129,8 @@ const vacancySchema = new mongoose.Schema({
     select: false, immutable: true },
   importSource: { type: String, trim: true, maxlength: 100, default: null, immutable: true },
   importSourceId: { type: String, trim: true, maxlength: 200, default: null, immutable: true },
+  sourceCompanyName: { type: String, trim: true, maxlength: 200, default: null },
+  importSourceData: { type: importSourceDataSchema, default: null, select: false },
   importMappingAudit: { type: importMappingAuditSchema, default: null, select: false },
   importImportance: { type: new mongoose.Schema({
     version: { type: Number, required: true, min: 1 },
@@ -201,6 +213,19 @@ vacancySchema.index({ importSource: 1, importSourceId: 1 }, {
     origin: 'IMPORTED', importSource: { $type: 'string' }, importSourceId: { $type: 'string' },
   },
 });
+vacancySchema.index({ status: 1, updatedAt: -1 }, { name: 'vacancy_status_updated' });
+vacancySchema.index({ origin: 1, status: 1, updatedAt: -1 }, { name: 'vacancy_origin_status_updated' });
+vacancySchema.index({ 'location.country': 1, 'location.state': 1, 'location.city': 1, status: 1 }, {
+  name: 'vacancy_location_status',
+});
+vacancySchema.index({
+  'matchProfile.values.type': 1,
+  status: 1,
+}, { name: 'vacancy_type_status' });
+vacancySchema.index({
+  'matchProfile.values.level': 1,
+  status: 1,
+}, { name: 'vacancy_level_status' });
 
 vacancySchema.set('toJSON', {
   transform: (_document, result) => {
@@ -208,6 +233,7 @@ vacancySchema.set('toJSON', {
     delete result.createdBy;
     delete result.deletedAt;
     delete result.importMappingAudit;
+    delete result.importSourceData;
     delete result.statusHistory;
     delete result.requirementsHistory;
     delete result.normalizationRevision;

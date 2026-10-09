@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCompanyVacancies } from '@/lib/use-links';
+import { vacancyService } from '@/lib/api/services';
+import { useAsync } from '@/lib/use-async';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody } from '@/components/ui/card';
 import { Select, Input } from '@/components/ui/field';
@@ -12,11 +13,11 @@ import { CandidateRanking } from '@/components/match/candidate-ranking';
 function RankingContent() {
   const params = useSearchParams();
   const router = useRouter();
-  const [vacancies] = useCompanyVacancies();
+  const vacancies = useAsync(() => vacancyService.list({ status: 'active', page: 1 }), []);
   const selected = params.get('vaga') ?? '';
   const [manual, setManual] = useState('');
 
-  const go = (id: string) => router.replace(`/empresa/ranking?vaga=${id}`);
+  const go = (id: string) => router.replace(`/empresa/candidatos?vaga=${id}`);
 
   return (
     <>
@@ -25,7 +26,7 @@ function RankingContent() {
         <CardBody className="grid gap-4 sm:grid-cols-2 sm:items-end">
           <Select label="Vaga" value={selected} onChange={(e) => e.target.value && go(e.target.value)}>
             <option value="">Selecione uma vaga…</option>
-            {vacancies.map((v) => (
+            {vacancies.data?.items.map((v) => (
               <option key={v._id} value={v._id}>{v.title} ({v.reference})</option>
             ))}
           </Select>

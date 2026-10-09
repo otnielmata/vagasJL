@@ -40,6 +40,15 @@ async function showRegistration(req, res, next) {
   }
 }
 
+async function showMyRegistration(req, res, next) {
+  try {
+    const result = await companyReadService.getMyRegistration(req.user);
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function removeRegistration(req, res, next) {
   try {
     await companyDeleteService.deleteRegistration(req.user, req.params.id);
@@ -49,4 +58,5 @@ async function removeRegistration(req, res, next) {
   }
 }
 
-module.exports = { register, addUser, updateRegistration, showRegistration, removeRegistration };
+module.exports = { register, addUser, updateRegistration, showRegistration, showMyRegistration,
+  removeRegistration };

@@ -38,6 +38,7 @@ export default function VacancyImportPage() {
   }
 
   const summary = result?.importacao;
+  const failureCount = summary?.result?.failed ?? summary?.failures?.length ?? summary?.preview?.invalid ?? 0;
   return (
     <>
       <PageHeader
@@ -101,12 +102,13 @@ export default function VacancyImportPage() {
           <CardHeader title={summary.dryRun ? 'Validação concluída' : 'Importação concluída'} description={`${result.arquivo.nome} · configuração v${summary.configurationVersion}`} />
           <CardBody className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
-              {[['Recebidas', summary.received], ['Importáveis', summary.importable], ['Falhas', summary.failures?.length ?? summary.preview?.invalid ?? 0]].map(([label, value]) => (
+              {[['Recebidas', summary.received], ['Importáveis', summary.importable], ['Falhas', failureCount]].map(([label, value]) => (
                 <div key={String(label)} className="rounded-xl bg-surface-2 p-4"><p className="text-xs text-muted">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>
               ))}
             </div>
+            {summary.result && <Alert tone={failureCount ? 'warning' : 'success'}>Criadas: {summary.result.created ?? 0} · Atualizadas: {summary.result.updated ?? 0} · Já existentes: {summary.result.unchanged ?? 0}.</Alert>}
             {result.publicacao && <Alert tone={result.publicacao.failed ? 'warning' : 'success'}>Publicadas: {result.publicacao.activated} de {result.publicacao.pending} vagas pendentes.</Alert>}
-            {summary.failures?.length ? <Alert tone="warning">A importação teve {summary.failures.length} falha(s). Consulte a resposta da API para os detalhes.</Alert> : <Alert tone="success">O arquivo foi processado sem falhas registradas.</Alert>}
+            {failureCount ? <Alert tone="warning">A importação teve {failureCount} falha(s). A resposta apresenta uma amostra de até 50 ocorrências.</Alert> : <Alert tone="success">O arquivo foi processado sem falhas registradas.</Alert>}
           </CardBody>
         </Card>
       )}

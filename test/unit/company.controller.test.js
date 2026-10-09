@@ -9,7 +9,7 @@ const service = require('../../src/services/company.service');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('POST /empresas is mounted and restricted to authenticated admins', () => {
+test('POST /empresas is mounted and restricted to authenticated master', () => {
   assert.ok(app._router.stack.some((layer) => layer.regexp.test('/empresas')));
   const route = router.stack.find((layer) => layer.route?.path === '/').route;
   const handlers = route.stack.map((layer) => layer.handle);
@@ -22,6 +22,12 @@ test('POST /empresas is mounted and restricted to authenticated admins', () => {
   const forbidden = { status(code) { this.code = code; return this; }, json() {} };
   handlers[1]({ user: { role: 'company' } }, forbidden, () => assert.fail('company must stop'));
   assert.equal(forbidden.code, 403);
+  let masterPassed = false;
+  handlers[1]({ user: { role: 'master' } }, forbidden, () => { masterPassed = true; });
+  assert.equal(masterPassed, true);
+  let adminPassed = false;
+  handlers[1]({ user: { role: 'admin' } }, forbidden, () => { adminPassed = true; });
+  assert.equal(adminPassed, false);
 });
 
 test('controller returns 201 with company identifier and forwards errors', async (context) => {

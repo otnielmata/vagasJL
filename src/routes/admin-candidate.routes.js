@@ -5,6 +5,6 @@ const controller = require('../controllers/candidate-status.controller');
 
 const router = Router();
 
-router.patch('/:id/status', authenticate, authorize('admin'), ensureDatabase, controller.updateStatus);
+router.patch('/:id/status', authenticate, authorize('master'), ensureDatabase, controller.updateStatus);
 
 module.exports = router;

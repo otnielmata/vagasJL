@@ -12,7 +12,7 @@ import { MatchRing } from './match-ring';
 
 /** Top candidatos para uma vaga (VJ-50/63). Mesmo motor do ranking do candidato. */
 export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
-  const [limit, setLimit] = useState<3 | 5 | 10>(10);
+  const [limit, setLimit] = useState<3 | 10 | 'all'>(10);
   const { data, error, loading } = useAsync(() => vacancyService.candidateRanking(vacancyId, { limit }), [vacancyId, limit]);
 
   return (
@@ -22,7 +22,7 @@ export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
         description={data?.minimumMatchPercentage != null ? `Match mínimo: ${data.minimumMatchPercentage}% · ${data.total} candidatos` : 'Somente candidatos ativos e disponíveis.'}
         action={
           <Segmented ariaLabel="Quantidade" value={limit} onChange={setLimit}
-            options={[{ value: 3, label: 'Top 3' }, { value: 5, label: 'Top 5' }, { value: 10, label: 'Top 10' }]} />
+            options={[{ value: 3, label: 'Top 3' }, { value: 10, label: 'Top 10' }, { value: 'all', label: 'Todos' }]} />
         }
         className="flex-col sm:flex-row"
       />
@@ -31,7 +31,7 @@ export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
           <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
         ) : error ? (
           <Alert tone={error.status === 403 ? 'warning' : 'danger'}>
-            {error.status === 403 ? 'Sua empresa precisa estar ativa e a vaga deve pertencer a ela.' : error.status === 404 ? 'Vaga inexistente ou ainda não ativa.' : error.message}
+            {error.status === 404 ? 'Vaga inexistente ou ainda não ativa.' : error.message}
           </Alert>
         ) : !data?.items.length ? (
           <EmptyState icon={Users} title="Nenhum candidato acima do Match mínimo" description="Revise a importância dos requisitos ou aguarde novos candidatos." />

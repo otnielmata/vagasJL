@@ -180,20 +180,26 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/api/health`       | Não          | Verifica se a API está no ar         |
 | POST   | `/usuarios`        | Não          | Registra usuário ativo (VJ-1)        |
 | POST   | `/candidatos`      | Sim (Bearer) | Cadastra candidato e valida aluno (VJ-22) |
-| POST   | `/empresas`        | Admin (Bearer) | Registra empresa pendente (VJ-37) |
-| POST   | `/empresas/{id}/usuarios` | Admin (Bearer) | Vincula primeiro recrutador verificado (VJ-38) |
-| PATCH  | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Edita dados cadastrais (VJ-39) |
-| GET    | `/empresas/{id}/cadastro` | Admin/recrutador vinculado (Bearer) | Consulta empresa e usuários públicos permitidos (VJ-40) |
-| DELETE | `/empresas/{id}/cadastro` | Admin/responsável autorizado (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
-| PATCH  | `/admin/empresas/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
-| PATCH  | `/admin/candidatos/{id}/status` | Admin (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
+| GET    | `/candidatos/me`   | Candidato (Bearer) | Recupera o cadastro do usuário autenticado |
+| POST   | `/empresas`        | Master (Bearer) | Registra empresa pendente (VJ-37) |
+| POST   | `/empresas/{id}/usuarios` | Master (Bearer) | Vincula recrutador ativo à empresa ativa (VJ-38) |
+| PATCH  | `/empresas/{id}/cadastro` | Master (Bearer) | Edita dados cadastrais (VJ-39) |
+| GET    | `/empresas/{id}/cadastro` | Master (Bearer) | Consulta empresa e recrutadores vinculados (VJ-40) |
+| GET    | `/empresas/me/cadastro` | Recrutador vinculado (Bearer) | Resolve automaticamente a empresa do recrutador |
+| DELETE | `/empresas/{id}/cadastro` | Master (Bearer) | Encerra empresa e revoga vínculos (VJ-41) |
+| PATCH  | `/admin/empresas/{id}/status` | Master (Bearer) | Ativa, inativa ou bloqueia empresa com auditoria (VJ-77) |
+| PATCH  | `/admin/candidatos/{id}/status` | Master (Bearer) | Ativa, inativa ou bloqueia candidato com auditoria (VJ-78) |
+| GET    | `/master/empresas` | Master (Bearer) | Lista empresas atuais com ID e pesquisa por nome ou e-mail |
+| GET    | `/master/recrutadores` | Master (Bearer) | Lista somente usuários `admin` com ID, nome e e-mail |
+| GET    | `/master/candidatos` | Master (Bearer) | Lista candidatos em páginas de 15, com busca por nome/e-mail |
 | PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
-| PUT    | `/admin/vagas/{id}` | Admin (Bearer) | Cadastra ou revisa vaga com versão e auditoria (VJ-80) |
+| PUT    | `/admin/vagas/{id}` | Master (Bearer) | Gerencia vaga administrativa com versão e auditoria (VJ-80) |
 | PUT    | `/admin/catalogos/{categoria}/{id}` | Admin (Bearer) | Publica item canônico do Catálogo Mestre (VJ-81) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
 | PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
 | PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
 | PUT    | `/configuracoes/match/completude-minima` | Admin (Bearer) | Publica completude mínima para recomendações (VJ-73) |
+| GET    | `/vagas?page=1` | Candidato/Admin/Master (Bearer) | Lista 10 vagas por página, sem cálculo de Match, com filtros textuais e estruturados |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |
@@ -257,22 +263,16 @@ O acesso exige as condições descritas na VJ-38 abaixo.
 
 ## Usuário da empresa — VJ-38
 
-`POST /empresas/{id}/usuarios` exige JWT de administrador ativo e corpo `{ "userId": "<ObjectId>" }`.
-O usuário já deve existir com papel `company`, status `active` e identidade previamente verificada
-(`emailVerifiedAt` gravado por um processo confiável de verificação de titularidade). O registro
-público de usuários **não verifica e-mail** e não pode marcar essa data. Sem verificação confiável,
-o vínculo retorna **403**; não basta conhecer um e-mail ou informar que ele é seu. Esta história
-não implementa envio de convites nem fluxo de verificação de e-mail: até que esse processo seja
-disponibilizado, a identidade deve ser provisionada/verificada administrativamente de forma segura.
-
-A empresa deve existir e estar `pending` ou `active`. O endpoint cria somente um documento
+`POST /empresas/{id}/usuarios` exige JWT de perfil master ativo e corpo `{ "userId": "<ObjectId>" }`.
+O usuário já deve existir com papel de recrutador (`company` ou `admin`) e status `active`.
+A empresa deve existir e estar `active`; o vínculo não depende de `emailVerifiedAt`.
+O endpoint cria somente um documento
 `companyusers` com papel `recruiter` e status `active`; nunca cria outra credencial. A resposta
 **201** contém `{ "membership": { ... }, "user": { "_id", "name", "email" } }`, sem senha,
 hash, token, convite ou dados internos de auditoria. Dados inválidos retornam **400**, empresa
-inexistente **404**, e empresa inativa/bloqueada ou vínculo ativo duplicado **409**. Índices únicos
+inexistente **404**, e empresa não ativa ou vínculo ativo duplicado **409**. Índices únicos
 impedem mais de um vínculo ativo por empresa e que o mesmo usuário represente duas empresas.
-A troca do e-mail da conta invalida sua verificação; a exclusão da conta remove a associação na
-mesma transação.
+A exclusão da conta remove a associação na mesma transação.
 
 Em `GET /candidatos/{id}`, apenas conta `company` ativa com associação ativa e empresa `active`
 pode consultar candidato `active`. Empresas `pending`, `inactive`, `blocked` ou sem vínculo recebem
@@ -392,7 +392,8 @@ Usuários não administradores recebem **403** e campos adicionais no corpo rece
 
 ## Cadastro de vaga própria — VJ-42
 
-`POST /empresas/{id}/vagas` exige JWT de conta `company` ativa e verificada, vínculo
+`POST /empresas/{id}/vagas` exige JWT de conta de recrutador (`company` ou conta legada `admin`)
+ativa e verificada, vínculo
 `recruiter` ativo com a empresa do caminho e empresa `active` não excluída. O corpo requer
 `reference` (chave operacional única por empresa), `title`, `description` e
 `matchProfile.values.type` (modalidade do catálogo publicado). `location` é opcional e, quando
@@ -429,7 +430,7 @@ versão do catálogo. `origin`, `status`, `company` e `createdBy` são definidos
 tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa retorna **409**.
 O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
 com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
-ativação válida em história posterior.
+aprovação do perfil Master. Enquanto estiver `pending`, ela não participa de rankings.
 
 ## Origem e Perfil de Match das vagas — VJ-43
 
@@ -452,7 +453,7 @@ modificar o banco, execute `npm run vacancies:audit-origins` com `MONGODB_URI` c
 ## Status e prazo das vagas — VJ-44
 
 `PATCH /vagas/{id}/status` recebe apenas `{ "status": "active", "reason": "Revisão aprovada" }`.
-Vagas novas começam `pending`. O administrador pode publicar, rejeitar, pausar, expirar ou
+Vagas novas começam `pending`. O perfil Master pode publicar, rejeitar, pausar, expirar ou
 remover; a publicação valida dados essenciais, catálogo versionado e empresa ativa quando a
 origem é `COMPANY`. O recrutador ativo e vinculado pode apenas pausar, retomar ou remover
 vagas próprias. A reativação de `expired` é reservada ao administrador, requer prazo futuro
@@ -645,7 +646,7 @@ existir configuração consolidada vigente.
 
 ## Administração de vagas — VJ-80
 
-`PUT /admin/vagas/{id}` permite somente a uma conta administrativa ativa cadastrar uma vaga de
+`PUT /admin/vagas/{id}` permite somente a uma conta Master ativa cadastrar uma vaga de
 origem `ADMIN` com o identificador informado ou revisar uma vaga existente. O corpo representa a vaga
 completa e inclui `version`, `reason`, `origin`, `status`, dados da oportunidade e o Perfil de Match.
 Novas vagas devem começar com `version: 1`, origem `ADMIN` e status `pending`.
@@ -2117,7 +2118,7 @@ confirmação são simulados. Não foram executadas exclusões reais nem testes 
 
 A fonte oficial das vagas importadas é o arquivo publicado em
 `https://juliodelima.com.br/vagas/data/enriched-dataset.json` (`IMPORT_VACANCIES_URL`).
-O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da VJ-69:
+O adaptador `JL_ENRICHED_V2` converte cada item para o lote de conciliação da VJ-69:
 
 - **Identidade:** `id` do item (ID da vaga no LinkedIn) é o `importSourceId`; a fonte é `juliodelima-vagas`.
   A referência da vaga é `jl-<id>`. A versão é o hash do item: conteúdo igual não gera revisão.
@@ -2127,6 +2128,10 @@ O adaptador `JL_ENRICHED_V1` converte cada item para o lote de conciliação da 
   e `Outros` viram "não informado"; valores sem correspondência são omitidos e listados em `unmapped`
   para ampliar o catálogo (veja `vagas-jl-web/docs/perfil-match-catalogo-v2.json`).
   `english`/`spanish` = `true` usam o nível de `IMPORT_VACANCIES_LANGUAGE_LEVEL`.
+- **Empresa e localização:** `company` é preservado como nome da empresa de origem e `location` é
+  convertido, quando possível, em `city`, `state` e `country`, mantendo também o valor original na auditoria.
+- **Metadados não pontuáveis:** contadores, `testingRelatedKeywords`, `hasGenAI` e `isTestingRelated`
+  são preservados para auditoria, mas não entram diretamente no cálculo do Match.
 - **Canal:** a URL da vaga vira canal de candidatura quando o host está em `APPLICATION_ALLOWED_HOSTS`
   (inclua `www.linkedin.com`); caso contrário a vaga entra sem canal.
 - **Fechamento:** com `IMPORT_VACANCIES_CLOSE_MISSING=true`, vagas que saírem do arquivo ficam `expired`,
@@ -2148,3 +2153,5 @@ candidatos, empresas ou administradores.
 Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), importância padrão
 da importação publicada (`PUT /configuracoes/importacao/importancia-padrao`), `APPLICATION_ALLOWED_HOSTS`
 com `www.linkedin.com` e `CRON_SECRET` definido no projeto da Vercel.
+Uma importação real é interrompida antes de criar o lote quando a importância padrão ainda não foi publicada;
+o modo `dryRun` continua disponível para apresentar os problemas de configuração sem gravar vagas.

@@ -34,8 +34,9 @@ async function ensureCompanyAuthorized(actor, vacancy) {
   if (vacancy.origin !== 'COMPANY' || !vacancy.company) {
     throw new ApiError(403, 'Acesso negado a esta vaga');
   }
-  const account = await User.findOne({ _id: actor.id, role: 'company', status: 'active',
-    emailVerifiedAt: { $type: 'date' } }).select('_id');
+  const account = await User.findOne({
+    _id: actor.id, role: actor.role, status: 'active',
+  }).select('_id');
   const company = account && await Company.findOne({ _id: vacancy.company,
     status: 'active', deletedAt: null }).select('_id');
   const membership = company && await CompanyUser.findOne({ company: company._id,
@@ -114,10 +115,9 @@ async function updateStatus(actor, id, input, now = new Date()) {
       throw new ApiError(403, 'Transicao reservada a administracao');
     }
   } else if (actor?.role === 'master') {
-    if (vacancy.origin !== 'IMPORTED' || status !== 'active') {
-      throw new ApiError(403, 'Perfil master pode publicar somente vagas importadas');
-    }
-  } else if (actor?.role !== 'admin') {
+    const account = await User.findOne({ _id: actor.id, role: 'master', status: 'active' }).select('_id');
+    if (!account) throw new ApiError(403, 'Conta master inativa ou inexistente');
+  } else {
     throw new ApiError(403, 'Acesso negado');
   }
   if (!TRANSITIONS[vacancy.status]?.includes(status)) {

@@ -6,7 +6,9 @@ const ApiError = require('../errors/api.error');
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
 async function linkRecruiter(operator, companyId, input) {
-  if (operator?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem vincular recrutadores');
+  if (!['master', 'admin'].includes(operator?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode vincular recrutadores');
+  }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
     throw new ApiError(400, 'Identificador de empresa invalido');
   }
@@ -18,13 +20,13 @@ async function linkRecruiter(operator, companyId, input) {
 
   const company = await Company.findOne({ _id: companyId, deletedAt: null }).select('status');
   if (!company) throw new ApiError(404, 'Empresa nao encontrada');
-  if (!['pending', 'active'].includes(company.status)) {
-    throw new ApiError(409, 'Empresa inativa ou bloqueada nao pode receber recrutador');
+  if (company.status !== 'active') {
+    throw new ApiError(409, 'A empresa precisa estar ativa para receber recrutador');
   }
 
-  const user = await User.findById(input.userId).select('+emailVerifiedAt name email role status');
-  if (!user || user.role !== 'company' || user.status !== 'active' || !user.emailVerifiedAt) {
-    throw new ApiError(403, 'Conta empresarial ativa e identidade verificada sao obrigatorias');
+  const user = await User.findById(input.userId).select('name email role status');
+  if (!user || !['company', 'admin'].includes(user.role) || user.status !== 'active') {
+    throw new ApiError(403, 'Conta de recrutador ativa e obrigatoria');
   }
 
   await CompanyUser.init();

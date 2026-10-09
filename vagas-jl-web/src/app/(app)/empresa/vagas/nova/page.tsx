@@ -6,7 +6,6 @@ import { Send } from 'lucide-react';
 import { companyService } from '@/lib/api/services';
 import type { Importance, MatchFieldKey, MatchValues, VacancyRequirement } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
-import { useCompanyVacancies } from '@/lib/use-links';
 import { MATCH_FIELDS } from '@/config/match-catalog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
@@ -29,10 +28,9 @@ const IMPORTANCE: { value: Importance; label: string }[] = [
   { value: 'indifferent', label: 'Indiferente' },
 ];
 
-function NewVacancyForm({ companyId }: { companyId: string }) {
+export function VacancyForm({ companyId, admin = false }: { companyId?: string; admin?: boolean }) {
   const router = useRouter();
   const toast = useToast();
-  const [, addVacancy] = useCompanyVacancies();
   const [base, setBase] = useState({ reference: '', title: '', description: '', city: '', state: '', country: 'Brasil', channelType: 'https_url', channel: '', expiresAt: '' });
   const [reqs, setReqs] = useState<Partial<Record<MatchFieldKey, ReqState>>>({
     type: { value: ['remote'], importance: 'required', eliminatory: false },
@@ -69,7 +67,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
       const location = Object.fromEntries(
         (['city', 'state', 'country'] as const).filter((k) => base[k].trim()).map((k) => [k, base[k].trim()]),
       );
-      const { vacancy } = await companyService.createVacancy(companyId, {
+      const input = {
         reference: base.reference.trim(),
         title: base.title.trim(),
         description: base.description.trim(),
@@ -77,10 +75,10 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
         ...(base.expiresAt ? { expiresAt: new Date(`${base.expiresAt}T23:59:59`).toISOString() } : {}),
         ...(Object.keys(location).length ? { location } : {}),
         matchProfile: buildMatchProfile(),
-      });
-      addVacancy({ _id: vacancy._id, title: vacancy.title, reference: vacancy.reference, createdAt: vacancy.createdAt ?? new Date().toISOString() });
+      };
+      await companyService.createVacancy(companyId!, input);
       toast('success', 'Vaga criada e enviada para revisão.');
-      router.push('/empresa');
+      router.push(admin ? '/admin/vagas' : '/empresa/vagas');
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, { message: 'Erro inesperado' }));
     } finally {
@@ -92,7 +90,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6" noValidate>
-      <PageHeader eyebrow="Nova vaga" title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
+      <PageHeader eyebrow={admin ? 'Administração' : 'Nova vaga'} title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
 
       <Card>
         <CardHeader title="Dados da vaga" />
@@ -136,7 +134,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
                     <Input aria-label={def.label} type="number" min={0} max={100} step={0.5} wrapperClassName="w-40" placeholder="Mínimo"
                       value={typeof r?.value === 'number' ? r.value : ''} onChange={(e) => setReq(def.key, { value: e.target.value === '' ? null : Number(e.target.value) })} />
                   ) : (
-                    <ChipGroup ariaLabel={def.label} multiple={def.kind === 'multi'} options={def.options ?? []}
+                    <ChipGroup ariaLabel={def.label} multiple={def.key !== 'type' && def.kind === 'multi'} options={def.options ?? []}
                       value={(r?.value as string[] | null) ?? []} onChange={(v) => setReq(def.key, { value: v })} />
                   )}
                   {selected && (
@@ -162,11 +160,29 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
           <ChipGroup
             ariaLabel="Práticas exigidas"
             options={MATCH_FIELDS.filter((d) => d.kind === 'boolean').map((d) => ({ id: d.key, label: d.label }))}
-            value={MATCH_FIELDS.filter((d) => d.kind === 'boolean' && reqs[d.key]?.value === true).map((d) => d.key)}
+            value={MATCH_FIELDS.filter((d) => d.kind === 'boolean' && Array.isArray(reqs[d.key]?.value) && (reqs[d.key]!.value as string[]).length).map((d) => d.key)}
             onChange={(ids) =>
-              MATCH_FIELDS.filter((d) => d.kind === 'boolean').forEach((d) => setReq(d.key, { value: ids.includes(d.key) ? true : null }))
+              MATCH_FIELDS.filter((d) => d.kind === 'boolean').forEach((d) =>
+                setReq(d.key, { value: ids.includes(d.key) ? [d.options![0].id] : null }))
             }
           />
+          <div className="mt-5 space-y-4">
+            {MATCH_FIELDS.filter((d) => d.kind === 'boolean' && Array.isArray(reqs[d.key]?.value) &&
+              (reqs[d.key]!.value as string[]).length).map((def) => {
+              const requirement = reqs[def.key]!;
+              return (
+                <div key={def.key} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-surface-2 p-4">
+                  <span className="text-sm font-medium">{def.label}</span>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE} value={requirement.importance}
+                      onChange={(value) => setReq(def.key, { importance: value })} />
+                    {requirement.importance === 'required' && <div className="w-52"><Switch label="Eliminatório" checked={requirement.eliminatory}
+                      onChange={(value) => setReq(def.key, { eliminatory: value })} /></div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardBody>
       </Card>
 
@@ -181,5 +197,5 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 }
 
 export default function NewVacancyPage() {
-  return <CompanyGate>{(id) => <NewVacancyForm companyId={id} />}</CompanyGate>;
+  return <CompanyGate>{(id) => <VacancyForm companyId={id} />}</CompanyGate>;
 }

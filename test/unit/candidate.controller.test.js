@@ -80,6 +80,17 @@ test('candidate lookup authenticates and permits only candidate or company befor
   assert.equal(denied.statusCode, 403);
 });
 
+test('candidate self lookup authenticates candidate before storage', () => {
+  const route = router.stack.find((layer) => layer.route?.path === '/me' && layer.route.methods.get).route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  assert.equal(handlers[0], authenticate);
+  assert.equal(handlers[2], ensureDatabase);
+  assert.equal(handlers[3], candidateController.showMine);
+  const denied = { status(code) { this.statusCode = code; return this; }, json() {} };
+  handlers[1]({ user: { role: 'company' } }, denied, () => assert.fail('company must be denied'));
+  assert.equal(denied.statusCode, 403);
+});
+
 test('candidate update authenticates and permits only candidate before validation and storage', () => {
   const route = router.stack.find((layer) => layer.route?.path === '/:id' && layer.route.methods.patch).route;
   const handlers = route.stack.map((layer) => layer.handle);
@@ -227,6 +238,20 @@ test('candidate lookup controller returns 200 using authenticated identity and r
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { candidate });
   assert.deepEqual(service.mock.calls[0].arguments, ['candidate', 'owner', 'candidate']);
+});
+
+test('candidate self lookup controller returns profile for authenticated identity', async (context) => {
+  const candidate = { _id: 'candidate', name: 'Maria', email: 'maria@example.com', status: 'active' };
+  const service = context.mock.method(candidateService, 'getOwnCandidate', async () => candidate);
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  await candidateController.showMine({ user: { id: 'owner', role: 'candidate' } }, response,
+    () => assert.fail('unexpected error'));
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, { candidate });
+  assert.deepEqual(service.mock.calls[0].arguments, ['owner']);
 });
 
 for (const statusCode of [403, 404, 503]) {

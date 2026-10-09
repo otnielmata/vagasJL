@@ -34,6 +34,15 @@ async function show(req, res, next) {
   }
 }
 
+async function showMine(req, res, next) {
+  try {
+    const candidate = await candidateService.getOwnCandidate(req.user.id);
+    return res.status(200).json({ candidate });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function update(req, res, next) {
   try {
     const candidate = await candidateService.updateCandidate(
@@ -86,5 +95,5 @@ async function referToApplication(req, res, next) {
   }
 }
 
-module.exports = { register, validateEligibility, show, update, remove, rankVacancies,
+module.exports = { register, validateEligibility, show, showMine, update, remove, rankVacancies,
   showMatchDetail, referToApplication };

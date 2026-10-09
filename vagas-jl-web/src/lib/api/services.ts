@@ -25,6 +25,8 @@ import type {
   User,
   Vacancy,
   VacancyImportResult,
+  VacancyListFilters,
+  VacancyListResponse,
   VacancyRequirement,
   VacancyStatus,
 } from './types';
@@ -49,6 +51,7 @@ export const userService = {
 export const candidateService = {
   create: (input: CandidateInput & { name: string; email: string }) =>
     api.post<{ candidate: Candidate }>('/candidatos', input),
+  getMine: () => api.get<{ candidate: Candidate }>('/candidatos/me'),
   get: (id: string) => api.get<{ candidate: Candidate }>(`/candidatos/${id}`),
   update: (id: string, input: CandidateInput) => api.patch<{ candidate: Candidate }>(`/candidatos/${id}`, input),
   remove: (id: string) => api.delete<void>(`/candidatos/${id}`),
@@ -88,6 +91,9 @@ export const companyService = {
   get: (id: string) => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
     `/empresas/${id}/cadastro`,
   ),
+  getMine: () => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
+    '/empresas/me/cadastro',
+  ),
   update: (id: string, input: { empresa?: Partial<CompanyInput>; usuarioAtual?: { name: string } }) =>
     api.patch<{ company: Company }>(`/empresas/${id}/cadastro`, input),
   remove: (id: string) => api.delete<void>(`/empresas/${id}/cadastro`),
@@ -97,7 +103,9 @@ export const companyService = {
 };
 
 export const vacancyService = {
-  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number } = {}) =>
+  list: (params: VacancyListFilters & { page?: number } = {}) =>
+    api.get<VacancyListResponse>('/vagas', { query: { ...params } }),
+  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all' } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>
     api.patch<{ vacancy: Vacancy }>(`/vagas/${vacancyId}/status`, { status, reason }),
@@ -126,6 +134,18 @@ export const adminService = {
 };
 
 export const masterService = {
+  listCompanies: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: (Company & { hasRecruiter: boolean })[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/empresas', { query: params },
+    ),
+  listRecruiters: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: User[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/recrutadores', { query: params },
+    ),
+  listCandidates: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: Pick<Candidate, '_id' | 'name' | 'email' | 'phone' | 'status'>[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/candidatos', { query: params },
+    ),
   importVacancies: (file: File, options: { dryRun?: boolean; activatePending?: boolean } = {}) => {
     const body = new FormData();
     body.append('file', file);

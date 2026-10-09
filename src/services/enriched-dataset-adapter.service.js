@@ -9,7 +9,7 @@ const { normalizeCatalogAlias } = require('../config/master-catalog');
  * configuracao publicada do Perfil de Match. Valores sem correspondencia nao derrubam
  * a vaga: sao omitidos e contabilizados em `unmapped` para ampliar o catalogo.
  */
-const ENRICHED_DATASET_ADAPTER_VERSION = 'JL_ENRICHED_V1';
+const ENRICHED_DATASET_ADAPTER_VERSION = 'JL_ENRICHED_V2';
 
 // Campo do JSON -> campo canonico com lista de opcoes.
 const LIST_FIELDS = Object.freeze({
@@ -68,6 +68,41 @@ function cleanDescription(value) {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 10000);
+}
+
+function cleanOptionalText(value, maxLength = 200) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : null;
+}
+
+function parseLocation(value) {
+  const rawLocation = cleanOptionalText(value, 2000);
+  if (!rawLocation) return null;
+  const withoutModality = rawLocation.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const parts = withoutModality.split(',').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  if (parts.length === 1) {
+    return ['brasil', 'brazil'].includes(normalizeCatalogAlias(parts[0]))
+      ? { country: parts[0] } : { city: parts[0] };
+  }
+  if (parts.length === 2) return { city: parts[0], country: parts[1] };
+  return { city: parts[0], state: parts.slice(1, -1).join(', '), country: parts.at(-1) };
+}
+
+function sourceData(raw, rawUrl) {
+  const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  return {
+    rawLocation: cleanOptionalText(raw.location, 2000),
+    rawApplicationUrl: rawUrl,
+    skillsRequiredCounter: numeric(raw.skillsRequiredCounter),
+    testingRelatedKeywords: Array.isArray(raw.testingRelatedKeywords)
+      ? raw.testingRelatedKeywords.filter((value) => typeof value === 'string' && value.trim())
+        .map((value) => value.trim().slice(0, 100)).slice(0, 200)
+      : [],
+    amountOfTestingRelatedKeywords: numeric(raw.amountOfTestingRelatedKeywords),
+    amountOfGenAITools: numeric(raw.amountOfGenAITools),
+    hasGenAI: typeof raw.hasGenAI === 'boolean' ? raw.hasGenAI : null,
+    isTestingRelated: typeof raw.isTestingRelated === 'boolean' ? raw.isTestingRelated : null,
+  };
 }
 
 function isUnknown(value) {
@@ -146,7 +181,8 @@ function adaptEnrichedItem(raw, index, { languageLevel = 'intermediate', allowed
     if (ids.size) values[field] = [...ids].sort().slice(0, 50).map((id) => ({ identified: true, id }));
   }
 
-  let url = typeof raw.url === 'string' && /^https:\/\//i.test(raw.url.trim()) ? raw.url.trim() : null;
+  const rawUrl = typeof raw.url === 'string' && /^https:\/\//i.test(raw.url.trim()) ? raw.url.trim() : null;
+  let url = rawUrl;
   // Host fora de APPLICATION_ALLOWED_HOSTS: a vaga entra sem canal em vez de ser recusada.
   if (url && Array.isArray(allowedHosts)) {
     let host = '';
@@ -156,20 +192,21 @@ function adaptEnrichedItem(raw, index, { languageLevel = 'intermediate', allowed
       url = null;
     }
   }
+  const location = parseLocation(raw.location);
   const content = {
     reference: `jl-${normalizeCatalogAlias(sourceId).replace(/[^a-z0-9]/g, '') || sha256(sourceId).slice(0, 16)}`
       .slice(0, 100),
     title,
     description,
+    sourceCompanyName: cleanOptionalText(raw.company),
+    importSourceData: sourceData(raw, rawUrl),
     ...(url ? { applicationChannel: { type: 'https_url', value: url } } : {}),
-    ...(typeof raw.location === 'string' && raw.location.trim()
-      ? { location: raw.location.trim().slice(0, 2000) } : {}),
+    ...(location ? { location } : {}),
     matchProfile: { values },
   };
   return {
     sourceId,
     item: { sourceId, sourceVersion: sha256(stableJson(raw)).slice(0, 40), content },
-    company: typeof raw.company === 'string' ? raw.company.trim() : null,
     unmapped,
   };
 }
@@ -214,5 +251,5 @@ function adaptEnrichedDataset(dataset, configuration, options = {}) {
   };
 }
 
-module.exports = { adaptEnrichedDataset, adaptEnrichedItem, catalogIndex, cleanDescription,
+module.exports = { adaptEnrichedDataset, adaptEnrichedItem, catalogIndex, cleanDescription, parseLocation,
   ENRICHED_DATASET_ADAPTER_VERSION, sha256, stableJson };

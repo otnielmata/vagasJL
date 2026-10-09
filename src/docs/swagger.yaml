@@ -43,6 +43,53 @@ tags:
     description: Verificacao de disponibilidade da API
 
 paths:
+  /vagas:
+    get:
+      tags: [Vacancies]
+      summary: Lista vagas com filtros sem utilizar o Match
+      description: >
+        Retorna dez vagas por pagina. Candidatos consultam somente vagas ativas e nao expiradas;
+        administradores e master podem consultar todos os status. A ordenacao usa a atualizacao mais recente
+        e nenhum percentual de Match e calculado para montar esta listagem.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: origin, in: query, schema: { type: string, enum: [IMPORTED, COMPANY, ADMIN] } }
+        - { name: status, in: query, description: Disponivel apenas para administradores, schema: { type: string, enum: [pending, active, paused, expired, removed, rejected] } }
+        - { name: city, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: state, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: country, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: type, in: query, description: Modalidade canonica, schema: { type: string, maxLength: 100 } }
+        - { name: level, in: query, description: Senioridade canonica, schema: { type: string, maxLength: 100 } }
+        - { name: role, in: query, description: Funcao canonica, schema: { type: string, maxLength: 100 } }
+        - { name: specialization, in: query, description: Especializacao canonica, schema: { type: string, maxLength: 100 } }
+        - { name: skill, in: query, description: Identificador canonico da competencia, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: Pagina de vagas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, limit, total, pages, filters]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 10
+                    items: { $ref: '#/components/schemas/Vacancy' }
+                  page: { type: integer }
+                  limit: { type: integer, enum: [10] }
+                  total: { type: integer }
+                  pages: { type: integer }
+                  filters: { type: object }
+        '400': { description: Filtro ou pagina invalida }
+        '401': { description: JWT ausente ou invalido }
+        '403': { description: Papel sem acesso a listagem }
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /admin/catalogos/{category}/{id}:
     put:
       tags: [Match Profile]
@@ -1021,11 +1068,12 @@ paths:
       tags: [Companies]
       summary: Administra o status empresarial com auditoria (VJ-77)
       description: >
-        Exige conta admin ativa. Ativacao requer cadastro minimo completo, vinculo recruiter
-        ativo e conta company ativa com email verificado. Inativacao e bloqueio invalidam
-        autorizacoes e impedem imediatamente consultas empresariais. Cada mudanca registra
-        estado anterior, novo estado, administrador, data e motivo. Repetir o estado atual e
-        idempotente e nao cria nova auditoria. Status nao pode ser alterado pelo endpoint de cadastro.
+        Exige conta master ativa. Ativacao requer apenas o cadastro minimo completo e independe
+        da existencia de vinculo com recrutador. A empresa pode retornar ao estado pending a
+        qualquer momento. Inativacao e bloqueio invalidam autorizacoes e impedem imediatamente
+        consultas empresariais. Cada mudanca registra estado anterior, novo estado, administrador,
+        data e motivo. Repetir o estado atual e idempotente e nao cria nova auditoria. Status nao
+        pode ser alterado pelo endpoint de cadastro.
       security:
         - bearerAuth: []
       parameters:
@@ -1051,9 +1099,9 @@ paths:
                 $ref: '#/components/schemas/CompanyStatusUpdateResponse'
         '400': { description: Identificador, status, motivo ou corpo invalidos }
         '401': { description: JWT ausente, invalido ou conta inativa }
-        '403': { description: Papel diferente de admin }
+        '403': { description: Papel diferente de master }
         '404': { description: Empresa inexistente ou excluida }
-        '409': { description: Empresa inapta, transicao proibida ou alteracao concorrente }
+        '409': { description: Cadastro minimo incompleto ou alteracao concorrente }
         '503':
           $ref: '#/components/responses/Unavailable'
 
@@ -1157,12 +1205,11 @@ paths:
   /empresas/{id}/usuarios:
     post:
       tags: [Companies]
-      summary: Vincula o primeiro recrutador verificado a empresa (VJ-38)
+      summary: Vincula o primeiro recrutador ativo a empresa ativa (VJ-38)
       description: >
-        Exige conta admin ativa. Vincula uma conta company existente, ativa e com email
-        previamente verificado. Nao cria credenciais ou envia convite. Empresa pending
-        pode receber o vinculo, mas acesso aos candidatos exige empresa active, conta
-        ativa e vinculo active. O MVP limita a um vinculo ativo por empresa e por usuario.
+        Exige conta master ativa. Vincula uma conta de recrutador existente e ativa a uma
+        empresa ativa. Nao exige emailVerifiedAt, nao cria credenciais e nao envia convite.
+        O MVP limita a um vinculo ativo por empresa e por usuario.
       security:
         - bearerAuth: []
       parameters:
@@ -1211,7 +1258,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Nao admin ou conta nao verificada, inativa ou sem papel company
+          description: Perfil diferente de master ou conta de recrutador inativa/invalida
           content:
             application/json:
               schema:
@@ -1223,7 +1270,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Empresa inativa ou bloqueada, ou vinculo ativo duplicado
+          description: Empresa nao ativa ou vinculo ativo duplicado
           content:
             application/json:
               schema:

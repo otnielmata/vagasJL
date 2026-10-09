@@ -8,7 +8,8 @@ const MatchProfileConfiguration = require('../../src/models/match-profile-config
 const ProfileCompletionThresholdConfiguration =
   require('../../src/models/profile-completion-threshold-configuration.model');
 const User = require('../../src/models/user.model');
-const { CANDIDATE_STATUS, ELIGIBILITY_STATUS, UNKNOWN } = require('../../src/config/candidate');
+const { CANDIDATE_STATUS, ELIGIBILITY_STATUS, ELIGIBILITY_METHOD, ELIGIBILITY_SOURCE, UNKNOWN } =
+  require('../../src/config/candidate');
 const { updateCandidateStatus } = require('../../src/services/candidate-status.service');
 
 const candidateId = '6512f1e2b3a1c2d3e4f5a6b7';
@@ -89,9 +90,41 @@ test('admin activates eligible complete candidate and records audited status cha
   assert.equal(updateUser.mock.callCount(), 0);
 });
 
-test('activation rejects missing eligibility, incomplete profile and duplicate active email', async (context) => {
-  const { candidate, duplicateQuery, updateCandidate } = setup(context);
+test('admin activates eligible complete candidate directly from pending validation', async (context) => {
+  const { candidate, updateCandidate } = setup(context, CANDIDATE_STATUS.PENDING_VALIDATION);
+  const response = await updateCandidateStatus(admin, candidateId, {
+    status: CANDIDATE_STATUS.ACTIVE, reason: 'Validacao manual aprovada',
+  }, now);
+  assert.equal(response.previousStatus, CANDIDATE_STATUS.PENDING_VALIDATION);
+  assert.equal(response.candidate.status, CANDIDATE_STATUS.ACTIVE);
+  assert.equal(updateCandidate.mock.callCount(), 1);
+  assert.deepEqual(updateCandidate.mock.calls[0].arguments[0], {
+    _id: candidate._id,
+    status: CANDIDATE_STATUS.PENDING_VALIDATION,
+    updatedAt: candidate.updatedAt,
+    deletedAt: null,
+  });
+});
+
+test('admin activation approves pending eligibility through trusted administrative review', async (context) => {
+  const { candidate, updateCandidate } = setup(context, CANDIDATE_STATUS.PENDING_VALIDATION);
   candidate.eligibility.status = ELIGIBILITY_STATUS.PENDING;
+  candidate.eligibility.method = ELIGIBILITY_METHOD.UNKNOWN;
+  candidate.eligibility.source = ELIGIBILITY_SOURCE.PENDING;
+  const response = await updateCandidateStatus(admin, candidateId, {
+    status: CANDIDATE_STATUS.ACTIVE, reason: 'Aluno conferido pelo perfil Master',
+  }, now);
+  assert.equal(response.candidate.status, CANDIDATE_STATUS.ACTIVE);
+  const update = updateCandidate.mock.calls[0].arguments[1];
+  assert.equal(update.$set['eligibility.status'], ELIGIBILITY_STATUS.APPROVED);
+  assert.equal(update.$set['eligibility.method'], ELIGIBILITY_METHOD.TRUSTED_IDENTIFIER);
+  assert.equal(update.$set['eligibility.source'], ELIGIBILITY_SOURCE.MONGODB);
+  assert.equal(update.$set['eligibility.approvedAt'], now);
+});
+
+test('activation rejects denied eligibility, incomplete profile and duplicate active email', async (context) => {
+  const { candidate, duplicateQuery, updateCandidate } = setup(context);
+  candidate.eligibility.status = ELIGIBILITY_STATUS.REJECTED;
   await assert.rejects(updateCandidateStatus(admin, candidateId,
     { status: CANDIDATE_STATUS.ACTIVE, reason: 'Revisao' }, now), { statusCode: 409 });
 
@@ -174,7 +207,7 @@ test('invalid actors, payloads, transitions and concurrent writes fail without m
   ]) await assert.rejects(updateCandidateStatus(admin, id, body), { statusCode: 400 });
 
   await assert.rejects(updateCandidateStatus(admin, candidateId,
-    { status: CANDIDATE_STATUS.ACTIVE, reason: 'Atalho invalido' }, now), { statusCode: 409 });
+    { status: CANDIDATE_STATUS.INCOMPLETE_PROFILE, reason: 'Atalho invalido' }, now), { statusCode: 409 });
   candidate.status = CANDIDATE_STATUS.ACTIVE;
   updateCandidate.mock.mockImplementation(async () => null);
   await assert.rejects(updateCandidateStatus(admin, candidateId,

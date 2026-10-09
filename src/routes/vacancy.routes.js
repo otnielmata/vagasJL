@@ -5,11 +5,13 @@ const controller = require('../controllers/vacancy.controller');
 
 const router = Router();
 
+router.get('/', authenticate, authorize('candidate', 'company', 'admin', 'master'), ensureDatabase,
+  controller.list);
 router.post('/:id/normalizacao', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.normalizeDescription);
 router.get('/:id/candidatos/ranking', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.rankCandidates);
-router.patch('/:id/status', authenticate, authorize('admin', 'company'), ensureDatabase,
+router.patch('/:id/status', authenticate, authorize('master', 'company'), ensureDatabase,
   controller.updateStatus);
 router.patch('/:id/requisitos', authenticate, authorize('admin', 'company'), ensureDatabase,
   controller.updateRequirements);
