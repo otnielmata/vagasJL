@@ -30,6 +30,7 @@ export interface RequestOptions {
   body?: unknown;
   auth?: boolean;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
 }
 
 /** Callback registrado pelo AuthProvider para encerrar a sessao em 401. */
@@ -47,7 +48,7 @@ export async function request<T>(method: Method, path: string, opts: RequestOpti
   const url = new URL(API_URL + path, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
   Object.entries(opts.query ?? {}).forEach(([k, v]) => v !== undefined && url.searchParams.set(k, String(v)));
 
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   if (opts.body !== undefined && !isFormData) headers['Content-Type'] = 'application/json';
   const requestBody: BodyInit | undefined = opts.body === undefined

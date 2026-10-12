@@ -73,7 +73,9 @@ export default function MatchProfilePage() {
         toast('success', 'Nada para salvar — o perfil já está atualizado.');
         return;
       }
-      const res = exists ? await candidateService.updateMatchProfile(values) : await candidateService.createMatchProfile(values);
+      const res = exists
+        ? await candidateService.updateMatchProfile(values, data.profile.revision)
+        : await candidateService.createMatchProfile(values);
       setData(res);
       toast('success', 'Perfil de Match salvo. Seus Matches serão recalculados.');
     } catch (e) {

@@ -62,8 +62,10 @@ export const candidateService = {
   getMatchProfile: () => api.get<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match'),
   createMatchProfile: (values: MatchValues) =>
     api.post<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }),
-  updateMatchProfile: (values: MatchValues) =>
-    api.patch<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }),
+  updateMatchProfile: (values: MatchValues, revision: number) =>
+    api.patch<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }, {
+      headers: { 'If-Match': `"${revision}"` },
+    }),
 
   // Match e ranking (VJ-45/63/64/86)
   vacancyRanking: (params: { page?: number; limit?: number } = {}) =>
