@@ -280,6 +280,7 @@ export interface RankingPage<T> {
   limit: number;
   pages: number;
   minimumMatchPercentage: number | null;
+  minimumProfileCompletionPercentage?: number | null;
   rankingThresholdVersion: number | null;
 }
 
@@ -307,9 +308,24 @@ export interface CandidateRankingItem {
   earnedPoints: number;
   possiblePoints: number;
   matchedRequiredCount: number;
+  profileCompletionPercentage: number;
   configurationVersion: number;
   multipliersVersion: number;
   audit: MatchAuditReference;
+}
+
+export interface MatchEngineConfiguration {
+  version: string;
+  revision: number;
+  state: 'draft' | 'published';
+  weights: Record<MatchFieldKey, number>;
+  multipliers: { required: 1; desirable: number; indifferent: 0 };
+  defaultImportImportance: 'required' | 'desirable' | 'indifferent';
+  minimumMatchPercentage: number;
+  minimumProfileCompletionPercentage: number | null;
+  eliminatoryPolicyEnabled: boolean;
+  effectiveAt: string;
+  recalculation?: { policy?: 'none' | 'affected_matches' };
 }
 
 export type MatchResultState = 'eligible' | 'below_threshold' | 'ineligible' | 'not_calculable';

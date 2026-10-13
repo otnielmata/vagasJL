@@ -192,13 +192,14 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/master/empresas` | Master (Bearer) | Lista empresas atuais com ID e pesquisa por nome ou e-mail |
 | GET    | `/master/recrutadores` | Master (Bearer) | Lista somente usuários `admin` com ID, nome e e-mail |
 | GET    | `/master/candidatos` | Master (Bearer) | Lista candidatos em páginas de 15, com busca por nome/e-mail |
-| PUT    | `/admin/configuracoes/match/{version}` | Admin (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
+| GET    | `/master/configuracoes/match` | Master (Bearer) | Consulta a configuração consolidada mais recente do Motor de Match |
+| PUT    | `/master/configuracoes/match/{version}` | Master (Bearer) | Publica configuração consolidada do Motor de Match (VJ-79) |
 | PUT    | `/admin/vagas/{id}` | Master (Bearer) | Gerencia vaga administrativa com versão e auditoria (VJ-80) |
 | PUT    | `/admin/catalogos/{categoria}/{id}` | Admin (Bearer) | Publica item canônico do Catálogo Mestre (VJ-81) |
 | PUT    | `/perfil-match/configuracao` | Admin (Bearer) | Publica catálogo e pesos versionados (VJ-28) |
-| PUT    | `/configuracoes/match/multiplicadores` | Admin (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
-| PUT    | `/configuracoes/match/limiar-ranking` | Admin (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
-| PUT    | `/configuracoes/match/completude-minima` | Admin (Bearer) | Publica completude mínima para recomendações (VJ-73) |
+| PUT    | `/configuracoes/match/multiplicadores` | Master (Bearer) | Publica multiplicadores versionados do Match (VJ-52) |
+| PUT    | `/configuracoes/match/limiar-ranking` | Master (Bearer) | Publica percentual mínimo versionado dos rankings (VJ-65) |
+| PUT    | `/configuracoes/match/completude-minima` | Master (Bearer) | Publica completude mínima para recomendações (VJ-73) |
 | GET    | `/vagas?page=1` | Candidato/Admin/Master (Bearer) | Lista 10 vagas por página, sem cálculo de Match, com filtros textuais e estruturados |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
 | GET    | `/empresas/{id}/vagas/{vagaId}` | Recrutador vinculado (Bearer) | Consulta uma vaga própria para edição |
@@ -510,7 +511,10 @@ obrigatórios atendidos, atualização do Perfil de Match e ID estável; a
 resposta paginada contém apenas ID e nome do candidato, nunca contato ou dados
 internos. O resultado sem pontos possíveis não é apresentado como 100%.
 Cada item também informa `earnedPoints`, `possiblePoints`, `matchedRequiredCount` e
-`configurationVersion`.
+`configurationVersion`. O recrutador pode aplicar filtros temporários com
+`minimumMatchPercentage` e `minimumProfileCompletionPercentage`, ambos entre 0 e 100. Eles
+recalculam a lista consultada sem publicar ou modificar os parâmetros globais e cada resultado
+informa `profileCompletionPercentage`.
 
 ## Top e desempates do ranking — VJ-63
 
@@ -524,7 +528,7 @@ engajamento no MVP.
 
 ## Limiar mínimo dos rankings — VJ-65
 
-`PUT /configuracoes/match/limiar-ranking` permite que um administrador ativo publique
+`PUT /configuracoes/match/limiar-ranking` permite que o perfil Master publique
 `{"minimumPercentage":60}`. O valor aceita números de 0 a 100, inclusive, com até duas casas
 decimais. A resposta contém valor, `version`, `author` e `effectiveAt`; repetir o valor vigente
 é idempotente e não cria nova versão. Não existe limiar padrão implícito: sem publicação, os
@@ -627,7 +631,8 @@ obtidos, pontos possíveis e a versão da configuração técnica aplicada.
 
 ## Configuração consolidada do Motor de Match — VJ-79
 
-`PUT /admin/configuracoes/match/{version}` permite que somente um administrador ativo publique uma
+`GET /master/configuracoes/match` consulta a versão consolidada mais recente e
+`PUT /master/configuracoes/match/{version}` permite que somente o perfil Master publique uma
 versão completa como `MATCH_V2`. O corpo reúne os 22 pesos técnicos, multiplicadores de importância,
 o campo legado de importância da importação, percentual mínimo de Match, vigência e estado `draft` ou
 `published`. Opcionalmente, também centraliza a completude mínima do perfil e a política de
@@ -811,7 +816,7 @@ e conteúdo preenchido em terceiros não são copiados nem compartilhados com a 
 
 ## Multiplicadores do Match — VJ-52
 
-Antes de calcular novos rankings, um administrador ativo deve publicar os
+Antes de calcular novos rankings, o perfil Master deve publicar os
 multiplicadores em `PUT /configuracoes/match/multiplicadores` com corpo
 `{"required":1,"desirable":0.5,"indifferent":0}`. `required=1` e
 `indifferent=0` são invariantes; `desirable` aceita número estritamente entre 0 e 1.
@@ -1409,7 +1414,7 @@ de 100%. Empresas não recebem respostas desconhecidas por esse endpoint.
 
 ### Completude mínima para recomendações — VJ-73
 
-`PUT /configuracoes/match/completude-minima` permite ao administrador publicar
+`PUT /configuracoes/match/completude-minima` permite ao perfil Master publicar
 `{"minimumPercentage":70}`. O percentual aceita valores de 0 a 100, inclusive, com até duas
 casas decimais. A resposta informa `version`, `author` e `effectiveAt`; repetir o valor vigente
 é idempotente. A publicação é atômica e valores inválidos ou atores sem permissão não alteram

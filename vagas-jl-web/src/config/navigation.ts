@@ -42,7 +42,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/admin/perfil', label: 'Meus dados', icon: UserRound },
     { href: '/admin/candidatos', label: 'Candidatos', icon: Users },
     { href: '/admin/vagas', label: 'Vagas', icon: FileSearch },
-    { href: '/admin/configuracoes', label: 'Parâmetros do Match', icon: SlidersHorizontal },
   ],
   master: [
     { href: '/master', label: 'Visão geral', icon: LayoutDashboard },
@@ -51,6 +50,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { href: '/master/candidatos', label: 'Status dos candidatos', icon: Users },
     { href: '/master/importacao', label: 'Importar vagas', icon: UploadCloud },
     { href: '/master/vagas', label: 'Vagas cadastradas', icon: FileSearch },
+    { href: '/master/configuracoes', label: 'Parâmetros do Match', icon: SlidersHorizontal },
   ],
 };
 

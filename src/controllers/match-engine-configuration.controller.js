@@ -1,5 +1,14 @@
 const service = require('../services/match-engine-configuration.service');
 
+async function show(req, res, next) {
+  try {
+    const configuration = await service.getLatestMatchEngineConfiguration(req.user);
+    return res.status(200).json({ configuration: configuration ? configuration.toJSON() : null });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function publish(req, res, next) {
   try {
     const configuration = await service.publishMatchEngineConfiguration(
@@ -11,4 +20,4 @@ async function publish(req, res, next) {
   }
 }
 
-module.exports = { publish };
+module.exports = { show, publish };

@@ -121,8 +121,8 @@ function publicationMetadata(normalized, actor, now) {
 }
 
 async function publishMatchEngineConfiguration(actor, version, input, now = new Date()) {
-  if (actor?.role !== 'admin' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
-    throw new ApiError(403, 'Apenas administradores podem configurar o Motor de Match');
+  if (actor?.role !== 'master' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
+    throw new ApiError(403, 'Apenas o perfil Master pode configurar o Motor de Match');
   }
   const normalized = normalizeInput(version, input);
   await Configuration.init();
@@ -158,6 +158,13 @@ async function publishMatchEngineConfiguration(actor, version, input, now = new 
   }
 }
 
+async function getLatestMatchEngineConfiguration(actor) {
+  if (actor?.role !== 'master' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
+    throw new ApiError(403, 'Apenas o perfil Master pode consultar o Motor de Match');
+  }
+  return Configuration.findOne().sort({ revision: -1 });
+}
+
 async function getEffectiveMatchEngineConfiguration(now = new Date()) {
   const configuration = await Configuration.findOne({
     state: 'published', effectiveAt: { $lte: now },
@@ -188,5 +195,6 @@ function applyEngineWeights(profileConfiguration, engineConfiguration) {
     weight: engineConfiguration.weights[field.key] })) };
 }
 
-module.exports = { publishMatchEngineConfiguration, getEffectiveMatchEngineConfiguration,
+module.exports = { publishMatchEngineConfiguration, getLatestMatchEngineConfiguration,
+  getEffectiveMatchEngineConfiguration,
   applyEngineWeights, normalizeInput, sameContent, WEIGHT_KEYS };

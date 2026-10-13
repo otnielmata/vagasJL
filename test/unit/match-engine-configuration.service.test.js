@@ -5,9 +5,10 @@ const { test } = require('node:test');
 const Configuration = require('../../src/models/match-engine-configuration.model');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { publishMatchEngineConfiguration, getEffectiveMatchEngineConfiguration,
-  applyEngineWeights, normalizeInput } = require('../../src/services/match-engine-configuration.service');
+  getLatestMatchEngineConfiguration, applyEngineWeights, normalizeInput } =
+  require('../../src/services/match-engine-configuration.service');
 
-const admin = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'admin' };
+const admin = { id: '6512f1e2b3a1c2d3e4f5a6b7', role: 'master' };
 const now = new Date('2026-09-23T20:00:00.000Z');
 
 function input(overrides = {}) {
@@ -116,6 +117,16 @@ test('operational read selects only the latest published version already in forc
   assert.deepEqual(sort.mock.calls[0].arguments[0], { effectiveAt: -1, revision: -1 });
 });
 
+test('master reads the latest configuration while recruiters cannot access parameters', async (context) => {
+  const latest = { version: 'MATCH_V3' };
+  const sort = context.mock.fn(async () => latest);
+  context.mock.method(Configuration, 'findOne', () => ({ sort }));
+  assert.equal(await getLatestMatchEngineConfiguration(admin), latest);
+  assert.deepEqual(sort.mock.calls[0].arguments[0], { revision: -1 });
+  await assert.rejects(getLatestMatchEngineConfiguration({ ...admin, role: 'admin' }),
+    { statusCode: 403 });
+});
+
 test('engine weights override only scoring weights and preserve the historical catalog', () => {
   const catalog = { version: 7, geographyWeights: { country: 6, state: 4, city: 2 }, fields: [
     { key: 'type', weight: 8, options: [{ id: 'remote', label: 'Remoto', aliases: [] }] },
@@ -137,7 +148,7 @@ test('normalizes the eliminatory policy as a versioned administrative rule', () 
     { statusCode: 422 });
 });
 
-test('only authenticated administrators may publish', async () => {
+test('only authenticated master users may publish', async () => {
   await assert.rejects(publishMatchEngineConfiguration({ ...admin, role: 'company' },
     'MATCH_V2', input(), now), { statusCode: 403 });
 });

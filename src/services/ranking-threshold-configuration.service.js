@@ -13,8 +13,8 @@ function validInput(input) {
 }
 
 async function publishRankingThreshold(actor, input, now = new Date()) {
-  if (actor?.role !== 'admin' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
-    throw new ApiError(403, 'Apenas administradores podem configurar o ranking');
+  if (actor?.role !== 'master' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
+    throw new ApiError(403, 'Apenas o perfil Master pode configurar o ranking');
   }
   if (!validInput(input)) throw new ApiError(400, 'Limiar percentual invalido');
   await Configuration.init();

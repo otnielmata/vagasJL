@@ -11,15 +11,19 @@ import { Segmented } from '@/components/ui/toggle';
 import { MatchRing } from './match-ring';
 
 /** Top candidatos para uma vaga (VJ-50/63). Mesmo motor do ranking do candidato. */
-export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
+export function CandidateRanking({ vacancyId, minimumMatchPercentage,
+  minimumProfileCompletionPercentage }: { vacancyId: string; minimumMatchPercentage: number;
+    minimumProfileCompletionPercentage: number }) {
   const [limit, setLimit] = useState<3 | 10 | 'all'>(10);
-  const { data, error, loading } = useAsync(() => vacancyService.candidateRanking(vacancyId, { limit }), [vacancyId, limit]);
+  const { data, error, loading } = useAsync(() => vacancyService.candidateRanking(vacancyId, {
+    limit, minimumMatchPercentage, minimumProfileCompletionPercentage,
+  }), [vacancyId, limit, minimumMatchPercentage, minimumProfileCompletionPercentage]);
 
   return (
     <Card>
       <CardHeader
         title="Top candidatos"
-        description={data?.minimumMatchPercentage != null ? `Match mínimo: ${data.minimumMatchPercentage}% · ${data.total} candidatos` : 'Somente candidatos ativos e disponíveis.'}
+        description={data ? `Match mínimo: ${data.minimumMatchPercentage ?? 0}% · Completude mínima: ${data.minimumProfileCompletionPercentage ?? 0}% · ${data.total} candidatos` : 'Somente candidatos ativos e disponíveis.'}
         action={
           <Segmented ariaLabel="Quantidade" value={limit} onChange={setLimit}
             options={[{ value: 3, label: 'Top 3' }, { value: 10, label: 'Top 10' }, { value: 'all', label: 'Todos' }]} />
@@ -47,7 +51,7 @@ export function CandidateRanking({ vacancyId }: { vacancyId: string }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{item.candidate.name}</p>
-                  <p className="text-xs text-muted">{item.matchedRequiredCount} obrigatórios atendidos</p>
+                  <p className="text-xs text-muted">{item.matchedRequiredCount} obrigatórios atendidos · Perfil {item.profileCompletionPercentage}% completo</p>
                   <Progress value={item.percentage} className="mt-1.5 h-1.5 max-w-xs sm:hidden" />
                 </div>
                 <MatchRing value={item.percentage} size={52} className="hidden sm:inline-grid" />

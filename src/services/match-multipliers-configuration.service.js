@@ -3,8 +3,8 @@ const ApiError = require('../errors/api.error');
 const { validMultipliers } = require('../config/match-multipliers');
 
 async function publishMultipliers(actor, input, now = new Date()) {
-  if (actor?.role !== 'admin' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
-    throw new ApiError(403, 'Apenas administradores podem configurar o Match');
+  if (actor?.role !== 'master' || !/^[a-f\d]{24}$/i.test(actor.id || '')) {
+    throw new ApiError(403, 'Apenas o perfil Master pode configurar o Match');
   }
   if (!validMultipliers(input)) throw new ApiError(400, 'Multiplicadores invalidos');
   await Configuration.init();

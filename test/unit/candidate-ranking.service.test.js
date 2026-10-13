@@ -78,6 +78,7 @@ function setup(context, currentVacancy = vacancy()) {
   context.mock.method(User, 'findOne', () => ({ select: async () => ({ _id: recruiterId }) }));
   context.mock.method(CompanyUser, 'findOne', () => ({ select: async () => ({ _id: 'membership' }) }));
   context.mock.method(Configuration, 'findOne', async () => configuration);
+  context.mock.method(Configuration, 'find', async () => [configuration]);
   const candidates = [
     { _id: candidateId, name: 'Ana', email: 'private@example.com', phone: '123' },
     { _id: '6512f1e2b3a1c2d3e4f5a6bb', name: 'Bia' },
@@ -154,6 +155,32 @@ test('company ranking applies published cutoff before total and pagination', asy
   assert.equal(result.rankingThresholdVersion, 4);
 });
 
+test('recruiter applies temporary Match and profile completion filters without publishing configuration',
+  async (context) => {
+    const { thresholdState } = setup(context, adminVacancy());
+    thresholdState.current = { version: 4, minimumPercentage: 80 };
+    const result = await rankCandidates(adminActor, vacancyId, {
+      limit: 'all', minimumMatchPercentage: '40', minimumProfileCompletionPercentage: '60',
+    }, now);
+    assert.equal(result.total, 1);
+    assert.equal(result.items[0].candidate.name, 'Bia');
+    assert.equal(result.items[0].profileCompletionPercentage, 66.67);
+    assert.equal(result.minimumMatchPercentage, 40);
+    assert.equal(result.minimumProfileCompletionPercentage, 60);
+    assert.equal(result.rankingThresholdVersion, 4);
+  });
+
+test('rejects invalid temporary ranking filters before reading the vacancy', async (context) => {
+  const find = context.mock.method(Vacancy, 'findById', () => assert.fail('must not query'));
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { minimumMatchPercentage: '101' }, now), { statusCode: 400 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { minimumProfileCompletionPercentage: '-1' }, now), { statusCode: 400 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { unsupported: '1' }, now), { statusCode: 400 });
+  assert.equal(find.mock.callCount(), 0);
+});
+
 test('both ranking directions use identical score and vacancy denominator for same pair', async (context) => {
   const row = vacancy();
   const { candidates, profiles } = setup(context, row);
@@ -165,7 +192,6 @@ test('both ranking directions use identical score and vacancy denominator for sa
   context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
   context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
   context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
-  context.mock.method(Configuration, 'find', async () => [configuration]);
   const fromCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
   const fromCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(fromCandidate.items[0].percentage, 50);
@@ -202,7 +228,6 @@ test('recalibrating published desirable multiplier affects both ranking directio
   context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
   context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
   context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
-  context.mock.method(Configuration, 'find', async () => [configuration]);
   const beforeCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
   const beforeCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(beforeCandidate.items[0].percentage, 66.67);

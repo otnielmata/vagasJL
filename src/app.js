@@ -60,7 +60,7 @@ app.use('/configuracoes', importImportanceConfigurationRoutes);
 app.use('/configuracoes', matchMultipliersConfigurationRoutes);
 app.use('/configuracoes', rankingThresholdConfigurationRoutes);
 app.use('/configuracoes', profileCompletionThresholdConfigurationRoutes);
-app.use('/admin/configuracoes', matchEngineConfigurationRoutes);
+app.use('/master/configuracoes', matchEngineConfigurationRoutes);
 app.use('/admin/catalogos', masterCatalogRoutes);
 app.use('/importacoes', vacancyImportRoutes);
 app.use('/master', masterDirectoryRoutes);

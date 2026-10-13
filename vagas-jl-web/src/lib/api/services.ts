@@ -111,7 +111,8 @@ export const companyService = {
 export const vacancyService = {
   list: (params: VacancyListFilters & { page?: number } = {}) =>
     api.get<VacancyListResponse>('/vagas', { query: { ...params } }),
-  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all' } = {}) =>
+  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all';
+    minimumMatchPercentage?: number; minimumProfileCompletionPercentage?: number } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>
     api.patch<{ vacancy: Vacancy }>(`/vagas/${vacancyId}/status`, { status, reason }),
@@ -131,15 +132,16 @@ export const adminService = {
       `/admin/candidatos/${id}/status`,
       { status, reason },
     ),
-  setRankingThreshold: (minimumPercentage: number) =>
-    api.put<unknown>('/configuracoes/match/limiar-ranking', { minimumPercentage }),
-  setCompletionThreshold: (minimumPercentage: number) =>
-    api.put<unknown>('/configuracoes/match/completude-minima', { minimumPercentage }),
-  setMultipliers: (desirable: number) =>
-    api.put<unknown>('/configuracoes/match/multiplicadores', { required: 1, desirable, indifferent: 0 }),
 };
 
 export const masterService = {
+  getMatchConfiguration: () =>
+    api.get<{ configuration: import('./types').MatchEngineConfiguration | null }>('/master/configuracoes/match'),
+  publishMatchConfiguration: (version: string, input: Omit<import('./types').MatchEngineConfiguration,
+    'version' | 'revision' | 'recalculation'> & { recalculationPolicy: 'affected_matches' }) =>
+    api.put<{ configuration: import('./types').MatchEngineConfiguration }>(
+      `/master/configuracoes/match/${version}`, input,
+    ),
   listCompanies: (params: { page?: number; q?: string } = {}) =>
     api.get<{ items: (Company & { hasRecruiter: boolean })[]; page: number; limit: number; total: number; pages: number }>(
       '/master/empresas', { query: params },

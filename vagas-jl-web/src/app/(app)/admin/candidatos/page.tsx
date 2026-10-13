@@ -16,6 +16,8 @@ function CandidatesContent() {
   const vacancies = useAsync(() => vacancyService.list({ status: 'active', page: 1 }), []);
   const selected = params.get('vaga') ?? '';
   const [manual, setManual] = useState('');
+  const [minimumMatch, setMinimumMatch] = useState(60);
+  const [minimumCompletion, setMinimumCompletion] = useState(50);
   const go = (id: string) => router.replace(`/admin/candidatos?vaga=${id}`);
 
   return (
@@ -40,7 +42,20 @@ function CandidatesContent() {
           </form>
         </CardBody>
       </Card>
-      {selected && <CandidateRanking vacancyId={selected} />}
+      {selected && (
+        <Card className="mb-6">
+          <CardBody className="grid gap-4 sm:grid-cols-2">
+            <Input label="Match mínimo no ranking (%)" type="number" min={0} max={100} step={1}
+              value={minimumMatch} onChange={(event) => setMinimumMatch(Math.min(100,
+                Math.max(0, Number(event.target.value))))} />
+            <Input label="Completude mínima do perfil (%)" type="number" min={0} max={100} step={1}
+              value={minimumCompletion} onChange={(event) => setMinimumCompletion(Math.min(100,
+                Math.max(0, Number(event.target.value))))} />
+          </CardBody>
+        </Card>
+      )}
+      {selected && <CandidateRanking vacancyId={selected} minimumMatchPercentage={minimumMatch}
+        minimumProfileCompletionPercentage={minimumCompletion} />}
     </>
   );
 }
