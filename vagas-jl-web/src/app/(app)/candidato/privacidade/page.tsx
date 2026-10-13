@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { Eye, Globe, Save } from 'lucide-react';
 import { candidateService } from '@/lib/api/services';
-import type { ContactDisplayField, FormationDisplayField } from '@/lib/api/types';
+import type { CandidatePrivacyState, ContactDisplayField, FormationDisplayField } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
+import { useAsync } from '@/lib/use-async';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
-import { Alert } from '@/components/ui/feedback';
+import { Alert, Skeleton } from '@/components/ui/feedback';
 import { Button } from '@/components/ui/button';
 import { ChipGroup, Switch } from '@/components/ui/toggle';
 import { useToast } from '@/components/ui/toast';
@@ -30,114 +31,118 @@ const PUBLIC_FIELDS = [
   { id: 'matchProfile.programmingLanguages', label: 'Linguagens' }, { id: 'formation.projects', label: 'Projetos da formação' },
 ];
 
-/**
- * A API expoe apenas PATCH para estes controles (sem GET do estado atual — ver docs/API-GAPS.md).
- * Por isso a tela parte de padroes seguros (RN-048: privacidade por padrao) e confirma o estado salvo.
- */
-export default function PrivacyPage() {
+function PrivacyForm({ initial }: { initial: CandidatePrivacyState }) {
   const toast = useToast();
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState(initial.availability.availableForOpportunities);
   const [savingAvail, setSavingAvail] = useState(false);
-  const [contact, setContact] = useState<string[]>([]);
-  const [formation, setFormation] = useState<string[]>([]);
+  const [contact, setContact] = useState<string[]>(initial.permissions.contact);
+  const [formation, setFormation] = useState<string[]>(initial.permissions.formation);
   const [savingPerm, setSavingPerm] = useState(false);
-  const [publicEnabled, setPublicEnabled] = useState(false);
-  const [publicFields, setPublicFields] = useState<string[]>(['name', 'professionalSummary']);
+  const [publicEnabled, setPublicEnabled] = useState(initial.publicProfile.enabled);
+  const [publicFields, setPublicFields] = useState<string[]>(initial.publicProfile.fields.length
+    ? initial.publicProfile.fields : ['name', 'professionalSummary']);
   const [savingPublic, setSavingPublic] = useState(false);
   const [error, setError] = useState<string>();
 
-  const run = async (fn: () => Promise<unknown>, setBusy: (v: boolean) => void, ok: string) => {
-    setBusy(true);
+  async function saveAvailability(value: boolean) {
+    setSavingAvail(true);
     setError(undefined);
     try {
-      await fn();
-      toast('success', ok);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
+      const response = await candidateService.setAvailability(value);
+      setAvailable(response.availability.availableForOpportunities);
+      toast('success', response.availability.availableForOpportunities
+        ? 'Você está visível para empresas.' : 'Você ficou oculto para empresas.');
+    } catch (exception) {
+      setError(exception instanceof ApiError ? exception.message : 'Não foi possível salvar.');
     } finally {
-      setBusy(false);
+      setSavingAvail(false);
     }
-  };
+  }
 
+  async function savePermissions() {
+    setSavingPerm(true);
+    setError(undefined);
+    try {
+      const response = await candidateService.setDisplayPermissions({
+        contact: contact as ContactDisplayField[], formation: formation as FormationDisplayField[],
+      });
+      setContact(response.permissions.contact);
+      setFormation(response.permissions.formation);
+      toast('success', 'Permissões de exibição atualizadas.');
+    } catch (exception) {
+      setError(exception instanceof ApiError ? exception.message : 'Não foi possível salvar.');
+    } finally {
+      setSavingPerm(false);
+    }
+  }
+
+  async function savePublicProfile() {
+    setSavingPublic(true);
+    setError(undefined);
+    try {
+      const response = await candidateService.setPublicProfile(publicEnabled
+        ? { enabled: true, fields: publicFields } : { enabled: false });
+      setPublicEnabled(response.publicProfile.enabled);
+      if (response.publicProfile.enabled) setPublicFields(response.publicProfile.fields);
+      toast('success', response.publicProfile.enabled ? 'Consentimento registrado.' : 'Perfil público revogado.');
+    } catch (exception) {
+      setError(exception instanceof ApiError ? exception.message : 'Não foi possível salvar.');
+    } finally {
+      setSavingPublic(false);
+    }
+  }
+
+  return <>
+    {error && <Alert tone="danger" className="mb-6">{error}</Alert>}
+    <div className="space-y-6">
+      <Card>
+        <CardHeader title="Disponível para oportunidades" description="Mesmo indisponível, você continua pesquisando vagas normalmente." />
+        <CardBody>
+          <Switch label={available ? 'Aparecendo nas buscas das empresas' : 'Oculto das buscas das empresas'}
+            description="Somente candidatos ativos e disponíveis entram no ranking de candidatos das vagas."
+            checked={available} disabled={savingAvail} onChange={(value) => void saveAvailability(value)} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="O que as empresas podem ver" description="Contato e dados da formação exibidos a recrutadores."
+          action={<Eye className="h-5 w-5 text-muted" />} />
+        <CardBody className="space-y-6">
+          <div><p className="mb-2 text-sm font-medium">Contato</p>
+            <ChipGroup ariaLabel="Contato visível" options={CONTACT} value={contact} onChange={setContact} /></div>
+          <div><p className="mb-2 text-sm font-medium">Formação</p>
+            <ChipGroup ariaLabel="Formação visível" options={FORMATION} value={formation} onChange={setFormation} /></div>
+          <div className="flex justify-end"><Button variant="outline" loading={savingPerm}
+            onClick={() => void savePermissions()}><Save className="h-4 w-4" /> Salvar permissões</Button></div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Perfil profissional público" description="Página pública opcional, publicada somente com o seu consentimento."
+          action={<Globe className="h-5 w-5 text-muted" />} />
+        <CardBody className="space-y-6">
+          <Switch label="Publicar meu perfil" checked={publicEnabled} onChange={setPublicEnabled} />
+          {publicEnabled && <div><p className="mb-2 text-sm font-medium">Campos exibidos</p>
+            <ChipGroup ariaLabel="Campos públicos" options={PUBLIC_FIELDS} value={publicFields}
+              onChange={setPublicFields} /></div>}
+          <div className="flex justify-end"><Button variant="outline" loading={savingPublic}
+            onClick={() => void savePublicProfile()}><Save className="h-4 w-4" />
+            {publicEnabled ? 'Registrar consentimento' : 'Salvar'}</Button></div>
+        </CardBody>
+      </Card>
+    </div>
+  </>;
+}
+
+export default function PrivacyPage() {
+  const privacy = useAsync(candidateService.getPrivacy, []);
   return (
     <>
-      <PageHeader eyebrow="Privacidade" title="Você decide o que as empresas veem" description="Informações pessoais não são expostas publicamente por padrão." />
-      {error && <Alert tone="danger" className="mb-6">{error}</Alert>}
-
-      <div className="space-y-6">
-        <Card>
-          <CardHeader title="Disponível para oportunidades" description="Mesmo indisponível, você continua pesquisando vagas normalmente." />
-          <CardBody>
-            <Switch
-              label={available ? 'Aparecendo nas buscas das empresas' : 'Oculto das buscas das empresas'}
-              description="Somente candidatos ativos e disponíveis entram no ranking de candidatos das vagas."
-              checked={available}
-              disabled={savingAvail}
-              onChange={(v) => {
-                setAvailable(v);
-                void run(() => candidateService.setAvailability(v), setSavingAvail, v ? 'Você está visível para empresas.' : 'Você ficou oculto para empresas.');
-              }}
-            />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="O que as empresas podem ver" description="Contato e dados da formação exibidos a recrutadores." action={<Eye className="h-5 w-5 text-muted" />} />
-          <CardBody className="space-y-6">
-            <div>
-              <p className="mb-2 text-sm font-medium">Contato</p>
-              <ChipGroup ariaLabel="Contato visível" options={CONTACT} value={contact} onChange={setContact} />
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium">Formação</p>
-              <ChipGroup ariaLabel="Formação visível" options={FORMATION} value={formation} onChange={setFormation} />
-            </div>
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                loading={savingPerm}
-                onClick={() =>
-                  run(
-                    () => candidateService.setDisplayPermissions({ contact: contact as ContactDisplayField[], formation: formation as FormationDisplayField[] }),
-                    setSavingPerm,
-                    'Permissões de exibição atualizadas.',
-                  )
-                }
-              >
-                <Save className="h-4 w-4" /> Salvar permissões
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="Perfil profissional público" description="Página pública opcional, publicada somente com o seu consentimento." action={<Globe className="h-5 w-5 text-muted" />} />
-          <CardBody className="space-y-6">
-            <Switch label="Publicar meu perfil" checked={publicEnabled} onChange={setPublicEnabled} />
-            {publicEnabled && (
-              <div>
-                <p className="mb-2 text-sm font-medium">Campos exibidos</p>
-                <ChipGroup ariaLabel="Campos públicos" options={PUBLIC_FIELDS} value={publicFields} onChange={setPublicFields} />
-              </div>
-            )}
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                loading={savingPublic}
-                onClick={() =>
-                  run(
-                    () => candidateService.setPublicProfile(publicEnabled ? { enabled: true, fields: publicFields } : { enabled: false }),
-                    setSavingPublic,
-                    publicEnabled ? 'Consentimento registrado.' : 'Perfil público revogado.',
-                  )
-                }
-              >
-                <Save className="h-4 w-4" /> {publicEnabled ? 'Registrar consentimento' : 'Salvar'}
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
+      <PageHeader eyebrow="Privacidade" title="Você decide o que as empresas veem"
+        description="Informações pessoais não são expostas publicamente por padrão." />
+      {privacy.loading ? <Skeleton className="h-48" /> : privacy.error ? (
+        <Alert tone="danger">{privacy.error.message}</Alert>
+      ) : privacy.data ? <PrivacyForm initial={privacy.data} /> : null}
     </>
   );
 }

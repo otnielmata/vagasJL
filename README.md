@@ -210,6 +210,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | GET    | `/candidatos/me/vagas/{id}/match` | Candidato (Bearer) | Explica critérios atendidos e gaps do próprio Match (VJ-64) |
 | POST   | `/candidatos/me/vagas/{id}/candidatura` | Candidato não bloqueado (Bearer) | Retorna o canal oficial seguro e audita o encaminhamento (VJ-86) |
 | GET    | `/candidatos/me/engajamento` | Candidato ativo e validado (Bearer) | Consulta engajamento oficial somente leitura (VJ-67) |
+| GET    | `/candidatos/me/privacidade` | Candidato (Bearer) | Consulta disponibilidade, permissões e perfil público atualmente salvos |
 | PATCH  | `/candidatos/me/perfil-publico` | Candidato ativo (Bearer) | Controla consentimento da futura publicação (VJ-74) |
 | PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
 | PATCH  | `/candidatos/me/permissoes-exibicao` | Candidato (Bearer) | Controla contato e formação exibidos às empresas (VJ-76) |
@@ -1433,6 +1434,10 @@ de editar o perfil. Cálculos liberados registram a versão de completude vigent
 resultados históricos não são reinterpretados quando uma nova versão é publicada.
 
 ### Consentimento do perfil profissional público — VJ-74
+
+`GET /candidatos/me/privacidade` carrega em uma única resposta o estado atualmente persistido de
+disponibilidade, permissões de exibição e perfil público. A interface usa essa leitura ao abrir a
+tela e, após cada alteração, aplica somente o estado confirmado pela resposta do MongoDB.
 
 `PATCH /candidatos/me/perfil-publico` permite ao candidato ativo registrar ou revogar o
 consentimento para uma futura publicação do perfil. O cadastro nasce privado e nenhum cadastro,

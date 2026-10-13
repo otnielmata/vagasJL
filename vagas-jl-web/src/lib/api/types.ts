@@ -436,6 +436,12 @@ export interface PublicProfileState {
   revokedAt: string | null;
 }
 
+export interface CandidatePrivacyState {
+  availability: OpportunityAvailabilityState;
+  permissions: DisplayPermissionsState;
+  publicProfile: PublicProfileState;
+}
+
 /* ------------------------------------------------------------------ Empresa */
 
 export type CompanyStatus = 'pending' | 'active' | 'inactive' | 'blocked';

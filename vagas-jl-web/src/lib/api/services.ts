@@ -5,6 +5,7 @@ import type {
   Candidate,
   CandidateInput,
   CandidateMatchProfile,
+  CandidatePrivacyState,
   CandidateRankingItem,
   CandidateStatus,
   CandidateVacancyRanking,
@@ -78,6 +79,7 @@ export const candidateService = {
   engagement: () => api.get<{ engagement: Engagement }>('/candidatos/me/engajamento'),
 
   // Privacidade (VJ-74/75/76)
+  getPrivacy: () => api.get<CandidatePrivacyState>('/candidatos/me/privacidade'),
   setAvailability: (availableForOpportunities: boolean) =>
     api.patch<{ availability: OpportunityAvailabilityState }>('/candidatos/me/disponibilidade', {
       availableForOpportunities,
