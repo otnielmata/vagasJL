@@ -750,6 +750,32 @@ paths:
         '403': { description: Sem permissao empresarial ou administrativa }
         '404': { description: Vaga inexistente ou indisponivel }
         '503': { description: Configuracao tecnica indisponivel }
+  /vagas/{id}/candidatos/{candidateId}/relatorio:
+    get:
+      tags: [Vacancies]
+      summary: Exibe o relatório profissional e técnico de um candidato do ranking
+      description: >
+        Disponível somente ao recrutador autorizado da vaga ou ao administrador responsável.
+        Retorna dados cadastrais e oficiais de formação conforme as permissões definidas pelo
+        candidato, o Perfil de Match estruturado e a explicação dos critérios atendidos e gaps.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        - name: candidateId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+      responses:
+        '200': { description: Relatório do candidato com dados autorizados e Match explicável }
+        '400': { description: Identificador inválido }
+        '401': { description: JWT ausente ou inválido }
+        '403': { description: Usuário sem vínculo com a vaga }
+        '404': { description: Vaga, candidato ou Perfil de Match indisponível }
+        '503': { description: Configuração técnica ou auditoria indisponível }
   /importacoes/vagas/sincronizar:
     post:
       tags: [Vacancies]

@@ -13,6 +13,7 @@ import type {
   CompanyInput,
   CompanyStatus,
   CompanyVacancyInput,
+  CompanyCandidateReport,
   ContactDisplayField,
   DisplayPermissionsState,
   Engagement,
@@ -116,6 +117,8 @@ export const vacancyService = {
   candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all';
     minimumMatchPercentage?: number; minimumProfileCompletionPercentage?: number } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
+  candidateReport: (vacancyId: string, candidateId: string) =>
+    api.get<CompanyCandidateReport>(`/vagas/${vacancyId}/candidatos/${candidateId}/relatorio`),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>
     api.patch<{ vacancy: Vacancy }>(`/vagas/${vacancyId}/status`, { status, reason }),
   setRequirements: (vacancyId: string, requirements: VacancyRequirement[]) =>

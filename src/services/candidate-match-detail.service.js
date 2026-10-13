@@ -153,4 +153,4 @@ async function getCandidateMatchDetail(actor, vacancyId, now = new Date(), audit
   };
 }
 
-module.exports = { getCandidateMatchDetail, compareGaps, classifyMatchResult };
+module.exports = { getCandidateMatchDetail, criteriaFromScore, compareGaps, classifyMatchResult };

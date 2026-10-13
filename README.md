@@ -215,6 +215,7 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PATCH  | `/candidatos/me/disponibilidade` | Candidato (Bearer) | Controla aparição nas oportunidades empresariais (VJ-75) |
 | PATCH  | `/candidatos/me/permissoes-exibicao` | Candidato (Bearer) | Controla contato e formação exibidos às empresas (VJ-76) |
 | GET    | `/vagas/{id}/candidatos/ranking` | Admin/recrutador da vaga (Bearer) | Lista candidatos ativos compatíveis (VJ-50) |
+| GET    | `/vagas/{id}/candidatos/{candidateId}/relatorio` | Admin/recrutador da vaga (Bearer) | Exibe currículo técnico, explicação do Match e somente os dados autorizados pelo candidato |
 | POST   | `/vagas/{id}/normalizacao` | Admin/recrutador da vaga (Bearer) | Extrai, revisa ou publica requisitos descobertos na descrição (VJ-84) |
 | PATCH  | `/vagas/{id}/requisitos` | Admin/recrutador vinculado (Bearer) | Classifica requisitos técnicos da vaga (VJ-46) |
 | PATCH  | `/candidatos/me/perfil-match` | Candidato (Bearer) | Edita parcialmente o próprio Perfil de Match (VJ-30) |

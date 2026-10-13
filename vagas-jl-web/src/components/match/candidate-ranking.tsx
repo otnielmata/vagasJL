@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Trophy, Users } from 'lucide-react';
 import { vacancyService } from '@/lib/api/services';
 import { useAsync } from '@/lib/use-async';
@@ -9,11 +10,13 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Alert, EmptyState, Progress, Skeleton } from '@/components/ui/feedback';
 import { Segmented } from '@/components/ui/toggle';
 import { MatchRing } from './match-ring';
+import { useAuth } from '@/lib/auth/auth-context';
 
 /** Top candidatos para uma vaga (VJ-50/63). Mesmo motor do ranking do candidato. */
 export function CandidateRanking({ vacancyId, minimumMatchPercentage,
   minimumProfileCompletionPercentage }: { vacancyId: string; minimumMatchPercentage: number;
     minimumProfileCompletionPercentage: number }) {
+  const { user } = useAuth();
   const [limit, setLimit] = useState<3 | 10 | 'all'>(10);
   const { data, error, loading } = useAsync(() => vacancyService.candidateRanking(vacancyId, {
     limit, minimumMatchPercentage, minimumProfileCompletionPercentage,
@@ -42,7 +45,9 @@ export function CandidateRanking({ vacancyId, minimumMatchPercentage,
         ) : (
           <ol className="divide-y divide-border">
             {data.items.map((item, i) => (
-              <li key={item.candidate._id} className="flex items-center gap-4 py-3">
+              <li key={item.candidate._id} className="py-1">
+                <Link href={`/${user?.role === 'admin' ? 'admin' : 'empresa'}/candidatos/${item.candidate._id}?vaga=${vacancyId}`}
+                  className="flex items-center gap-4 rounded-xl px-2 py-3 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 <span className="w-6 text-center text-sm font-semibold text-muted">
                   {i < 3 ? <Trophy className="mx-auto h-4 w-4 text-warning" aria-label={`#${i + 1}`} /> : i + 1}
                 </span>
@@ -56,6 +61,7 @@ export function CandidateRanking({ vacancyId, minimumMatchPercentage,
                 </div>
                 <MatchRing value={item.percentage} size={52} className="hidden sm:inline-grid" />
                 <span className="font-display font-bold tabular-nums sm:hidden">{Math.round(item.percentage)}%</span>
+                </Link>
               </li>
             ))}
           </ol>

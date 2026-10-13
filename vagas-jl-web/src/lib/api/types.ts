@@ -314,6 +314,35 @@ export interface CandidateRankingItem {
   audit: MatchAuditReference;
 }
 
+export interface CompanyCandidateReport {
+  vacancy: { _id: string; title: string; reference: string };
+  candidate: Pick<Candidate, '_id' | 'name'> & Partial<Pick<Candidate,
+    | 'photoUrl' | 'email' | 'phone' | 'city' | 'state' | 'country' | 'linkedinUrl'
+    | 'githubUrl' | 'portfolioUrl' | 'professionalSummary' | 'availability'
+    | 'availableForOpportunities'>> & { formation?: Partial<Engagement['data']> };
+  profile: {
+    completionPercentage: number;
+    fields: {
+      field: MatchFieldKey;
+      label: string;
+      value: number | null;
+      options: { id: string; label: string }[];
+    }[];
+    updatedAt: string;
+  };
+  match: {
+    percentage: number;
+    earnedPoints: number;
+    possiblePoints: number;
+    matchedRequiredCount: number;
+    eligibility: { eligible: boolean; reason: Record<string, unknown> | null };
+    metCriteria: MatchCriterionDetail[];
+    gaps: MatchCriterionDetail[];
+    unknownCriteria: MatchCriterionDetail[];
+    audit: MatchAuditReference;
+  };
+}
+
 export interface MatchEngineConfiguration {
   version: string;
   revision: number;
