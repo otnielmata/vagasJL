@@ -10,6 +10,7 @@ const { getEffectiveMatchEngineConfiguration } =
 const { transformLegacyVacancyInput } = require('./legacy-vacancy-compatibility.service');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+const IMPORTED_REQUIREMENT_IMPORTANCE = 'desirable';
 
 function invalid() {
   throw new ApiError(400, 'Procedencia da vaga invalida');
@@ -120,7 +121,6 @@ async function prepareImportedVacancyData(provenance, input) {
     const configuration = engineConfiguration ? {
       version: engineConfiguration.revision,
       engineVersion: engineConfiguration.version,
-      importance: engineConfiguration.defaultImportImportance,
     } : await ImportImportanceConfiguration.findOne().sort({ version: -1 });
     if (!configuration) throw new ApiError(409, 'Importancia padrao da importacao nao publicada');
     const seen = new Set();
@@ -131,13 +131,13 @@ async function prepareImportedVacancyData(provenance, input) {
       const key = item.id === undefined ? item.field : `${item.field}:${item.id}`;
       if (seen.has(key)) return null;
       seen.add(key);
-      return { ...item, importance: configuration.importance, eliminatory: false };
+      return { ...item, importance: IMPORTED_REQUIREMENT_IMPORTANCE, eliminatory: false };
     }).filter(Boolean);
     const appliedAt = new Date();
     content.matchProfile.requirements = requirements;
     importImportance = { version: configuration.version,
       engineVersion: configuration.engineVersion || null,
-      importance: configuration.importance, appliedAt };
+      importance: IMPORTED_REQUIREMENT_IMPORTANCE, appliedAt };
   }
   return {
     ...content, ...importedMetadata, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,

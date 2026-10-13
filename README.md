@@ -619,7 +619,7 @@ obtidos, pontos possíveis e a versão da configuração técnica aplicada.
 
 `PUT /admin/configuracoes/match/{version}` permite que somente um administrador ativo publique uma
 versão completa como `MATCH_V2`. O corpo reúne os 22 pesos técnicos, multiplicadores de importância,
-importância padrão das vagas importadas, percentual mínimo de Match, vigência e estado `draft` ou
+o campo legado de importância da importação, percentual mínimo de Match, vigência e estado `draft` ou
 `published`. Opcionalmente, também centraliza a completude mínima do perfil e a política de
 reprocessamento (`none` ou `affected_matches`). A partir da VJ-85, também pode definir
 `eliminatoryPolicyEnabled`; quando a configuração consolidada está vigente, esse valor substitui a
@@ -627,6 +627,8 @@ compatibilidade legada de `MATCH_ELIMINATORY_ENABLED`.
 
 Pesos aceitam valores de 0 a 1000 com até duas casas decimais; peso zero retira o critério do cálculo.
 O multiplicador `required` permanece 1, `indifferent` permanece 0 e `desirable` deve ficar entre 0 e 1.
+Requisitos identificados em vagas importadas são sempre classificados como `desirable` e não
+eliminatórios; `defaultImportImportance` permanece no contrato somente para compatibilidade e auditoria.
 Percentuais aceitam valores entre 0 e 100. Qualquer parâmetro inválido ou ausente retorna **422** sem
 publicação parcial e sem alterar a versão vigente.
 
@@ -884,8 +886,8 @@ O administrador publica IDs, labels e aliases reais em `genAITools` pelo
 origem `genAITecnologies`, o texto recebido, o ID resolvido e o status
 `mapped` ficam em auditoria privada. Valores desconhecidos ou ambíguos ficam
 com status `pending`, não são gravados como competência e não participam do
-Match. Na importação, somente mapeamento confiável gera requisito com a
-importância padrão publicada.
+Match. Na importação, somente mapeamento confiável gera requisito, sempre como
+`desirable` e não eliminatório.
 
 Se ChatGPT aparecer simultaneamente em `genAITools`, `genAITecnologies` e
 `hasGenAI`, apenas o requisito canônico em `genAITools` altera numerador,
@@ -1088,31 +1090,33 @@ requisito pontuável, o serviço de Match retorna `percentage: null` e
 personalizado sem requisitos classificados. Vagas `COMPANY` e `ADMIN` continuam exigindo
 valores declarados e rejeitam `false` como competência.
 
-## Importância padrão de requisitos importados — VJ-49
+## Classificação de requisitos importados — VJ-49
 
-Um administrador publica a importância padrão em
+O endpoint legado permite publicar a configuração em
 `PUT /configuracoes/importacao/importancia-padrao` com o corpo
 `{"importance":"desirable"}`. Os valores aceitos são `required`, `desirable` e
 `indifferent`. A resposta contém versão, autor e data de vigência. Repetir o mesmo
 valor mantém a versão; uma alteração cria nova versão. Requisições sem JWT, sem
 permissão ou com corpo inválido retornam 401, 403 ou 400, respectivamente.
+Essa configuração é preservada para compatibilidade e rastreabilidade, mas não altera
+a classificação operacional: toda competência identificada em vaga importada é
+persistida como `desirable` e `eliminatory: false`.
 
 O serviço interno `registerImportedVacancy` recebe uma competência identificada
 como `{ "id": "cypress", "identified": true }` no campo técnico do Perfil de Match;
 para `yearsOfExperience`, usa `{ "value": 3, "identified": true }`. Listas aceitam
 mais de um ID. O ID deve ser **canônico e já publicado** no catálogo compartilhado;
 `true` sem ID é ambíguo e rejeitado. Um `false` continua significando não identificado.
-Cada `true` canônico recebe a importância publicada, sem tornar-se eliminatório;
+Cada `true` canônico recebe importância `desirable`, sem tornar-se eliminatório;
 IDs repetidos geram um único requisito. Sem configuração publicada, a importação
 de requisitos `true` é bloqueada, sem gravar a vaga. A vaga fica pendente até cumprir
 as demais regras de ativação.
 
-A vaga armazena a versão, a importância e a data aplicadas, além da revisão e do
-histórico interno de classificação. Alterar a configuração afeta apenas novas
-importações; o mesmo `source`/`sourceId` não pode ser reimportado silenciosamente.
+A vaga armazena a versão, a importância `desirable` e a data aplicadas, além da revisão e do
+histórico interno de classificação. Alterar a configuração não substitui essa regra;
+o mesmo `source`/`sourceId` não pode ser reimportado silenciosamente.
 Um futuro reprocessamento deverá ser explícito e auditado. `desirable` usa o fator
-reduzido do Match; `indifferent` não pontua. Ausências e campos derivados nunca
-geram pontos adicionais.
+reduzido do Match. Ausências e campos derivados nunca geram pontos adicionais.
 
 ## Conciliação de vagas importadas — VJ-69
 
@@ -2150,8 +2154,9 @@ O comando ativa a conta, altera somente o papel e incrementa `tokenVersion`, inv
 Na camada web, esse papel recebe a área exclusiva `/master/importacao`; o menu não é exibido para
 candidatos, empresas ou administradores.
 
-Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), importância padrão
+Pré-requisitos em produção: catálogo do Perfil de Match publicado (v2 recomendado), configuração legada
 da importação publicada (`PUT /configuracoes/importacao/importancia-padrao`), `APPLICATION_ALLOWED_HOSTS`
 com `www.linkedin.com` e `CRON_SECRET` definido no projeto da Vercel.
-Uma importação real é interrompida antes de criar o lote quando a importância padrão ainda não foi publicada;
+Uma importação real é interrompida antes de criar o lote quando essa configuração ainda não foi publicada;
+quando publicada, todos os requisitos identificados são gravados como `desirable` e não eliminatórios;
 o modo `dryRun` continua disponível para apresentar os problemas de configuração sem gravar vagas.

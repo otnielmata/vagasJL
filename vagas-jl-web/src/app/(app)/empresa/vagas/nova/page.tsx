@@ -42,6 +42,8 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
     setBase((b) => ({ ...b, [k]: e.target.value }));
   const setReq = (key: MatchFieldKey, patch: Partial<ReqState>) =>
     setReqs((r) => ({ ...r, [key]: { value: null, importance: 'required', eliminatory: false, ...r[key], ...patch } }));
+  const setImportance = (key: MatchFieldKey, importance: Importance) =>
+    setReq(key, { importance, ...(importance === 'indifferent' ? { eliminatory: false } : {}) });
 
   function buildMatchProfile() {
     const values: MatchValues = {};
@@ -118,9 +120,10 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
       <Card>
         <CardHeader title="Perfil de Match da vaga" description="Obrigatório participa integralmente; desejável com impacto reduzido; indiferente não pontua. Eliminatório torna o candidato inelegível se não atender." />
         <CardBody className="divide-y divide-border">
-          {MATCH_FIELDS.filter((d) => d.kind !== 'boolean').map((def) => {
+          {MATCH_FIELDS.map((def) => {
             const r = reqs[def.key];
             const selected = r && r.value !== null && !(Array.isArray(r.value) && r.value.length === 0);
+            const requirement = r ?? { value: null, importance: 'required' as Importance, eliminatory: false };
             return (
               <div key={def.key} className="grid gap-3 py-5 first:pt-0 last:pb-0 lg:grid-cols-[200px_1fr]">
                 <div>
@@ -134,55 +137,24 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
                     <Input aria-label={def.label} type="number" min={0} max={100} step={0.5} wrapperClassName="w-40" placeholder="Mínimo"
                       value={typeof r?.value === 'number' ? r.value : ''} onChange={(e) => setReq(def.key, { value: e.target.value === '' ? null : Number(e.target.value) })} />
                   ) : (
-                    <ChipGroup ariaLabel={def.label} multiple={def.key !== 'type' && def.kind === 'multi'} options={def.options ?? []}
+                    <ChipGroup ariaLabel={def.label} multiple={def.kind === 'multi' && def.key !== 'type'} options={def.options ?? []}
                       value={(r?.value as string[] | null) ?? []} onChange={(v) => setReq(def.key, { value: v })} />
                   )}
-                  {selected && (
-                    <div className="flex flex-wrap items-center gap-4">
-                      <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE} value={r!.importance} onChange={(v) => setReq(def.key, { importance: v })} />
-                      {r!.importance === 'required' && (
-                        <div className="w-56">
-                          <Switch label="Eliminatório" checked={r!.eliminatory} onChange={(v) => setReq(def.key, { eliminatory: v })} />
-                        </div>
-                      )}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE}
+                      value={requirement.importance} disabled={!selected}
+                      onChange={(importance) => setImportance(def.key, importance)} />
+                    <div className="w-56">
+                      <Switch label="Eliminatório" checked={requirement.eliminatory}
+                        disabled={!selected || requirement.importance === 'indifferent'}
+                        onChange={(eliminatory) => setReq(def.key, { eliminatory })} />
                     </div>
-                  )}
+                    {!selected && <span className="text-xs text-muted">Selecione um requisito para classificar.</span>}
+                  </div>
                 </div>
               </div>
             );
           })}
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader title="Práticas exigidas" description="Marque apenas o que a vaga realmente pede — ausência significa “não aplicável”, não “compatível”." />
-        <CardBody>
-          <ChipGroup
-            ariaLabel="Práticas exigidas"
-            options={MATCH_FIELDS.filter((d) => d.kind === 'boolean').map((d) => ({ id: d.key, label: d.label }))}
-            value={MATCH_FIELDS.filter((d) => d.kind === 'boolean' && Array.isArray(reqs[d.key]?.value) && (reqs[d.key]!.value as string[]).length).map((d) => d.key)}
-            onChange={(ids) =>
-              MATCH_FIELDS.filter((d) => d.kind === 'boolean').forEach((d) =>
-                setReq(d.key, { value: ids.includes(d.key) ? [d.options![0].id] : null }))
-            }
-          />
-          <div className="mt-5 space-y-4">
-            {MATCH_FIELDS.filter((d) => d.kind === 'boolean' && Array.isArray(reqs[d.key]?.value) &&
-              (reqs[d.key]!.value as string[]).length).map((def) => {
-              const requirement = reqs[def.key]!;
-              return (
-                <div key={def.key} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-surface-2 p-4">
-                  <span className="text-sm font-medium">{def.label}</span>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE} value={requirement.importance}
-                      onChange={(value) => setReq(def.key, { importance: value })} />
-                    {requirement.importance === 'required' && <div className="w-52"><Switch label="Eliminatório" checked={requirement.eliminatory}
-                      onChange={(value) => setReq(def.key, { eliminatory: value })} /></div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </CardBody>
       </Card>
 

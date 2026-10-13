@@ -130,24 +130,29 @@ export function Segmented<T extends string | number>({
   value,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="inline-flex rounded-xl border border-border bg-surface-2 p-0.5">
+    <div role="radiogroup" aria-label={ariaLabel} aria-disabled={disabled}
+      className={cn('inline-flex rounded-xl border border-border bg-surface-2 p-0.5', disabled && 'opacity-60')}>
       {options.map((o) => (
         <button
           key={String(o.value)}
           type="button"
           role="radio"
           aria-checked={value === o.value}
+          disabled={disabled}
           onClick={() => onChange(o.value)}
           className={cn(
             'rounded-[10px] px-3 py-1.5 text-sm font-medium transition-colors',
             value === o.value ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground',
+            disabled && 'cursor-not-allowed',
           )}
         >
           {o.label}
