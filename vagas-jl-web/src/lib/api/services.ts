@@ -102,6 +102,10 @@ export const companyService = {
   addUser: (id: string, userId: string) => api.post<unknown>(`/empresas/${id}/usuarios`, { userId }),
   createVacancy: (companyId: string, input: CompanyVacancyInput) =>
     api.post<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas`, input),
+  getVacancy: (companyId: string, vacancyId: string) =>
+    api.get<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas/${vacancyId}`),
+  updateVacancy: (companyId: string, vacancyId: string, input: CompanyVacancyInput) =>
+    api.patch<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas/${vacancyId}`, input),
 };
 
 export const vacancyService = {

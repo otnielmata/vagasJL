@@ -18,5 +18,9 @@ router.delete('/:id/cadastro', authenticate, authorize('master'), ensureDatabase
   controller.removeRegistration);
 router.post('/:id/vagas', authenticate, authorize('company', 'admin'), ensureDatabase,
   vacancyController.registerCompany);
+router.get('/:id/vagas/:vacancyId', authenticate, authorize('company', 'admin'), ensureDatabase,
+  vacancyController.showCompany);
+router.patch('/:id/vagas/:vacancyId', authenticate, authorize('company', 'admin'), ensureDatabase,
+  vacancyController.updateCompany);
 
 module.exports = router;

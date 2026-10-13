@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send } from 'lucide-react';
 import { companyService } from '@/lib/api/services';
-import type { Importance, MatchFieldKey, MatchValues, VacancyRequirement } from '@/lib/api/types';
+import type { Importance, MatchFieldKey, MatchValues, Vacancy, VacancyRequirement } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
 import { MATCH_FIELDS } from '@/config/match-catalog';
 import { PageHeader } from '@/components/ui/page-header';
@@ -28,13 +28,49 @@ const IMPORTANCE: { value: Importance; label: string }[] = [
   { value: 'indifferent', label: 'Indiferente' },
 ];
 
-export function VacancyForm({ companyId, admin = false }: { companyId?: string; admin?: boolean }) {
+const EMPTY_BASE = { reference: '', title: '', description: '', city: '', state: '', country: 'Brasil',
+  channelType: 'https_url', channel: '', expiresAt: '' };
+
+function initialBase(vacancy?: Vacancy) {
+  if (!vacancy) return EMPTY_BASE;
+  return {
+    reference: vacancy.reference ?? '',
+    title: vacancy.title ?? '',
+    description: vacancy.description ?? '',
+    city: vacancy.location?.city ?? '',
+    state: vacancy.location?.state ?? '',
+    country: vacancy.location?.country ?? '',
+    channelType: vacancy.applicationChannel?.type ?? 'https_url',
+    channel: vacancy.applicationChannel?.value ?? '',
+    expiresAt: vacancy.expiresAt ? vacancy.expiresAt.slice(0, 10) : '',
+  };
+}
+
+function initialRequirements(vacancy?: Vacancy): Partial<Record<MatchFieldKey, ReqState>> {
+  if (!vacancy) return { type: { value: ['remote'], importance: 'required', eliminatory: false } };
+  const result: Partial<Record<MatchFieldKey, ReqState>> = {};
+  for (const def of MATCH_FIELDS) {
+    const raw = vacancy.matchProfile.values?.[def.key];
+    if (raw === undefined || raw === null) continue;
+    const requirement = vacancy.matchProfile.requirements?.find((item) => item.field === def.key);
+    result[def.key] = {
+      value: def.kind === 'number' ? Number(raw) : Array.isArray(raw) ? raw.map(String) : [String(raw)],
+      importance: requirement?.importance ?? 'required',
+      eliminatory: requirement?.eliminatory === true,
+    };
+  }
+  return result;
+}
+
+export function VacancyForm({ companyId, admin = false, vacancy }: {
+  companyId?: string;
+  admin?: boolean;
+  vacancy?: Vacancy;
+}) {
   const router = useRouter();
   const toast = useToast();
-  const [base, setBase] = useState({ reference: '', title: '', description: '', city: '', state: '', country: 'Brasil', channelType: 'https_url', channel: '', expiresAt: '' });
-  const [reqs, setReqs] = useState<Partial<Record<MatchFieldKey, ReqState>>>({
-    type: { value: ['remote'], importance: 'required', eliminatory: false },
-  });
+  const [base, setBase] = useState(() => initialBase(vacancy));
+  const [reqs, setReqs] = useState<Partial<Record<MatchFieldKey, ReqState>>>(() => initialRequirements(vacancy));
   const [error, setError] = useState<ApiError>();
   const [saving, setSaving] = useState(false);
 
@@ -78,8 +114,11 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
         ...(Object.keys(location).length ? { location } : {}),
         matchProfile: buildMatchProfile(),
       };
-      await companyService.createVacancy(companyId!, input);
-      toast('success', 'Vaga criada e enviada para revisão.');
+      if (vacancy) await companyService.updateVacancy(companyId!, vacancy._id, input);
+      else await companyService.createVacancy(companyId!, input);
+      toast('success', vacancy
+        ? 'Vaga atualizada e enviada novamente para aprovação.'
+        : 'Vaga criada e enviada para revisão.');
       router.push(admin ? '/admin/vagas' : '/empresa/vagas');
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, { message: 'Erro inesperado' }));
@@ -92,7 +131,9 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
 
   return (
     <form onSubmit={onSubmit} className="space-y-6" noValidate>
-      <PageHeader eyebrow={admin ? 'Administração' : 'Nova vaga'} title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
+      <PageHeader eyebrow={admin ? 'Recrutador' : 'Vaga da empresa'}
+        title={vacancy ? 'Editar oportunidade' : 'Cadastrar oportunidade'}
+        description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
 
       <Card>
         <CardHeader title="Dados da vaga" />
@@ -161,7 +202,7 @@ export function VacancyForm({ companyId, admin = false }: { companyId?: string; 
       {error && <Alert tone="danger" title="Não foi possível criar a vaga">{error.message}</Alert>}
       <div className="flex justify-end">
         <Button type="submit" size="lg" loading={saving} disabled={!base.title || !base.reference || !base.description || !hasType}>
-          <Send className="h-4 w-4" /> Enviar vaga para revisão
+          <Send className="h-4 w-4" /> {vacancy ? 'Salvar e reenviar para aprovação' : 'Enviar vaga para revisão'}
         </Button>
       </div>
     </form>

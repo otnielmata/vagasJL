@@ -23,6 +23,26 @@ async function registerCompany(req, res, next) {
   }
 }
 
+async function showCompany(req, res, next) {
+  try {
+    const vacancy = await service.getCompanyVacancy(req.user, req.params.id, req.params.vacancyId);
+    return res.status(200).json({ vacancy: vacancy.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateCompany(req, res, next) {
+  try {
+    const vacancy = await service.updateCompanyVacancy(
+      req.user, req.params.id, req.params.vacancyId, req.body,
+    );
+    return res.status(200).json({ vacancy: vacancy.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function updateStatus(req, res, next) {
   try {
     const vacancy = await statusService.updateStatus(req.user, req.params.id, req.body);
@@ -61,5 +81,5 @@ async function normalizeDescription(req, res, next) {
   }
 }
 
-module.exports = { list, registerCompany, updateStatus, updateRequirements, rankCandidates,
-  normalizeDescription };
+module.exports = { list, registerCompany, showCompany, updateCompany, updateStatus,
+  updateRequirements, rankCandidates, normalizeDescription };

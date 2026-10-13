@@ -201,6 +201,8 @@ A especificação também pode ser consultada diretamente em [`src/docs/swagger.
 | PUT    | `/configuracoes/match/completude-minima` | Admin (Bearer) | Publica completude mínima para recomendações (VJ-73) |
 | GET    | `/vagas?page=1` | Candidato/Admin/Master (Bearer) | Lista 10 vagas por página, sem cálculo de Match, com filtros textuais e estruturados |
 | POST   | `/empresas/{id}/vagas` | Recrutador vinculado (Bearer) | Cadastra vaga própria pendente (VJ-42) |
+| GET    | `/empresas/{id}/vagas/{vagaId}` | Recrutador vinculado (Bearer) | Consulta uma vaga própria para edição |
+| PATCH  | `/empresas/{id}/vagas/{vagaId}` | Recrutador vinculado (Bearer) | Edita uma vaga própria e a reenvia para aprovação |
 | POST   | `/candidatos/me/perfil-match` | Candidato (Bearer) | Cadastra o próprio Perfil de Match (VJ-29) |
 | GET    | `/candidatos/me/perfil-match` | Candidato (Bearer) | Consulta respostas e completude do Perfil de Match (VJ-72) |
 | GET    | `/candidatos/me/vagas/ranking` | Candidato (Bearer) | Lista vagas elegíveis em ordem técnica (VJ-45) |
@@ -431,6 +433,14 @@ tentativas de enviá-los retornam **400**. Referência repetida na mesma empresa
 O índice único impede duplicidade concorrente. A vaga é salva em coleção própria, compatível
 com futuras origens `IMPORTED` e `ADMIN`; não há pontuação nem inclusão no ranking até uma
 aprovação do perfil Master. Enquanto estiver `pending`, ela não participa de rankings.
+
+O recrutador pode consultar e editar uma vaga da empresa vinculada por meio de
+`GET /empresas/{id}/vagas/{vagaId}` e `PATCH /empresas/{id}/vagas/{vagaId}`. A edição recebe
+o mesmo contrato completo do cadastro e registra a revisão dos requisitos. Vagas `active`,
+`paused` ou `expired` retornam para `pending` e deixam os rankings até uma nova aprovação do
+perfil Master; vagas já pendentes permanecem pendentes. Vagas `removed` ou `rejected` não
+podem ser editadas e retornam **409**. O histórico de status e a auditoria dos requisitos são
+preservados.
 
 ## Origem e Perfil de Match das vagas — VJ-43
 

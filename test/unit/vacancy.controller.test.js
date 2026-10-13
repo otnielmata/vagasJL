@@ -28,6 +28,22 @@ test('POST company vacancy is mounted for linked recruiter roles', () => {
   }
 });
 
+test('GET and PATCH company vacancy are protected for linked recruiter roles', () => {
+  for (const [method, handler] of [['get', controller.showCompany], ['patch', controller.updateCompany]]) {
+    const route = router.stack.find((layer) => layer.route?.path === '/:id/vagas/:vacancyId' &&
+      layer.route.methods[method]).route;
+    const handlers = route.stack.map((layer) => layer.handle);
+    assert.equal(handlers[0], authenticate);
+    assert.equal(handlers[2], ensureDatabase);
+    assert.equal(handlers[3], handler);
+    for (const role of ['company', 'admin']) {
+      let passed = false;
+      handlers[1]({ user: { role } }, {}, () => { passed = true; });
+      assert.equal(passed, true);
+    }
+  }
+});
+
 test('controller returns 201 with safe vacancy and forwards errors', async (context) => {
   const register = context.mock.method(service, 'registerCompanyVacancy', async () => ({
     toJSON: () => ({ _id: 'vacancy-id', origin: 'COMPANY', status: 'pending' }),
@@ -43,4 +59,20 @@ test('controller returns 201 with safe vacancy and forwards errors', async (cont
   let forwarded;
   await controller.registerCompany(request, {}, (error) => { forwarded = error; });
   assert.equal(forwarded, failure);
+});
+
+test('company vacancy read and edit controllers return safe service results', async (context) => {
+  const vacancy = { toJSON: () => ({ _id: 'vacancy-id', origin: 'COMPANY', status: 'pending' }) };
+  const show = context.mock.method(service, 'getCompanyVacancy', async () => vacancy);
+  const update = context.mock.method(service, 'updateCompanyVacancy', async () => vacancy);
+  const request = { user: { id: 'user', role: 'admin' },
+    params: { id: 'company', vacancyId: 'vacancy-id' }, body: { title: 'QA' } };
+  const response = { status(code) { this.code = code; return this; },
+    json(body) { this.body = body; return this; } };
+  await controller.showCompany(request, response, () => assert.fail('unexpected error'));
+  assert.equal(response.code, 200);
+  await controller.updateCompany(request, response, () => assert.fail('unexpected error'));
+  assert.equal(response.code, 200);
+  assert.deepEqual(show.mock.calls[0].arguments, [request.user, 'company', 'vacancy-id']);
+  assert.deepEqual(update.mock.calls[0].arguments, [request.user, 'company', 'vacancy-id', request.body]);
 });

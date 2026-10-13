@@ -12,7 +12,7 @@ export default function CompanyVacanciesPage() {
     <CompanyGate>{() => <>
       <PageHeader eyebrow="Recrutador" title="Vagas cadastradas" description="Consulte somente as vagas cadastradas pela sua empresa. Novas vagas aguardam aprovação do Master."
         actions={<Link href="/empresa/vagas/nova" className={buttonClasses()}><Plus className="h-4 w-4" /> Cadastrar vaga</Link>} />
-      <VacancyBrowser admin company />
+      <VacancyBrowser admin company editBasePath="/empresa/vagas" />
     </>}</CompanyGate>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, BriefcaseBusiness, ChevronLeft, ChevronRight, MapPin, Search, X } from 'lucide-react';
+import { ArrowUpRight, BriefcaseBusiness, ChevronLeft, ChevronRight, MapPin, Pencil, Search, X } from 'lucide-react';
 import { vacancyService } from '@/lib/api/services';
 import type { Vacancy, VacancyListFilters, VacancyStatus } from '@/lib/api/types';
 import { MATCH_FIELDS, optionLabel } from '@/config/match-catalog';
@@ -24,7 +24,12 @@ function asArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : value == null ? [] : [String(value)];
 }
 
-function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin: boolean; company: boolean }) {
+function VacancyListCard({ vacancy, admin, company, editBasePath }: {
+  vacancy: Vacancy;
+  admin: boolean;
+  company: boolean;
+  editBasePath?: string;
+}) {
   const values = vacancy.matchProfile?.values ?? {};
   const location = [vacancy.location?.city, vacancy.location?.state, vacancy.location?.country]
     .filter(Boolean).join(', ');
@@ -49,9 +54,15 @@ function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin:
             {vacancy.sourceCompanyName && <p className="mt-1 text-sm font-medium">{vacancy.sourceCompanyName}</p>}
             {location && <p className="mt-1 inline-flex items-center gap-1 text-sm text-muted"><MapPin className="h-4 w-4" />{location}</p>}
           </div>
+          <div className="flex flex-wrap gap-2">
           {!admin && (
             <Link className={buttonClasses('outline', 'sm')} href={`/candidato/vagas/${vacancy._id}`}>
               Ver detalhes <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          )}
+          {editBasePath && !['removed', 'rejected'].includes(vacancy.status) && (
+            <Link className={buttonClasses('outline', 'sm')} href={`${editBasePath}/${vacancy._id}/editar`}>
+              <Pencil className="h-4 w-4" /> Editar vaga
             </Link>
           )}
           {company && vacancy.status === 'active' && (
@@ -59,6 +70,7 @@ function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin:
               Ver candidatos <ArrowUpRight className="h-4 w-4" />
             </Link>
           )}
+          </div>
         </div>
         {vacancy.description && <p className="line-clamp-3 text-sm text-muted">{vacancy.description}</p>}
         {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((tag) => <Badge key={tag} tone="muted">{tag}</Badge>)}</div>}
@@ -68,10 +80,12 @@ function VacancyListCard({ vacancy, admin, company }: { vacancy: Vacancy; admin:
   );
 }
 
-export function VacancyBrowser({ admin = false, company = false, hideOrigin = false, initialFilters = EMPTY }: {
+export function VacancyBrowser({ admin = false, company = false, hideOrigin = false, editBasePath,
+  initialFilters = EMPTY }: {
   admin?: boolean;
   company?: boolean;
   hideOrigin?: boolean;
+  editBasePath?: string;
   initialFilters?: VacancyListFilters;
 }) {
   const [draft, setDraft] = useState<VacancyListFilters>(initialFilters);
@@ -140,7 +154,8 @@ export function VacancyBrowser({ admin = false, company = false, hideOrigin = fa
       ) : data?.items.length ? (
         <>
           <p className="text-sm text-muted">{data.total} vaga(s) encontrada(s) · 10 por página</p>
-          <div className="grid gap-4">{data.items.map((vacancy) => <VacancyListCard key={vacancy._id} vacancy={vacancy} admin={admin} company={company} />)}</div>
+          <div className="grid gap-4">{data.items.map((vacancy) => <VacancyListCard key={vacancy._id}
+            vacancy={vacancy} admin={admin} company={company} editBasePath={editBasePath} />)}</div>
           <nav aria-label="Paginação das vagas" className="flex items-center justify-center gap-3">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft className="h-4 w-4" />Anterior</Button>
             <span className="text-sm text-muted">Página {data.page} de {Math.max(data.pages, 1)}</span>
