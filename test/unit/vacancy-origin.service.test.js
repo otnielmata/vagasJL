@@ -171,6 +171,15 @@ test('model requires origin and matching provenance, with immutable origin', () 
   assert.equal(Vacancy.schema.path('origin').options.default, undefined);
 });
 
+test('vacancy filters use independent indexes for array-valued type and level', () => {
+  const indexes = Vacancy.schema.indexes();
+  assert.ok(indexes.some(([keys, options]) => keys['matchProfile.values.type'] === 1 &&
+    keys.status === 1 && options.name === 'vacancy_type_status'));
+  assert.ok(indexes.some(([keys, options]) => keys['matchProfile.values.level'] === 1 &&
+    keys.status === 1 && options.name === 'vacancy_level_status'));
+  assert.equal(indexes.some(([, options]) => options.name === 'vacancy_type_level_status'), false);
+});
+
 test('legacy and untraceable vacancies are flagged, never inferred as imported', () => {
   const base = { status: 'active', matchProfile: { configurationVersion: 2,
     values: { type: ['remote'] } } };

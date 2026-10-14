@@ -9,7 +9,7 @@ const TRANSACTION_OPTIONS = Object.freeze({
 });
 
 async function deleteRegistration(actor, companyId) {
-  if (!['admin', 'company'].includes(actor?.role)) {
+  if (!['master', 'admin', 'company'].includes(actor?.role)) {
     throw new ApiError(403, 'Perfil sem permissao para excluir empresa');
   }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {

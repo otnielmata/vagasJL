@@ -3,12 +3,9 @@ require('../support/env');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Company = require('../../src/models/company.model');
-const CompanyUser = require('../../src/models/company-user.model');
-const User = require('../../src/models/user.model');
 const { updateCompanyStatus } = require('../../src/services/company-status.service');
 
 const companyId = '6512f1e2b3a1c2d3e4f5a6b7';
-const recruiterId = '6512f1e2b3a1c2d3e4f5a6b8';
 const admin = { id: '6512f1e2b3a1c2d3e4f5a6b9', role: 'admin' };
 const now = new Date('2026-09-23T18:00:00.000Z');
 
@@ -28,11 +25,7 @@ function setup(context, status = 'pending', overrides = {}) {
     ...overrides,
   });
   const companyQuery = { select: async () => company };
-  const membershipQuery = { select: () => ({ lean: async () => ({ user: recruiterId }) }) };
-  const userQuery = { select: () => ({ lean: async () => ({ _id: recruiterId }) }) };
   const findCompany = context.mock.method(Company, 'findOne', () => companyQuery);
-  const findMembership = context.mock.method(CompanyUser, 'findOne', () => membershipQuery);
-  const findUser = context.mock.method(User, 'findOne', () => userQuery);
   const updateCompany = context.mock.method(Company, 'findOneAndUpdate', async (_filter, update) => {
     company.status = update.$set.status;
     company.authorizationInvalidatedAt = update.$set.authorizationInvalidatedAt;
@@ -40,12 +33,11 @@ function setup(context, status = 'pending', overrides = {}) {
     company.statusHistory.push(update.$push.statusHistory);
     return company;
   });
-  return { company, companyQuery, membershipQuery, userQuery, findCompany, findMembership,
-    findUser, updateCompany };
+  return { company, companyQuery, findCompany, updateCompany };
 }
 
-test('admin activates complete company with verified responsible and audit', async (context) => {
-  const { company, findMembership, findUser, updateCompany } = setup(context);
+test('admin activates complete company without recruiter link and records audit', async (context) => {
+  const { company, updateCompany } = setup(context);
   const response = await updateCompanyStatus(admin, companyId, {
     status: 'active', reason: 'Revisao documental aprovada',
   }, now);
@@ -53,14 +45,6 @@ test('admin activates complete company with verified responsible and audit', asy
   assert.deepEqual(response, {
     company: { _id: company._id, status: 'active' },
     previousStatus: 'pending', changed: true, changedAt: now,
-  });
-  assert.equal(findMembership.mock.callCount(), 1);
-  assert.deepEqual(findMembership.mock.calls[0].arguments[0], {
-    company: company._id, role: 'recruiter', status: 'active',
-  });
-  assert.equal(findUser.mock.callCount(), 1);
-  assert.deepEqual(findUser.mock.calls[0].arguments[0], {
-    _id: recruiterId, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
   });
   const [filter, update, options] = updateCompany.mock.calls[0].arguments;
   assert.deepEqual(filter, {
@@ -78,17 +62,9 @@ test('admin activates complete company with verified responsible and audit', asy
   assert.deepEqual(options, { new: true, runValidators: true });
 });
 
-test('activation rejects incomplete company and missing verified responsible without write', async (context) => {
-  const { company, membershipQuery, userQuery, updateCompany } = setup(context);
+test('activation rejects only incomplete company without write', async (context) => {
+  const { company, updateCompany } = setup(context);
   company.city = undefined;
-  await assert.rejects(updateCompanyStatus(admin, companyId,
-    { status: 'active', reason: 'Revisao' }, now), { statusCode: 409 });
-  company.city = 'Sao Paulo';
-  membershipQuery.select = () => ({ lean: async () => null });
-  await assert.rejects(updateCompanyStatus(admin, companyId,
-    { status: 'active', reason: 'Revisao' }, now), { statusCode: 409 });
-  membershipQuery.select = () => ({ lean: async () => ({ user: recruiterId }) });
-  userQuery.select = () => ({ lean: async () => null });
   await assert.rejects(updateCompanyStatus(admin, companyId,
     { status: 'active', reason: 'Revisao' }, now), { statusCode: 409 });
   assert.equal(updateCompany.mock.callCount(), 0);
@@ -96,20 +72,28 @@ test('activation rejects incomplete company and missing verified responsible wit
 
 for (const target of ['inactive', 'blocked']) {
   test(`admin changes active company to ${target} and invalidates authorization`, async (context) => {
-    const { company, findMembership, findUser } = setup(context, 'active');
+    const { company } = setup(context, 'active');
     const response = await updateCompanyStatus(admin, companyId,
       { status: target, reason: `Motivo ${target}` }, now);
     assert.equal(response.company.status, target);
     assert.equal(company.authorizationVersion, 3);
     assert.equal(company.authorizationInvalidatedAt, now);
     assert.equal(company.statusHistory.at(-1).to, target);
-    assert.equal(findMembership.mock.callCount(), 0);
-    assert.equal(findUser.mock.callCount(), 0);
+  });
+}
+
+for (const current of ['active', 'inactive', 'blocked']) {
+  test(`admin returns ${current} company to pending without recruiter link`, async (context) => {
+    const { company } = setup(context, current);
+    const response = await updateCompanyStatus(admin, companyId,
+      { status: 'pending', reason: 'Nova revisao necessaria' }, now);
+    assert.equal(response.company.status, 'pending');
+    assert.equal(company.statusHistory.at(-1).to, 'pending');
   });
 }
 
 test('same status is idempotent and creates no audit or cache invalidation', async (context) => {
-  const { company, findMembership, updateCompany } = setup(context, 'inactive');
+  const { company, updateCompany } = setup(context, 'inactive');
   const beforeVersion = company.authorizationVersion;
   const response = await updateCompanyStatus(admin, companyId,
     { status: 'inactive', reason: 'Repeticao segura' }, now);
@@ -118,7 +102,6 @@ test('same status is idempotent and creates no audit or cache invalidation', asy
     previousStatus: 'inactive', changed: false, changedAt: null,
   });
   assert.equal(company.authorizationVersion, beforeVersion);
-  assert.equal(findMembership.mock.callCount(), 0);
   assert.equal(updateCompany.mock.callCount(), 0);
 });
 
@@ -139,17 +122,11 @@ test('invalid actors, IDs and bodies are rejected before storage', async (contex
   assert.equal(findCompany.mock.callCount(), 0);
 });
 
-test('missing company, forbidden transition and concurrent change return safe errors', async (context) => {
+test('missing company and concurrent change return safe errors', async (context) => {
   const { companyQuery, updateCompany } = setup(context, 'active');
   companyQuery.select = async () => null;
   await assert.rejects(updateCompanyStatus(admin, companyId,
     { status: 'blocked', reason: 'Revisao' }, now), { statusCode: 404 });
-
-  companyQuery.select = async () => Company.hydrate({
-    _id: companyId, status: 'active', updatedAt: now,
-  });
-  await assert.rejects(updateCompanyStatus(admin, companyId,
-    { status: 'pending', reason: 'Retorno invalido' }, now), { statusCode: 409 });
 
   companyQuery.select = async () => Company.hydrate({
     _id: companyId, legalName: 'Empresa', responsibleName: 'Ana', email: 'a@b.com',

@@ -4,9 +4,8 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send } from 'lucide-react';
 import { companyService } from '@/lib/api/services';
-import type { Importance, MatchFieldKey, MatchValues, VacancyRequirement } from '@/lib/api/types';
+import type { Importance, MatchFieldKey, MatchValues, Vacancy, VacancyRequirement } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
-import { useCompanyVacancies } from '@/lib/use-links';
 import { MATCH_FIELDS } from '@/config/match-catalog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
@@ -29,14 +28,49 @@ const IMPORTANCE: { value: Importance; label: string }[] = [
   { value: 'indifferent', label: 'Indiferente' },
 ];
 
-function NewVacancyForm({ companyId }: { companyId: string }) {
+const EMPTY_BASE = { reference: '', title: '', description: '', city: '', state: '', country: 'Brasil',
+  channelType: 'https_url', channel: '', expiresAt: '' };
+
+function initialBase(vacancy?: Vacancy) {
+  if (!vacancy) return EMPTY_BASE;
+  return {
+    reference: vacancy.reference ?? '',
+    title: vacancy.title ?? '',
+    description: vacancy.description ?? '',
+    city: vacancy.location?.city ?? '',
+    state: vacancy.location?.state ?? '',
+    country: vacancy.location?.country ?? '',
+    channelType: vacancy.applicationChannel?.type ?? 'https_url',
+    channel: vacancy.applicationChannel?.value ?? '',
+    expiresAt: vacancy.expiresAt ? vacancy.expiresAt.slice(0, 10) : '',
+  };
+}
+
+function initialRequirements(vacancy?: Vacancy): Partial<Record<MatchFieldKey, ReqState>> {
+  if (!vacancy) return { type: { value: ['remote'], importance: 'required', eliminatory: false } };
+  const result: Partial<Record<MatchFieldKey, ReqState>> = {};
+  for (const def of MATCH_FIELDS) {
+    const raw = vacancy.matchProfile.values?.[def.key];
+    if (raw === undefined || raw === null) continue;
+    const requirement = vacancy.matchProfile.requirements?.find((item) => item.field === def.key);
+    result[def.key] = {
+      value: def.kind === 'number' ? Number(raw) : Array.isArray(raw) ? raw.map(String) : [String(raw)],
+      importance: requirement?.importance ?? 'required',
+      eliminatory: requirement?.eliminatory === true,
+    };
+  }
+  return result;
+}
+
+export function VacancyForm({ companyId, admin = false, vacancy }: {
+  companyId?: string;
+  admin?: boolean;
+  vacancy?: Vacancy;
+}) {
   const router = useRouter();
   const toast = useToast();
-  const [, addVacancy] = useCompanyVacancies();
-  const [base, setBase] = useState({ reference: '', title: '', description: '', city: '', state: '', country: 'Brasil', channelType: 'https_url', channel: '', expiresAt: '' });
-  const [reqs, setReqs] = useState<Partial<Record<MatchFieldKey, ReqState>>>({
-    type: { value: ['remote'], importance: 'required', eliminatory: false },
-  });
+  const [base, setBase] = useState(() => initialBase(vacancy));
+  const [reqs, setReqs] = useState<Partial<Record<MatchFieldKey, ReqState>>>(() => initialRequirements(vacancy));
   const [error, setError] = useState<ApiError>();
   const [saving, setSaving] = useState(false);
 
@@ -44,6 +78,8 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
     setBase((b) => ({ ...b, [k]: e.target.value }));
   const setReq = (key: MatchFieldKey, patch: Partial<ReqState>) =>
     setReqs((r) => ({ ...r, [key]: { value: null, importance: 'required', eliminatory: false, ...r[key], ...patch } }));
+  const setImportance = (key: MatchFieldKey, importance: Importance) =>
+    setReq(key, { importance, ...(importance === 'indifferent' ? { eliminatory: false } : {}) });
 
   function buildMatchProfile() {
     const values: MatchValues = {};
@@ -69,7 +105,7 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
       const location = Object.fromEntries(
         (['city', 'state', 'country'] as const).filter((k) => base[k].trim()).map((k) => [k, base[k].trim()]),
       );
-      const { vacancy } = await companyService.createVacancy(companyId, {
+      const input = {
         reference: base.reference.trim(),
         title: base.title.trim(),
         description: base.description.trim(),
@@ -77,10 +113,13 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
         ...(base.expiresAt ? { expiresAt: new Date(`${base.expiresAt}T23:59:59`).toISOString() } : {}),
         ...(Object.keys(location).length ? { location } : {}),
         matchProfile: buildMatchProfile(),
-      });
-      addVacancy({ _id: vacancy._id, title: vacancy.title, reference: vacancy.reference, createdAt: vacancy.createdAt ?? new Date().toISOString() });
-      toast('success', 'Vaga criada e enviada para revisão.');
-      router.push('/empresa');
+      };
+      if (vacancy) await companyService.updateVacancy(companyId!, vacancy._id, input);
+      else await companyService.createVacancy(companyId!, input);
+      toast('success', vacancy
+        ? 'Vaga atualizada e enviada novamente para aprovação.'
+        : 'Vaga criada e enviada para revisão.');
+      router.push(admin ? '/admin/vagas' : '/empresa/vagas');
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, { message: 'Erro inesperado' }));
     } finally {
@@ -92,7 +131,9 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6" noValidate>
-      <PageHeader eyebrow="Nova vaga" title="Cadastrar oportunidade" description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
+      <PageHeader eyebrow={admin ? 'Recrutador' : 'Vaga da empresa'}
+        title={vacancy ? 'Editar oportunidade' : 'Cadastrar oportunidade'}
+        description="Use o mesmo Perfil de Match dos candidatos: selecione requisitos do catálogo e defina a importância de cada um." />
 
       <Card>
         <CardHeader title="Dados da vaga" />
@@ -120,9 +161,10 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
       <Card>
         <CardHeader title="Perfil de Match da vaga" description="Obrigatório participa integralmente; desejável com impacto reduzido; indiferente não pontua. Eliminatório torna o candidato inelegível se não atender." />
         <CardBody className="divide-y divide-border">
-          {MATCH_FIELDS.filter((d) => d.kind !== 'boolean').map((def) => {
+          {MATCH_FIELDS.map((def) => {
             const r = reqs[def.key];
             const selected = r && r.value !== null && !(Array.isArray(r.value) && r.value.length === 0);
+            const requirement = r ?? { value: null, importance: 'required' as Importance, eliminatory: false };
             return (
               <div key={def.key} className="grid gap-3 py-5 first:pt-0 last:pb-0 lg:grid-cols-[200px_1fr]">
                 <div>
@@ -136,19 +178,20 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
                     <Input aria-label={def.label} type="number" min={0} max={100} step={0.5} wrapperClassName="w-40" placeholder="Mínimo"
                       value={typeof r?.value === 'number' ? r.value : ''} onChange={(e) => setReq(def.key, { value: e.target.value === '' ? null : Number(e.target.value) })} />
                   ) : (
-                    <ChipGroup ariaLabel={def.label} multiple={def.kind === 'multi'} options={def.options ?? []}
+                    <ChipGroup ariaLabel={def.label} multiple={def.kind === 'multi' && def.key !== 'type'} options={def.options ?? []}
                       value={(r?.value as string[] | null) ?? []} onChange={(v) => setReq(def.key, { value: v })} />
                   )}
-                  {selected && (
-                    <div className="flex flex-wrap items-center gap-4">
-                      <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE} value={r!.importance} onChange={(v) => setReq(def.key, { importance: v })} />
-                      {r!.importance === 'required' && (
-                        <div className="w-56">
-                          <Switch label="Eliminatório" checked={r!.eliminatory} onChange={(v) => setReq(def.key, { eliminatory: v })} />
-                        </div>
-                      )}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Segmented ariaLabel={`Importância de ${def.label}`} options={IMPORTANCE}
+                      value={requirement.importance} disabled={!selected}
+                      onChange={(importance) => setImportance(def.key, importance)} />
+                    <div className="w-56">
+                      <Switch label="Eliminatório" checked={requirement.eliminatory}
+                        disabled={!selected || requirement.importance === 'indifferent'}
+                        onChange={(eliminatory) => setReq(def.key, { eliminatory })} />
                     </div>
-                  )}
+                    {!selected && <span className="text-xs text-muted">Selecione um requisito para classificar.</span>}
+                  </div>
                 </div>
               </div>
             );
@@ -156,24 +199,10 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader title="Práticas exigidas" description="Marque apenas o que a vaga realmente pede — ausência significa “não aplicável”, não “compatível”." />
-        <CardBody>
-          <ChipGroup
-            ariaLabel="Práticas exigidas"
-            options={MATCH_FIELDS.filter((d) => d.kind === 'boolean').map((d) => ({ id: d.key, label: d.label }))}
-            value={MATCH_FIELDS.filter((d) => d.kind === 'boolean' && reqs[d.key]?.value === true).map((d) => d.key)}
-            onChange={(ids) =>
-              MATCH_FIELDS.filter((d) => d.kind === 'boolean').forEach((d) => setReq(d.key, { value: ids.includes(d.key) ? true : null }))
-            }
-          />
-        </CardBody>
-      </Card>
-
       {error && <Alert tone="danger" title="Não foi possível criar a vaga">{error.message}</Alert>}
       <div className="flex justify-end">
         <Button type="submit" size="lg" loading={saving} disabled={!base.title || !base.reference || !base.description || !hasType}>
-          <Send className="h-4 w-4" /> Enviar vaga para revisão
+          <Send className="h-4 w-4" /> {vacancy ? 'Salvar e reenviar para aprovação' : 'Enviar vaga para revisão'}
         </Button>
       </div>
     </form>
@@ -181,5 +210,5 @@ function NewVacancyForm({ companyId }: { companyId: string }) {
 }
 
 export default function NewVacancyPage() {
-  return <CompanyGate>{(id) => <NewVacancyForm companyId={id} />}</CompanyGate>;
+  return <CompanyGate>{(id) => <VacancyForm companyId={id} />}</CompanyGate>;
 }

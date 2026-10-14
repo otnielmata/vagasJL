@@ -10,9 +10,42 @@ const { getEffectiveMatchEngineConfiguration } =
 const { transformLegacyVacancyInput } = require('./legacy-vacancy-compatibility.service');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+const IMPORTED_REQUIREMENT_IMPORTANCE = 'desirable';
 
 function invalid() {
   throw new ApiError(400, 'Procedencia da vaga invalida');
+}
+
+function normalizeImportedMetadata(input) {
+  const sourceCompanyName = input?.sourceCompanyName;
+  const metadata = input?.importSourceData;
+  if (sourceCompanyName === undefined && metadata === undefined) return {};
+  if (sourceCompanyName !== null && sourceCompanyName !== undefined &&
+      (typeof sourceCompanyName !== 'string' || !sourceCompanyName.trim() ||
+        sourceCompanyName.trim().length > 200)) invalid();
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) invalid();
+  const expected = ['amountOfGenAITools', 'amountOfTestingRelatedKeywords', 'hasGenAI',
+    'isTestingRelated', 'rawApplicationUrl', 'rawLocation', 'skillsRequiredCounter',
+    'testingRelatedKeywords'];
+  if (Object.keys(metadata).sort().join(',') !== expected.sort().join(',') ||
+      !Array.isArray(metadata.testingRelatedKeywords) || metadata.testingRelatedKeywords.length > 200 ||
+      metadata.testingRelatedKeywords.some((value) => typeof value !== 'string' || !value.trim() ||
+        value.length > 100)) invalid();
+  for (const field of ['skillsRequiredCounter', 'amountOfTestingRelatedKeywords', 'amountOfGenAITools']) {
+    if (metadata[field] !== null && (!Number.isFinite(metadata[field]) || metadata[field] < 0)) invalid();
+  }
+  for (const field of ['hasGenAI', 'isTestingRelated']) {
+    if (metadata[field] !== null && typeof metadata[field] !== 'boolean') invalid();
+  }
+  for (const field of ['rawLocation', 'rawApplicationUrl']) {
+    if (metadata[field] !== null && (typeof metadata[field] !== 'string' || !metadata[field].trim() ||
+      metadata[field].length > 2000)) invalid();
+  }
+  return {
+    sourceCompanyName: sourceCompanyName?.trim() || null,
+    importSourceData: { ...metadata,
+      testingRelatedKeywords: metadata.testingRelatedKeywords.map((value) => value.trim()) },
+  };
 }
 
 async function prepareImportedVacancyData(provenance, input) {
@@ -25,9 +58,12 @@ async function prepareImportedVacancyData(provenance, input) {
       provenance.source.trim().length > 100 ||
       typeof provenance.sourceId !== 'string' || !provenance.sourceId.trim() ||
       provenance.sourceId.trim().length > 200) invalid();
+  const importedMetadata = normalizeImportedMetadata(input);
+  const { sourceCompanyName: _sourceCompanyName, importSourceData: _importSourceData,
+    ...vacancyInput } = input || {};
   const importSource = provenance.source.trim().toLowerCase();
   const importSourceId = provenance.sourceId.trim();
-  const transformation = await transformLegacyVacancyInput(input);
+  const transformation = await transformLegacyVacancyInput(vacancyInput);
   input = transformation.content;
   const rawValues = input?.matchProfile?.values;
   const identified = [];
@@ -85,7 +121,6 @@ async function prepareImportedVacancyData(provenance, input) {
     const configuration = engineConfiguration ? {
       version: engineConfiguration.revision,
       engineVersion: engineConfiguration.version,
-      importance: engineConfiguration.defaultImportImportance,
     } : await ImportImportanceConfiguration.findOne().sort({ version: -1 });
     if (!configuration) throw new ApiError(409, 'Importancia padrao da importacao nao publicada');
     const seen = new Set();
@@ -96,16 +131,16 @@ async function prepareImportedVacancyData(provenance, input) {
       const key = item.id === undefined ? item.field : `${item.field}:${item.id}`;
       if (seen.has(key)) return null;
       seen.add(key);
-      return { ...item, importance: configuration.importance, eliminatory: false };
+      return { ...item, importance: IMPORTED_REQUIREMENT_IMPORTANCE, eliminatory: false };
     }).filter(Boolean);
     const appliedAt = new Date();
     content.matchProfile.requirements = requirements;
     importImportance = { version: configuration.version,
       engineVersion: configuration.engineVersion || null,
-      importance: configuration.importance, appliedAt };
+      importance: IMPORTED_REQUIREMENT_IMPORTANCE, appliedAt };
   }
   return {
-    ...content, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
+    ...content, ...importedMetadata, origin: 'IMPORTED', status: 'pending', importSource, importSourceId,
       importImportance,
       ...(importImportance ? { requirementsRevision: 1, requirementsHistory: [{
         at: importImportance.appliedAt, actor: null, process: 'import',

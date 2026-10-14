@@ -12,10 +12,10 @@ const ensureDatabase = require('../../src/middleware/database.middleware');
 const { INITIAL_MATCH_WEIGHTS } = require('../../src/config/match-profile');
 const { calculateCompetencyMatch } = require('../../src/services/match-scoring.service');
 
-const admin = { id: '507f1f77bcf86cd799439011', role: 'admin' };
+const admin = { id: '507f1f77bcf86cd799439011', role: 'master' };
 const initial = { required: 1, desirable: 0.5, indifferent: 0 };
 
-test('route requires JWT and admin before publishing', () => {
+test('route requires JWT and master before publishing', () => {
   const route = router.stack.find((layer) => layer.route?.path === '/match/multiplicadores').route;
   const handlers = route.stack.map((layer) => layer.handle);
   assert.equal(handlers[0], authenticate);

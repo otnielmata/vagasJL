@@ -173,6 +173,7 @@ export interface Vacancy {
   company?: string | null;
   importSource?: string | null;
   importSourceId?: string | null;
+  sourceCompanyName?: string | null;
   reference: string;
   title: string;
   description?: string;
@@ -189,6 +190,29 @@ export interface Vacancy {
   expiresAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface VacancyListFilters {
+  q?: string;
+  origin?: VacancyOrigin;
+  status?: VacancyStatus;
+  city?: string;
+  state?: string;
+  country?: string;
+  type?: string;
+  level?: string;
+  role?: string;
+  specialization?: string;
+  skill?: string;
+}
+
+export interface VacancyListResponse {
+  items: Vacancy[];
+  page: number;
+  limit: 10;
+  total: number;
+  pages: number;
+  filters: VacancyListFilters;
 }
 
 export interface CompanyVacancyInput {
@@ -256,6 +280,7 @@ export interface RankingPage<T> {
   limit: number;
   pages: number;
   minimumMatchPercentage: number | null;
+  minimumProfileCompletionPercentage?: number | null;
   rankingThresholdVersion: number | null;
 }
 
@@ -283,9 +308,53 @@ export interface CandidateRankingItem {
   earnedPoints: number;
   possiblePoints: number;
   matchedRequiredCount: number;
+  profileCompletionPercentage: number;
   configurationVersion: number;
   multipliersVersion: number;
   audit: MatchAuditReference;
+}
+
+export interface CompanyCandidateReport {
+  vacancy: { _id: string; title: string; reference: string };
+  candidate: Pick<Candidate, '_id' | 'name'> & Partial<Pick<Candidate,
+    | 'photoUrl' | 'email' | 'phone' | 'city' | 'state' | 'country' | 'linkedinUrl'
+    | 'githubUrl' | 'portfolioUrl' | 'professionalSummary' | 'availability'
+    | 'availableForOpportunities'>> & { formation?: Partial<Engagement['data']> };
+  profile: {
+    completionPercentage: number;
+    fields: {
+      field: MatchFieldKey;
+      label: string;
+      value: number | null;
+      options: { id: string; label: string }[];
+    }[];
+    updatedAt: string;
+  };
+  match: {
+    percentage: number;
+    earnedPoints: number;
+    possiblePoints: number;
+    matchedRequiredCount: number;
+    eligibility: { eligible: boolean; reason: Record<string, unknown> | null };
+    metCriteria: MatchCriterionDetail[];
+    gaps: MatchCriterionDetail[];
+    unknownCriteria: MatchCriterionDetail[];
+    audit: MatchAuditReference;
+  };
+}
+
+export interface MatchEngineConfiguration {
+  version: string;
+  revision: number;
+  state: 'draft' | 'published';
+  weights: Record<MatchFieldKey, number>;
+  multipliers: { required: 1; desirable: number; indifferent: 0 };
+  defaultImportImportance: 'required' | 'desirable' | 'indifferent';
+  minimumMatchPercentage: number;
+  minimumProfileCompletionPercentage: number | null;
+  eliminatoryPolicyEnabled: boolean;
+  effectiveAt: string;
+  recalculation?: { policy?: 'none' | 'affected_matches' };
 }
 
 export type MatchResultState = 'eligible' | 'below_threshold' | 'ineligible' | 'not_calculable';
@@ -394,6 +463,12 @@ export interface PublicProfileState {
   effectiveFields: string[];
   consentedAt: string | null;
   revokedAt: string | null;
+}
+
+export interface CandidatePrivacyState {
+  availability: OpportunityAvailabilityState;
+  permissions: DisplayPermissionsState;
+  publicProfile: PublicProfileState;
 }
 
 /* ------------------------------------------------------------------ Empresa */

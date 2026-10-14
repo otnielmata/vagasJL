@@ -2,13 +2,43 @@ const service = require('../services/vacancy.service');
 const statusService = require('../services/vacancy-status.service');
 const requirementsService = require('../services/vacancy-requirements.service');
 const candidateRankingService = require('../services/candidate-ranking.service');
+const companyCandidateReportService = require('../services/company-candidate-report.service');
 const descriptionNormalizationService =
   require('../services/vacancy-description-normalization.service');
+const vacancyListService = require('../services/vacancy-list.service');
+
+async function list(req, res, next) {
+  try {
+    return res.status(200).json(await vacancyListService.listVacancies(req.user, req.query));
+  } catch (error) {
+    return next(error);
+  }
+}
 
 async function registerCompany(req, res, next) {
   try {
     const vacancy = await service.registerCompanyVacancy(req.user, req.params.id, req.body);
     return res.status(201).json({ vacancy: vacancy.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function showCompany(req, res, next) {
+  try {
+    const vacancy = await service.getCompanyVacancy(req.user, req.params.id, req.params.vacancyId);
+    return res.status(200).json({ vacancy: vacancy.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateCompany(req, res, next) {
+  try {
+    const vacancy = await service.updateCompanyVacancy(
+      req.user, req.params.id, req.params.vacancyId, req.body,
+    );
+    return res.status(200).json({ vacancy: vacancy.toJSON() });
   } catch (error) {
     return next(error);
   }
@@ -41,6 +71,17 @@ async function rankCandidates(req, res, next) {
   }
 }
 
+async function showCandidateReport(req, res, next) {
+  try {
+    const report = await companyCandidateReportService.getCompanyCandidateReport(
+      req.user, req.params.id, req.params.candidateId,
+    );
+    return res.status(200).json(report);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function normalizeDescription(req, res, next) {
   try {
     const normalization = await descriptionNormalizationService.normalizeVacancyDescription(
@@ -52,5 +93,5 @@ async function normalizeDescription(req, res, next) {
   }
 }
 
-module.exports = { registerCompany, updateStatus, updateRequirements, rankCandidates,
-  normalizeDescription };
+module.exports = { list, registerCompany, showCompany, updateCompany, updateStatus,
+  updateRequirements, rankCandidates, showCandidateReport, normalizeDescription };

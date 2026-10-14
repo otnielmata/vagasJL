@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { Briefcase, Plus, Users } from 'lucide-react';
-import { companyService } from '@/lib/api/services';
+import { companyService, vacancyService } from '@/lib/api/services';
 import { useAsync } from '@/lib/use-async';
-import { useCompanyVacancies } from '@/lib/use-links';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
@@ -12,18 +11,20 @@ import { Alert, EmptyState, Skeleton } from '@/components/ui/feedback';
 import { buttonClasses } from '@/components/ui/button';
 import { CompanyGate } from '@/components/company/company-gate';
 import { CompanyStatusBadge } from '@/components/match/status-badges';
+import { useAuth } from '@/lib/auth/auth-context';
 
 function Dashboard({ companyId }: { companyId: string }) {
+  const { user } = useAuth();
   const { data, error, loading } = useAsync(() => companyService.get(companyId), [companyId]);
-  const [vacancies] = useCompanyVacancies();
+  const vacancies = useAsync(() => vacancyService.list({ page: 1 }), []);
   const company = data?.company;
 
   return (
     <>
       <PageHeader
         eyebrow="Visão geral"
-        title={company?.tradeName || company?.legalName || 'Sua empresa'}
-        description="Cadastre vagas com requisitos estruturados e veja os candidatos mais compatíveis."
+        title={user?.name || 'Recrutador'}
+        description={`Vinculado a ${company?.tradeName || company?.legalName || 'uma empresa'}. Cadastre vagas e veja os candidatos mais compatíveis.`}
         actions={
           <Link href="/empresa/vagas/nova" className={buttonClasses()}>
             <Plus className="h-4 w-4" /> Nova vaga
@@ -42,7 +43,14 @@ function Dashboard({ companyId }: { companyId: string }) {
       ) : null}
 
       {company && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-6 grid gap-4 sm:grid-cols-4">
+          <Card>
+            <CardBody>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">Recrutador</p>
+              <p className="mt-2 truncate font-display text-lg font-semibold">{user?.name}</p>
+              <p className="truncate text-xs text-muted">{user?.email}</p>
+            </CardBody>
+          </Card>
           <Card>
             <CardBody>
               <p className="text-xs font-medium uppercase tracking-wider text-muted">Status</p>
@@ -54,7 +62,7 @@ function Dashboard({ companyId }: { companyId: string }) {
           <Card>
             <CardBody>
               <p className="text-xs font-medium uppercase tracking-wider text-muted">Vagas cadastradas aqui</p>
-              <p className="mt-2 font-display text-3xl font-bold">{vacancies.length}</p>
+              <p className="mt-2 font-display text-3xl font-bold">{vacancies.data?.total ?? 0}</p>
             </CardBody>
           </Card>
           <Card>
@@ -69,19 +77,21 @@ function Dashboard({ companyId }: { companyId: string }) {
       <Card className="mt-6">
         <CardHeader title="Suas vagas" description="Novas vagas entram como Pendentes até a revisão." />
         <CardBody>
-          {vacancies.length === 0 ? (
+          {vacancies.loading ? <Skeleton className="h-24" /> : vacancies.error ? (
+            <Alert tone="danger">{vacancies.error.message}</Alert>
+          ) : !vacancies.data?.items.length ? (
             <EmptyState icon={Briefcase} title="Nenhuma vaga ainda" description="Crie a primeira vaga para ver os candidatos mais compatíveis." action={<Link href="/empresa/vagas/nova" className={buttonClasses()}>Criar vaga</Link>} />
           ) : (
             <ul className="divide-y divide-border">
-              {vacancies.map((v) => (
+              {vacancies.data.items.map((v) => (
                 <li key={v._id} className="flex items-center justify-between gap-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{v.title}</p>
                     <p className="text-xs text-muted">{v.reference} · criada em {formatDate(v.createdAt)}</p>
                   </div>
-                  <Link href={`/empresa/ranking?vaga=${v._id}`} className={buttonClasses('outline', 'sm')}>
+                  {v.status === 'active' && <Link href={`/empresa/candidatos?vaga=${v._id}`} className={buttonClasses('outline', 'sm')}>
                     <Users className="h-4 w-4" /> Top candidatos
-                  </Link>
+                  </Link>}
                 </li>
               ))}
             </ul>

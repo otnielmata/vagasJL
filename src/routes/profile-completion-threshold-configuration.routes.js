@@ -4,7 +4,7 @@ const ensureDatabase = require('../middleware/database.middleware');
 const controller = require('../controllers/profile-completion-threshold-configuration.controller');
 
 const router = Router();
-router.put('/match/completude-minima', authenticate, authorize('admin'), ensureDatabase,
+router.put('/match/completude-minima', authenticate, authorize('master'), ensureDatabase,
   controller.publish);
 
 module.exports = router;

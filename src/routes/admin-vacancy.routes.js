@@ -5,6 +5,6 @@ const controller = require('../controllers/admin-vacancy.controller');
 
 const router = Router();
 
-router.put('/:id', authenticate, authorize('admin'), ensureDatabase, controller.manage);
+router.put('/:id', authenticate, authorize('master'), ensureDatabase, controller.manage);
 
 module.exports = router;

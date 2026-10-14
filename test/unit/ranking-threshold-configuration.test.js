@@ -10,9 +10,9 @@ const router = require('../../src/routes/ranking-threshold-configuration.routes'
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-const admin = { id: '507f1f77bcf86cd799439011', role: 'admin' };
+const admin = { id: '507f1f77bcf86cd799439011', role: 'master' };
 
-test('route requires JWT and active admin authorization before publishing', () => {
+test('route requires JWT and active master authorization before publishing', () => {
   const route = router.stack.find((layer) => layer.route?.path === '/match/limiar-ranking').route;
   const handlers = route.stack.map((layer) => layer.handle);
   assert.equal(handlers[0], authenticate);

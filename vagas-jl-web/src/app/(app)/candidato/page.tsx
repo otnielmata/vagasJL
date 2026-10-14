@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { ArrowRight, Gauge, Sparkles, UserRound } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { candidateService } from '@/lib/api/services';
@@ -16,21 +17,26 @@ import { VacancyCard } from '@/components/match/vacancy-card';
 
 export default function CandidateDashboard() {
   const { user } = useAuth();
-  const [candidateId] = useCandidateId();
-  const hasCandidate = !!candidateId;
+  const [, setCandidateId] = useCandidateId();
+  const registration = useAsync(() => candidateService.getMine());
   const profile = useAsync(() => candidateService.getMatchProfile());
   const ranking = useAsync(() => candidateService.vacancyRanking({ limit: 3 }), [], !profile.error);
   const engagement = useAsync(() => candidateService.engagement());
 
   const noProfile = profile.error?.status === 404;
+  const missingRegistration = registration.error?.status === 404;
   const completion = profile.data?.profile.completion.percentage ?? 0;
   const firstName = user?.name.split(' ')[0];
+
+  useEffect(() => {
+    if (registration.data?.candidate._id) setCandidateId(registration.data.candidate._id);
+  }, [registration.data, setCandidateId]);
 
   return (
     <>
       <PageHeader eyebrow="Visão geral" title={`Olá, ${firstName}`} description="Veja as vagas que mais combinam com o seu perfil e o que falta para melhorar seu Match." />
 
-      {!hasCandidate && (
+      {missingRegistration && (
         <Alert
           tone="warning"
           className="mb-6"

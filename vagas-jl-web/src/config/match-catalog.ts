@@ -49,14 +49,14 @@ export const MATCH_FIELDS: MatchFieldDef[] = [
   },
   { key: 'yearsOfExperience', label: 'Anos de experiência', kind: 'number', group: 'contexto', weight: 9 },
 
-  { key: 'agile', label: 'Agile', kind: 'boolean', group: 'praticas', weight: 4 },
-  { key: 'programming', label: 'Programação', kind: 'boolean', group: 'praticas', weight: 3 },
-  { key: 'automation', label: 'Automação', kind: 'boolean', group: 'praticas', weight: 5 },
-  { key: 'webTesting', label: 'Web Testing', kind: 'boolean', group: 'praticas', weight: 6 },
-  { key: 'apiTesting', label: 'API Testing', kind: 'boolean', group: 'praticas', weight: 7 },
-  { key: 'mobileTesting', label: 'Mobile Testing', kind: 'boolean', group: 'praticas', weight: 5 },
-  { key: 'desktopTesting', label: 'Desktop Testing', kind: 'boolean', group: 'praticas', weight: 4 },
-  { key: 'continuousIntegration', label: 'CI/CD', kind: 'boolean', group: 'praticas', weight: 6 },
+  { key: 'agile', label: 'Agile', kind: 'boolean', group: 'praticas', weight: 4, options: [opt('agile', 'Agile')] },
+  { key: 'programming', label: 'Programação', kind: 'boolean', group: 'praticas', weight: 3, options: [opt('programming', 'Programação')] },
+  { key: 'automation', label: 'Automação', kind: 'boolean', group: 'praticas', weight: 5, options: [opt('automation', 'Automação')] },
+  { key: 'webTesting', label: 'Web Testing', kind: 'boolean', group: 'praticas', weight: 6, options: [opt('web-testing', 'Web Testing')] },
+  { key: 'apiTesting', label: 'API Testing', kind: 'boolean', group: 'praticas', weight: 7, options: [opt('api-testing', 'API Testing')] },
+  { key: 'mobileTesting', label: 'Mobile Testing', kind: 'boolean', group: 'praticas', weight: 5, options: [opt('mobile-testing', 'Mobile Testing')] },
+  { key: 'desktopTesting', label: 'Desktop Testing', kind: 'boolean', group: 'praticas', weight: 4, options: [opt('desktop-testing', 'Desktop Testing')] },
+  { key: 'continuousIntegration', label: 'CI/CD', kind: 'boolean', group: 'praticas', weight: 6, options: [opt('ci-cd', 'CI/CD')] },
 
   {
     key: 'testAutomationTechnologies',
@@ -125,8 +125,8 @@ export const MATCH_FIELDS: MatchFieldDef[] = [
     weight: 3,
     options: [opt('basic', 'Básico'), opt('intermediate', 'Intermediário'), opt('advanced', 'Avançado'), opt('fluent', 'Fluente')],
   },
-  { key: 'higherEducationDegree', label: 'Formação superior', kind: 'boolean', group: 'idiomas', weight: 3 },
-  { key: 'certification', label: 'Certificação (ex.: CTFL)', kind: 'boolean', group: 'idiomas', weight: 2 },
+  { key: 'higherEducationDegree', label: 'Formação superior', kind: 'boolean', group: 'idiomas', weight: 3, options: [opt('higher-education', 'Formação superior')] },
+  { key: 'certification', label: 'Certificação (ex.: CTFL)', kind: 'boolean', group: 'idiomas', weight: 2, options: [opt('certification', 'Certificação')] },
 
   {
     key: 'level',
@@ -144,7 +144,8 @@ export const MATCH_FIELDS: MatchFieldDef[] = [
     weight: 5,
     options: [
       opt('qa_analyst', 'Analista de QA'), opt('qa_engineer', 'QA Engineer'), opt('sdet', 'SDET'),
-      opt('qa_lead', 'QA Lead'), opt('test_manager', 'Gerente de Testes'),
+      opt('qa_lead', 'QA Lead'), opt('test_manager', 'Gerente de Testes'), opt('tester', 'Testador'),
+      opt('qa_specialist', 'Especialista em QA'),
     ],
   },
   {
@@ -156,7 +157,8 @@ export const MATCH_FIELDS: MatchFieldDef[] = [
     options: [
       opt('test_automation', 'Automação de testes'), opt('manual_testing', 'Testes manuais'),
       opt('performance', 'Performance'), opt('security', 'Segurança'), opt('mobile', 'Mobile'),
-      opt('accessibility', 'Acessibilidade'),
+      opt('accessibility', 'Acessibilidade'), opt('sap', 'SAP'), opt('ai', 'IA'), opt('games', 'Games'),
+      opt('uat', 'UAT'), opt('salesforce', 'Salesforce'), opt('embedded', 'Embarcados'),
     ],
   },
   {
@@ -165,7 +167,8 @@ export const MATCH_FIELDS: MatchFieldDef[] = [
     kind: 'single',
     group: 'carreira',
     weight: 3,
-    options: [opt('functional', 'Funcional'), opt('technical', 'Técnico'), opt('hybrid_profile', 'Híbrido')],
+    options: [opt('functional', 'Funcional'), opt('technical', 'Técnico'), opt('hybrid_profile', 'Híbrido'),
+      opt('testing', 'Testes'), opt('quality', 'Qualidade')],
   },
 ];
 

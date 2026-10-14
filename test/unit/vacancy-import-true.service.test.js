@@ -31,7 +31,7 @@ function setup(context, importance = 'desirable') {
   return context.mock.method(Vacancy, 'create', async (data) => new Vacancy(data));
 }
 
-test('true canonical IDs receive one configurable non-eliminatory requirement with audit', async (context) => {
+test('true canonical IDs receive one desirable non-eliminatory requirement with audit', async (context) => {
   setup(context);
   const vacancy = await registerImportedVacancy(provenance, input);
   assert.equal(vacancy.validateSync(), undefined);
@@ -70,14 +70,16 @@ test('bare true and non-canonical IDs fail without persisting vacancy', async (c
   assert.equal(create.mock.callCount(), 0);
 });
 
-test('indifferent true requirement remains non-scoring', async (context) => {
+test('configured import importance cannot override the desirable import rule', async (context) => {
   setup(context, 'indifferent');
   const vacancy = await registerImportedVacancy(provenance, input);
   const score = calculateCompetencyMatch({ vacancyValues: vacancy.matchProfile.values.toObject(),
     candidateValues: { automation: ['cypress'] }, configuration, multipliers,
     requirements: vacancy.matchProfile.requirements, vacancy: { origin: 'IMPORTED' } });
-  assert.equal(score.possiblePoints, 0);
-  assert.equal(score.percentage, null);
+  assert.equal(vacancy.importImportance.importance, 'desirable');
+  assert.equal(vacancy.matchProfile.requirements[0].importance, 'desirable');
+  assert.equal(score.possiblePoints, INITIAL_MATCH_WEIGHTS.automation * 0.5);
+  assert.equal(score.percentage, 100);
 });
 
 test('new configuration never changes a previously imported vacancy', async (context) => {
@@ -95,10 +97,10 @@ test('new configuration never changes a previously imported vacancy', async (con
   assert.equal(earlier.importImportance.version, 1);
   assert.equal(earlier.matchProfile.requirements[0].importance, 'desirable');
   assert.equal(later.importImportance.version, 2);
-  assert.equal(later.matchProfile.requirements[0].importance, 'required');
+  assert.equal(later.matchProfile.requirements[0].importance, 'desirable');
 });
 
-test('effective engine configuration supplies the imported requirement importance', async (context) => {
+test('effective engine configuration cannot override the desirable import rule', async (context) => {
   context.mock.method(Configuration, 'findOne', () => ({ sort: async () => configuration }));
   context.mock.method(MatchEngineConfiguration, 'findOne', () => ({ sort: async () => ({
     version: 'MATCH_V2', revision: 2, state: 'published',
@@ -121,7 +123,7 @@ test('effective engine configuration supplies the imported requirement importanc
 
   assert.equal(vacancy.importImportance.version, 2);
   assert.equal(vacancy.importImportance.engineVersion, 'MATCH_V2');
-  assert.equal(vacancy.importImportance.importance, 'required');
-  assert.equal(vacancy.matchProfile.requirements[0].importance, 'required');
+  assert.equal(vacancy.importImportance.importance, 'desirable');
+  assert.equal(vacancy.matchProfile.requirements[0].importance, 'desirable');
   assert.equal(legacyConfiguration.mock.callCount(), 0);
 });

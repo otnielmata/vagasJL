@@ -8,7 +8,7 @@ const service = require('../../src/services/company-user.service');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('company user route requires JWT and admin role', () => {
+test('company user route requires JWT and master role', () => {
   const route = router.stack.find((layer) => layer.route?.path === '/:id/usuarios').route;
   const handlers = route.stack.map((layer) => layer.handle);
   assert.equal(handlers[0], authenticate);
@@ -17,8 +17,14 @@ test('company user route requires JWT and admin role', () => {
   const response = { status(code) { this.code = code; return this; }, json() {} };
   handlers[0]({ headers: {} }, response, () => assert.fail('must require JWT'));
   assert.equal(response.code, 401);
-  handlers[1]({ user: { role: 'company' } }, response, () => assert.fail('must require admin'));
+  handlers[1]({ user: { role: 'company' } }, response, () => assert.fail('must require master'));
   assert.equal(response.code, 403);
+  let masterPassed = false;
+  handlers[1]({ user: { role: 'master' } }, response, () => { masterPassed = true; });
+  assert.equal(masterPassed, true);
+  let adminPassed = false;
+  handlers[1]({ user: { role: 'admin' } }, response, () => { adminPassed = true; });
+  assert.equal(adminPassed, false);
 });
 
 test('controller returns public membership and user data, forwarding failures', async (context) => {

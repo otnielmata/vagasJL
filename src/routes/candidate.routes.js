@@ -19,6 +19,7 @@ const publicProfileController = require('../controllers/candidate-public-profile
 const opportunityAvailabilityController =
   require('../controllers/candidate-opportunity-availability.controller');
 const displayPermissionsController = require('../controllers/candidate-display-permissions.controller');
+const privacyStateController = require('../controllers/candidate-privacy-state.controller');
 
 const router = Router();
 
@@ -31,6 +32,8 @@ router.post('/me/vagas/:id/candidatura', authenticate, authorize('candidate'),
   candidateController.referToApplication);
 router.get('/me/engajamento', authenticate, authorize('candidate'), ensureDatabase,
   engagementController.show);
+router.get('/me/privacidade', authenticate, authorize('candidate'), ensureDatabase,
+  privacyStateController.show);
 router.patch('/me/perfil-publico', authenticate, authorize('candidate'), candidatePublicProfileRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase, publicProfileController.update);
 router.patch('/me/disponibilidade', authenticate, authorize('candidate'),
@@ -41,6 +44,7 @@ router.patch('/me/permissoes-exibicao', authenticate, authorize('candidate'),
   candidateDisplayPermissionsRules(),
   (req, res, next) => validate(req, res, next, 400), ensureDatabase,
   displayPermissionsController.update);
+router.get('/me', authenticate, authorize('candidate'), ensureDatabase, candidateController.showMine);
 
 router.post('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.register);
 router.get('/me/perfil-match', authenticate, authorize('candidate'), ensureDatabase, matchProfileController.show);

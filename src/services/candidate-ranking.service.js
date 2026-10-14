@@ -13,21 +13,52 @@ const { pagination } = require('./vacancy-ranking.service');
 const { getPublishedRankingThreshold, meetsRankingThreshold } =
   require('./ranking-threshold-configuration.service');
 const { recordMatchEvaluation } = require('./match-evaluation-audit.service');
+const { completionFor } = require('./candidate-match-profile.service');
 const { getEffectiveMatchEngineConfiguration, applyEngineWeights } =
   require('./match-engine-configuration.service');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 
+const FILTER_KEYS = new Set(['page', 'limit', 'minimumMatchPercentage',
+  'minimumProfileCompletionPercentage']);
+
+function percentageFilter(value, label) {
+  if (value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100 ||
+      Math.abs(parsed * 100 - Math.round(parsed * 100)) >= 1e-9) {
+    throw new ApiError(400, `${label} invalido`);
+  }
+  return parsed;
+}
+
+function rankingPagination(query = {}) {
+  if (Object.keys(query).some((key) => !FILTER_KEYS.has(key))) {
+    throw new ApiError(400, 'Parametros do ranking invalidos');
+  }
+  if (query.limit !== 'all') return { ...pagination({ page: query.page, limit: query.limit }), all: false };
+  if (
+      query.page !== undefined && query.page !== '1') {
+    throw new ApiError(400, 'Parametros de paginacao invalidos');
+  }
+  return { page: 1, limit: null, all: true };
+}
+
 async function rankCandidates(actor, id, query = {}, now = new Date(), auditContext = {}) {
   if (!['admin', 'company'].includes(actor?.role)) throw new ApiError(403, 'Acesso negado ao ranking');
   if (typeof id !== 'string' || !OBJECT_ID.test(id)) throw new ApiError(400, 'Identificador da vaga invalido');
-  const { page, limit } = pagination(query);
+  const { page, limit, all } = rankingPagination(query);
+  const requestedMatchPercentage = percentageFilter(query.minimumMatchPercentage, 'Match minimo');
+  const requestedCompletionPercentage = percentageFilter(
+    query.minimumProfileCompletionPercentage, 'Completude minima');
   const vacancy = await Vacancy.findById(id).select('+createdBy +deletedAt');
   if (!vacancy || vacancy.deletedAt) throw new ApiError(404, 'Vaga nao encontrada');
-  if (actor.role === 'company') {
-    if (vacancy.origin !== 'COMPANY') throw new ApiError(403, 'Acesso negado a esta vaga');
+  if (vacancy.origin === 'COMPANY') {
     await ensureCompanyAuthorized(actor, vacancy);
+  } else if (actor.role !== 'admin' || vacancy.origin !== 'ADMIN' ||
+      String(vacancy.createdBy) !== actor.id) {
+    throw new ApiError(403, 'Acesso negado a esta vaga');
   }
   if (vacancy.origin === 'COMPANY') {
     const company = await Company.findOne({ _id: vacancy.company, status: 'active',
@@ -49,6 +80,9 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
     ? { version: engineConfiguration.revision,
       minimumPercentage: engineConfiguration.minimumMatchPercentage }
     : await getPublishedRankingThreshold();
+  const appliedMatchPercentage = requestedMatchPercentage ?? rankingThreshold?.minimumPercentage ?? null;
+  const appliedRankingThreshold = appliedMatchPercentage == null ? null
+    : { minimumPercentage: appliedMatchPercentage };
 
   const candidates = await Candidate.find({ status: CANDIDATE_STATUS.ACTIVE,
     availableForOpportunities: true, 'eligibility.status': 'approved',
@@ -56,11 +90,21 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   const profiles = candidates.length ? await CandidateMatchProfile.find({
     candidate: { $in: candidates.map((candidate) => candidate._id) }, deletedAt: null,
   }).select('candidate values configurationVersion revision updatedAt') : [];
+  const profileVersions = [...new Set(profiles.map((profile) => profile.configurationVersion))];
+  const profileConfigurations = profileVersions.length
+    ? await Configuration.find({ version: { $in: profileVersions } }) : [];
+  const profileConfigurationsByVersion = new Map(profileConfigurations.map((item) => [item.version, item]));
   const byCandidate = new Map(profiles.map((profile) => [String(profile.candidate), profile]));
   const executionId = auditContext.executionId || crypto.randomUUID();
   const evaluated = await Promise.all(candidates.map(async (candidate) => {
     const profile = byCandidate.get(String(candidate._id));
     if (!profile?.values) return null;
+    const profileConfiguration = profileConfigurationsByVersion.get(profile.configurationVersion);
+    if (!profileConfiguration) throw new ApiError(503, 'Configuracao do Perfil de Match indisponivel para completude');
+    const completion = completionFor(profile, profileConfiguration);
+    if (requestedCompletionPercentage != null && completion.percentage < requestedCompletionPercentage) {
+      return null;
+    }
     const candidateValues = typeof profile.values.toObject === 'function'
       ? profile.values.toObject() : profile.values;
     const score = scorePair(vacancy, candidateValues, scoringConfiguration,
@@ -72,10 +116,11 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
         profileCatalog: vacancy.matchProfile.configurationVersion,
         multipliers: matchConfiguration.version,
         rankingThreshold: rankingThreshold?.version ?? null } });
-    if (!meetsRankingThreshold(score, rankingThreshold)) return null;
+    if (!meetsRankingThreshold(score, appliedRankingThreshold)) return null;
     const item = { candidate: { _id: candidate._id, name: candidate.name },
       percentage: score.percentage, earnedPoints: score.earnedPoints,
       possiblePoints: score.possiblePoints, matchedRequiredCount: score.matchedRequiredCount,
+      profileCompletionPercentage: completion.percentage,
       configurationVersion: vacancy.matchProfile.configurationVersion,
       engineConfigurationVersion: engineConfiguration?.version ?? null,
       multipliersVersion: matchConfiguration.version, audit };
@@ -86,11 +131,12 @@ async function rankCandidates(actor, id, query = {}, now = new Date(), auditCont
   const ranked = evaluated.filter(Boolean);
   ranked.sort(compareRankingRows);
   const total = ranked.length;
-  return { items: ranked.slice((page - 1) * limit, page * limit).map((row) => row.item),
-    total, page, limit, minimumMatchPercentage: rankingThreshold?.minimumPercentage ?? null,
+  return { items: (all ? ranked : ranked.slice((page - 1) * limit, page * limit)).map((row) => row.item),
+    total, page, limit: all ? total : limit, minimumMatchPercentage: appliedMatchPercentage,
+    minimumProfileCompletionPercentage: requestedCompletionPercentage,
     rankingThresholdVersion: rankingThreshold?.version ?? null,
     engineConfigurationVersion: engineConfiguration?.version ?? null,
-    pages: Math.ceil(total / limit) };
+    pages: all ? (total ? 1 : 0) : Math.ceil(total / limit) };
 }
 
-module.exports = { rankCandidates };
+module.exports = { rankCandidates, rankingPagination };

@@ -35,7 +35,7 @@ function parseInput(actor, input) {
 }
 
 async function updateRegistration(actor, companyId, input) {
-  if (!['admin', 'company'].includes(actor?.role)) {
+  if (!['master', 'admin', 'company'].includes(actor?.role)) {
     throw new ApiError(403, 'Perfil sem permissao para editar empresa');
   }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {

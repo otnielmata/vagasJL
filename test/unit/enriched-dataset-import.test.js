@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
-const { adaptEnrichedDataset, cleanDescription } = require('../../src/services/enriched-dataset-adapter.service');
+const { adaptEnrichedDataset, cleanDescription, parseLocation } = require('../../src/services/enriched-dataset-adapter.service');
 const controller = require('../../src/controllers/vacancy-import.controller');
 const service = require('../../src/services/vacancy-import-source.service');
 const config = require('../../src/config/env');
@@ -38,6 +38,10 @@ test('adapta item do JL Vagas para IDs canonicos da configuracao publicada', () 
   assert.match(sourceVersion, /^[a-f\d]{40}$/);
   assert.equal(content.reference, 'jl-4442722949');
   assert.equal(content.description, 'Job Summary\n\nWe test things');
+  assert.equal(content.sourceCompanyName, 'ACME');
+  assert.deepEqual(content.location, { city: 'Rio Grande', state: 'RS', country: 'Brasil' });
+  assert.equal(content.importSourceData.rawLocation, 'Rio Grande, RS, Brasil (Hibrido)');
+  assert.equal(content.importSourceData.rawApplicationUrl, 'https://www.linkedin.com/jobs/view/4442722949/');
   assert.deepEqual(content.applicationChannel, { type: 'https_url', value: 'https://www.linkedin.com/jobs/view/4442722949/' });
   const v = content.matchProfile.values;
   assert.deepEqual(v.type, [{ identified: true, id: 'onsite' }]);
@@ -83,6 +87,9 @@ test('mesmo conteudo gera mesma versao; conteudo alterado gera outra', () => {
 test('JSON que nao e lista e recusado', () => {
   assert.throws(() => adaptEnrichedDataset({ vagas: [] }, configuration), { statusCode: 422 });
   assert.equal(cleanDescription('a\\nb\nShow more'), 'a\nb');
+  assert.deepEqual(parseLocation('Brasil (Remoto)'), { country: 'Brasil' });
+  assert.deepEqual(parseLocation('São Paulo, Brasil (Híbrido)'), { city: 'São Paulo', country: 'Brasil' });
+  assert.deepEqual(parseLocation('Rio de Janeiro e Região (Remoto)'), { city: 'Rio de Janeiro e Região' });
 });
 
 function response() {

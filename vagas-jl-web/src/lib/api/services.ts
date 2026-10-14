@@ -5,6 +5,7 @@ import type {
   Candidate,
   CandidateInput,
   CandidateMatchProfile,
+  CandidatePrivacyState,
   CandidateRankingItem,
   CandidateStatus,
   CandidateVacancyRanking,
@@ -12,6 +13,7 @@ import type {
   CompanyInput,
   CompanyStatus,
   CompanyVacancyInput,
+  CompanyCandidateReport,
   ContactDisplayField,
   DisplayPermissionsState,
   Engagement,
@@ -25,6 +27,8 @@ import type {
   User,
   Vacancy,
   VacancyImportResult,
+  VacancyListFilters,
+  VacancyListResponse,
   VacancyRequirement,
   VacancyStatus,
 } from './types';
@@ -49,6 +53,7 @@ export const userService = {
 export const candidateService = {
   create: (input: CandidateInput & { name: string; email: string }) =>
     api.post<{ candidate: Candidate }>('/candidatos', input),
+  getMine: () => api.get<{ candidate: Candidate }>('/candidatos/me'),
   get: (id: string) => api.get<{ candidate: Candidate }>(`/candidatos/${id}`),
   update: (id: string, input: CandidateInput) => api.patch<{ candidate: Candidate }>(`/candidatos/${id}`, input),
   remove: (id: string) => api.delete<void>(`/candidatos/${id}`),
@@ -59,8 +64,10 @@ export const candidateService = {
   getMatchProfile: () => api.get<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match'),
   createMatchProfile: (values: MatchValues) =>
     api.post<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }),
-  updateMatchProfile: (values: MatchValues) =>
-    api.patch<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }),
+  updateMatchProfile: (values: MatchValues, revision: number) =>
+    api.patch<{ profile: CandidateMatchProfile }>('/candidatos/me/perfil-match', { values }, {
+      headers: { 'If-Match': `"${revision}"` },
+    }),
 
   // Match e ranking (VJ-45/63/64/86)
   vacancyRanking: (params: { page?: number; limit?: number } = {}) =>
@@ -73,6 +80,7 @@ export const candidateService = {
   engagement: () => api.get<{ engagement: Engagement }>('/candidatos/me/engajamento'),
 
   // Privacidade (VJ-74/75/76)
+  getPrivacy: () => api.get<CandidatePrivacyState>('/candidatos/me/privacidade'),
   setAvailability: (availableForOpportunities: boolean) =>
     api.patch<{ availability: OpportunityAvailabilityState }>('/candidatos/me/disponibilidade', {
       availableForOpportunities,
@@ -88,17 +96,29 @@ export const companyService = {
   get: (id: string) => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
     `/empresas/${id}/cadastro`,
   ),
+  getMine: () => api.get<{ company: Company; usuarios: { _id: string; name: string; email: string }[] }>(
+    '/empresas/me/cadastro',
+  ),
   update: (id: string, input: { empresa?: Partial<CompanyInput>; usuarioAtual?: { name: string } }) =>
     api.patch<{ company: Company }>(`/empresas/${id}/cadastro`, input),
   remove: (id: string) => api.delete<void>(`/empresas/${id}/cadastro`),
   addUser: (id: string, userId: string) => api.post<unknown>(`/empresas/${id}/usuarios`, { userId }),
   createVacancy: (companyId: string, input: CompanyVacancyInput) =>
     api.post<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas`, input),
+  getVacancy: (companyId: string, vacancyId: string) =>
+    api.get<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas/${vacancyId}`),
+  updateVacancy: (companyId: string, vacancyId: string, input: CompanyVacancyInput) =>
+    api.patch<{ vacancy: Vacancy }>(`/empresas/${companyId}/vagas/${vacancyId}`, input),
 };
 
 export const vacancyService = {
-  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number } = {}) =>
+  list: (params: VacancyListFilters & { page?: number } = {}) =>
+    api.get<VacancyListResponse>('/vagas', { query: { ...params } }),
+  candidateRanking: (vacancyId: string, params: { page?: number; limit?: number | 'all';
+    minimumMatchPercentage?: number; minimumProfileCompletionPercentage?: number } = {}) =>
     api.get<RankingPage<CandidateRankingItem>>(`/vagas/${vacancyId}/candidatos/ranking`, { query: params }),
+  candidateReport: (vacancyId: string, candidateId: string) =>
+    api.get<CompanyCandidateReport>(`/vagas/${vacancyId}/candidatos/${candidateId}/relatorio`),
   setStatus: (vacancyId: string, status: Exclude<VacancyStatus, 'pending'>, reason: string) =>
     api.patch<{ vacancy: Vacancy }>(`/vagas/${vacancyId}/status`, { status, reason }),
   setRequirements: (vacancyId: string, requirements: VacancyRequirement[]) =>
@@ -117,15 +137,28 @@ export const adminService = {
       `/admin/candidatos/${id}/status`,
       { status, reason },
     ),
-  setRankingThreshold: (minimumPercentage: number) =>
-    api.put<unknown>('/configuracoes/match/limiar-ranking', { minimumPercentage }),
-  setCompletionThreshold: (minimumPercentage: number) =>
-    api.put<unknown>('/configuracoes/match/completude-minima', { minimumPercentage }),
-  setMultipliers: (desirable: number) =>
-    api.put<unknown>('/configuracoes/match/multiplicadores', { required: 1, desirable, indifferent: 0 }),
 };
 
 export const masterService = {
+  getMatchConfiguration: () =>
+    api.get<{ configuration: import('./types').MatchEngineConfiguration | null }>('/master/configuracoes/match'),
+  publishMatchConfiguration: (version: string, input: Omit<import('./types').MatchEngineConfiguration,
+    'version' | 'revision' | 'recalculation'> & { recalculationPolicy: 'affected_matches' }) =>
+    api.put<{ configuration: import('./types').MatchEngineConfiguration }>(
+      `/master/configuracoes/match/${version}`, input,
+    ),
+  listCompanies: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: (Company & { hasRecruiter: boolean })[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/empresas', { query: params },
+    ),
+  listRecruiters: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: User[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/recrutadores', { query: params },
+    ),
+  listCandidates: (params: { page?: number; q?: string } = {}) =>
+    api.get<{ items: Pick<Candidate, '_id' | 'name' | 'email' | 'phone' | 'status'>[]; page: number; limit: number; total: number; pages: number }>(
+      '/master/candidatos', { query: params },
+    ),
   importVacancies: (file: File, options: { dryRun?: boolean; activatePending?: boolean } = {}) => {
     const body = new FormData();
     body.append('file', file);

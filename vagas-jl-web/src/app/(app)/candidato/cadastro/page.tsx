@@ -45,8 +45,8 @@ function toForm(c: Candidate): CandidateInput {
 export default function CandidateRegistrationPage() {
   const { user } = useAuth();
   const toast = useToast();
-  const [candidateId, setCandidateId] = useCandidateId();
-  const current = useAsync(() => candidateService.get(candidateId!), [candidateId], !!candidateId);
+  const [, setCandidateId] = useCandidateId();
+  const current = useAsync(() => candidateService.getMine());
   const [form, setForm] = useState<CandidateInput>(EMPTY);
   const [purchaseCode, setPurchaseCode] = useState('');
   const [error, setError] = useState<ApiError>();
@@ -54,10 +54,14 @@ export default function CandidateRegistrationPage() {
   const [validating, setValidating] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (current.data) setForm(toForm(current.data.candidate));
-    else if (user && !candidateId) setForm((f) => ({ ...f, name: f.name || user.name, email: f.email || user.email }));
-  }, [current.data, user, candidateId]);
+    if (current.data) {
+      setCandidateId(current.data.candidate._id);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm(toForm(current.data.candidate));
+    } else if (user && current.error?.status === 404) {
+      setForm((f) => ({ ...f, name: f.name || user.name, email: f.email || user.email }));
+    }
+  }, [current.data, current.error, user, setCandidateId]);
 
   const set = (k: keyof CandidateInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -68,8 +72,8 @@ export default function CandidateRegistrationPage() {
     setError(undefined);
     try {
       const payload = clean(form);
-      if (candidateId) {
-        const res = await candidateService.update(candidateId, payload);
+      if (candidate) {
+        const res = await candidateService.update(candidate._id, payload);
         current.setData(res);
       } else {
         const res = await candidateService.create({
@@ -89,10 +93,10 @@ export default function CandidateRegistrationPage() {
   }
 
   async function validate() {
-    if (!candidateId) return;
+    if (!candidate) return;
     setValidating(true);
     try {
-      const res = await candidateService.validate(candidateId, purchaseCode ? { purchaseCode } : {});
+      const res = await candidateService.validate(candidate._id, purchaseCode ? { purchaseCode } : {});
       current.setData(res);
       toast(res.candidate.eligibility.status === 'approved' ? 'success' : 'danger',
         res.candidate.eligibility.status === 'approved' ? 'Elegibilidade confirmada!' : 'Não foi possível confirmar a elegibilidade.');
@@ -109,11 +113,11 @@ export default function CandidateRegistrationPage() {
     <>
       <PageHeader
         eyebrow="Dados profissionais"
-        title={candidateId ? 'Seu cadastro' : 'Criar cadastro de candidato'}
+        title={candidate ? 'Seu cadastro' : 'Criar cadastro de candidato'}
         description="Dados de contato e apresentação. Eles não entram no cálculo do Match — você controla o que as empresas veem em Privacidade."
       />
 
-      {candidateId && current.loading ? (
+      {current.loading ? (
         <Skeleton className="h-96 rounded-2xl" />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -155,7 +159,7 @@ export default function CandidateRegistrationPage() {
             {error && !error.errors?.length && <Alert tone="danger">{error.message}</Alert>}
             <div className="flex justify-end">
               <Button type="submit" size="lg" loading={saving} disabled={!form.name || !form.email}>
-                <Save className="h-4 w-4" /> {candidateId ? 'Salvar alterações' : 'Criar cadastro'}
+                <Save className="h-4 w-4" /> {candidate ? 'Salvar alterações' : 'Criar cadastro'}
               </Button>
             </div>
           </form>
@@ -167,7 +171,7 @@ export default function CandidateRegistrationPage() {
                 {candidate && (
                   <div className="flex flex-wrap items-center gap-2">
                     <CandidateStatusBadge value={candidate.status} />
-                    {candidate.eligibility.status === 'approved' && (
+                    {candidate.eligibility?.status === 'approved' && (
                       <span className="inline-flex items-center gap-1 text-xs text-success">
                         <BadgeCheck className="h-4 w-4" /> Elegível
                       </span>
@@ -176,7 +180,7 @@ export default function CandidateRegistrationPage() {
                 )}
                 <Input label="Código da compra (opcional)" value={purchaseCode} onChange={(e) => setPurchaseCode(e.target.value)}
                   hint="Se o seu e-mail não for reconhecido, informe o código/hash da compra." />
-                {candidateId && candidate?.eligibility.status !== 'approved' && (
+                {candidate && candidate.eligibility?.status !== 'approved' && (
                   <Button variant="outline" className="w-full" onClick={validate} loading={validating}>
                     Validar elegibilidade
                   </Button>

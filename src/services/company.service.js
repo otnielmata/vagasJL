@@ -74,7 +74,9 @@ function normalizeCompanyUpdates(input) {
 }
 
 async function registerCompany(user, input) {
-  if (user?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem cadastrar empresas');
+  if (!['master', 'admin'].includes(user?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode cadastrar empresas');
+  }
   const data = normalizeCompany(input);
   await Company.init();
   if (await Company.findOne({ email: data.email, deletedAt: null })) {

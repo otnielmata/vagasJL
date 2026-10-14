@@ -9,7 +9,7 @@ const service = require('../../src/services/company-read.service');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('GET cadastro is mounted and requires active admin or company JWT', () => {
+test('GET cadastro by id is mounted and restricted to master', () => {
   assert.ok(app._router.stack.some((layer) => layer.regexp.test('/empresas')));
   const route = router.stack.find((layer) => layer.route?.path === '/:id/cadastro' && layer.route.methods.get).route;
   const handlers = route.stack.map((layer) => layer.handle);
@@ -24,8 +24,35 @@ test('GET cadastro is mounted and requires active admin or company JWT', () => {
   for (const role of ['admin', 'company']) {
     let passed = false;
     handlers[1]({ user: { role } }, response, () => { passed = true; });
-    assert.equal(passed, true);
+    assert.equal(passed, false);
   }
+  let masterPassed = false;
+  handlers[1]({ user: { role: 'master' } }, response, () => { masterPassed = true; });
+  assert.equal(masterPassed, true);
+});
+
+test('GET /empresas/me/cadastro resolves the authenticated recruiter membership', async (context) => {
+  const route = router.stack.find((layer) => layer.route?.path === '/me/cadastro').route;
+  const handlers = route.stack.map((layer) => layer.handle);
+  let companyPassed = false;
+  handlers[1]({ user: { role: 'company' } }, {}, () => { companyPassed = true; });
+  assert.equal(companyPassed, true);
+  let adminPassed = false;
+  handlers[1]({ user: { role: 'admin' } }, {}, () => { adminPassed = true; });
+  assert.equal(adminPassed, true);
+  let masterPassed = false;
+  const response = { status(code) { this.code = code; return this; }, json() {} };
+  handlers[1]({ user: { role: 'master' } }, response, () => { masterPassed = true; });
+  assert.equal(masterPassed, false);
+  const read = context.mock.method(service, 'getMyRegistration', async () => ({
+    company: { _id: 'company' }, usuarios: [],
+  }));
+  const request = { user: { id: 'user', role: 'company' } };
+  const controllerResponse = { status(code) { this.code = code; return this; },
+    json(body) { this.body = body; return this; } };
+  await controller.showMyRegistration(request, controllerResponse, assert.fail);
+  assert.equal(controllerResponse.code, 200);
+  assert.deepEqual(read.mock.calls[0].arguments, [request.user]);
 });
 
 test('controller returns 200 with public company and user list, forwarding errors', async (context) => {

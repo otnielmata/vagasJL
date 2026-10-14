@@ -8,7 +8,7 @@ const controller = require('../../src/controllers/admin-vacancy.controller');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('PUT /admin/vagas/:id is mounted and restricted to active administrators', () => {
+test('PUT /admin/vagas/:id is mounted and restricted to the master profile', () => {
   assert.ok(app._router.stack.some((layer) => layer.regexp.test('/admin/vagas')));
   const route = router.stack.find((layer) => layer.route?.path === '/:id').route;
   const handlers = route.stack.map((layer) => layer.handle);
@@ -16,8 +16,11 @@ test('PUT /admin/vagas/:id is mounted and restricted to active administrators', 
   assert.equal(handlers[2], ensureDatabase);
   assert.equal(handlers[3], controller.manage);
   const response = { status(code) { this.code = code; return this; }, json() {} };
-  for (const role of ['candidate', 'company']) {
+  for (const role of ['candidate', 'company', 'admin']) {
     handlers[1]({ user: { role } }, response, () => assert.fail('must not continue'));
     assert.equal(response.code, 403);
   }
+  let passed = false;
+  handlers[1]({ user: { role: 'master' } }, response, () => { passed = true; });
+  assert.equal(passed, true);
 });

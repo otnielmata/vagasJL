@@ -22,6 +22,7 @@ const { rankVacancies } = require('../../src/services/vacancy-ranking.service');
 const vacancyId = '6512f1e2b3a1c2d3e4f5a6b7';
 const companyId = '6512f1e2b3a1c2d3e4f5a6b8';
 const recruiterId = '6512f1e2b3a1c2d3e4f5a6b9';
+const adminActor = { id: recruiterId, role: 'admin' };
 const candidateId = '6512f1e2b3a1c2d3e4f5a6ba';
 const now = new Date('2026-09-18T12:00:00Z');
 const configuration = { version: 1, geographyWeights: { country: 6, state: 4, city: 2 },
@@ -43,6 +44,10 @@ function vacancy(overrides = {}) {
   result.toJSON = () => ({ _id: result._id, origin: result.origin,
     matchProfile: result.matchProfile });
   return result;
+}
+
+function adminVacancy(overrides = {}) {
+  return vacancy({ origin: 'ADMIN', company: null, createdBy: recruiterId, ...overrides });
 }
 
 function setup(context, currentVacancy = vacancy()) {
@@ -73,6 +78,7 @@ function setup(context, currentVacancy = vacancy()) {
   context.mock.method(User, 'findOne', () => ({ select: async () => ({ _id: recruiterId }) }));
   context.mock.method(CompanyUser, 'findOne', () => ({ select: async () => ({ _id: 'membership' }) }));
   context.mock.method(Configuration, 'findOne', async () => configuration);
+  context.mock.method(Configuration, 'find', async () => [configuration]);
   const candidates = [
     { _id: candidateId, name: 'Ana', email: 'private@example.com', phone: '123' },
     { _id: '6512f1e2b3a1c2d3e4f5a6bb', name: 'Bia' },
@@ -115,8 +121,8 @@ test('company ranking scores from vacancy requirements, sorts and hides private 
   assert.equal(second.items[0].percentage, 50);
 });
 
-test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit', async (context) => {
-  const { candidates, profiles } = setup(context);
+test('company ranking accepts Top 3, Top 5, Top 10 and all candidates', async (context) => {
+  const { candidates, profiles } = setup(context, adminVacancy());
   candidates.splice(0, candidates.length);
   profiles.splice(0, profiles.length);
   for (let index = 0; index < 10; index += 1) {
@@ -126,22 +132,53 @@ test('company ranking accepts Top 3, Top 5 and Top 10 through the existing limit
       configurationVersion: 1, values: { type: ['remote'], agile: ['scrum'] } });
   }
   for (const limit of [3, 5, 10]) {
-    const result = await rankCandidates({ role: 'admin' }, vacancyId, { limit: String(limit) }, now);
+    const result = await rankCandidates(adminActor, vacancyId, { limit: String(limit) }, now);
     assert.equal(result.items.length, limit);
     assert.equal(result.total, 10);
     assert.equal(result.limit, limit);
   }
+  const all = await rankCandidates(adminActor, vacancyId, { limit: 'all' }, now);
+  assert.equal(all.items.length, 10);
+  assert.equal(all.total, 10);
+  assert.equal(all.limit, 10);
+  assert.equal(all.pages, 1);
 });
 
 test('company ranking applies published cutoff before total and pagination', async (context) => {
-  const { thresholdState } = setup(context);
+  const { thresholdState } = setup(context, adminVacancy());
   thresholdState.current = { version: 4, minimumPercentage: 60 };
-  const result = await rankCandidates({ role: 'admin' }, vacancyId, { limit: '1' }, now);
+  const result = await rankCandidates(adminActor, vacancyId, { limit: '1' }, now);
   assert.equal(result.total, 1);
   assert.equal(result.pages, 1);
   assert.equal(result.items[0].candidate.name, 'Bia');
   assert.equal(result.minimumMatchPercentage, 60);
   assert.equal(result.rankingThresholdVersion, 4);
+});
+
+test('recruiter applies temporary Match and profile completion filters without publishing configuration',
+  async (context) => {
+    const { thresholdState } = setup(context, adminVacancy());
+    thresholdState.current = { version: 4, minimumPercentage: 80 };
+    const result = await rankCandidates(adminActor, vacancyId, {
+      limit: 'all', minimumMatchPercentage: '40', minimumProfileCompletionPercentage: '60',
+    }, now);
+    assert.equal(result.total, 1);
+    assert.equal(result.items[0].candidate.name, 'Bia');
+    assert.equal(result.items[0].profileCompletionPercentage, 66.67);
+    assert.equal(result.minimumMatchPercentage, 40);
+    assert.equal(result.minimumProfileCompletionPercentage, 60);
+    assert.equal(result.rankingThresholdVersion, 4);
+  });
+
+test('rejects invalid temporary ranking filters before reading the vacancy', async (context) => {
+  const find = context.mock.method(Vacancy, 'findById', () => assert.fail('must not query'));
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { minimumMatchPercentage: '101' }, now), { statusCode: 400 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { minimumProfileCompletionPercentage: '-1' }, now), { statusCode: 400 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId,
+    { unsupported: '1' }, now), { statusCode: 400 });
+  assert.equal(find.mock.callCount(), 0);
 });
 
 test('both ranking directions use identical score and vacancy denominator for same pair', async (context) => {
@@ -155,7 +192,6 @@ test('both ranking directions use identical score and vacancy denominator for sa
   context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
   context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
   context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
-  context.mock.method(Configuration, 'find', async () => [configuration]);
   const fromCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
   const fromCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(fromCandidate.items[0].percentage, 50);
@@ -168,17 +204,17 @@ test('both ranking directions use identical score and vacancy denominator for sa
 });
 
 test('company ranking considers only explicitly restricted country, not vacancy address', async (context) => {
-  const row = vacancy({ location: { country: 'Brasil', city: 'Campinas', state: 'São Paulo' },
+  const row = adminVacancy({ location: { country: 'Brasil', city: 'Campinas', state: 'São Paulo' },
     geographicRestrictions: { country: { value: 'brasil', importance: 'required' } } });
   const { candidates, profiles } = setup(context, row);
   candidates[0].country = 'Brasil';
   candidates[0].city = 'Niterói';
   candidates[1].country = 'Portugal';
-  const result = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  const result = await rankCandidates(adminActor, vacancyId, {}, now);
   assert.deepEqual(result.items.map((item) => [item.candidate.name, item.earnedPoints,
     item.possiblePoints]), [['Bia', 16, 22], ['Ana', 14, 22]]);
   profiles[1].values = { type: ['remote'] };
-  const next = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  const next = await rankCandidates(adminActor, vacancyId, {}, now);
   assert.equal(next.items[0].candidate.name, 'Ana');
 });
 
@@ -192,7 +228,6 @@ test('recalibrating published desirable multiplier affects both ranking directio
   context.mock.method(CandidateMatchProfile, 'findOne', () => ({ select: async () => profiles[0] }));
   context.mock.method(Vacancy, 'find', () => ({ select: async () => [row] }));
   context.mock.method(Company, 'find', () => ({ select: async () => [{ _id: companyId }] }));
-  context.mock.method(Configuration, 'find', async () => [configuration]);
   const beforeCandidate = await rankVacancies({ id: candidateId, role: 'candidate' }, {}, now);
   const beforeCompany = await rankCandidates({ id: recruiterId, role: 'company' }, vacancyId, {}, now);
   assert.equal(beforeCandidate.items[0].percentage, 66.67);
@@ -210,30 +245,30 @@ test('recalibrating published desirable multiplier affects both ranking directio
 });
 
 test('unpublished multipliers block candidate ranking before candidate data is read', async (context) => {
-  const { findCandidates } = setup(context);
+  const { findCandidates } = setup(context, adminVacancy());
   context.mock.method(MatchMultipliersConfiguration, 'findOne', () => ({ sort: async () => null }));
-  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, {}, now), { statusCode: 503 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 503 });
   assert.equal(findCandidates.mock.callCount(), 0);
 });
 
 test('inactive candidates and missing profiles are omitted from total', async (context) => {
-  const { candidateQuery, profiles, findCandidates } = setup(context);
+  const { candidateQuery, profiles, findCandidates } = setup(context, adminVacancy());
   candidateQuery.select = async () => [{ _id: candidateId, name: 'Ana' }];
   profiles.splice(0);
-  const result = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  const result = await rankCandidates(adminActor, vacancyId, {}, now);
   assert.equal(result.total, 0);
   assert.equal(findCandidates.mock.calls[0].arguments[0].status, 'active');
 });
 
 test('eliminatory mismatch is excluded while low non-eliminatory score remains', async (context) => {
-  const row = vacancy();
+  const row = adminVacancy();
   const { profiles } = setup(context, row);
   row.matchProfile.requirements[1].eliminatory = true;
-  const result = await rankCandidates({ role: 'admin' }, vacancyId, {}, now);
+  const result = await rankCandidates(adminActor, vacancyId, {}, now);
   assert.equal(result.total, 1);
   assert.equal(result.items[0].candidate.name, 'Bia');
   profiles[1].values = { type: ['remote'] };
-  assert.equal((await rankCandidates({ role: 'admin' }, vacancyId, {}, now)).total, 0);
+  assert.equal((await rankCandidates(adminActor, vacancyId, {}, now)).total, 0);
 });
 
 test('company access is denied for other origins or inactive ownership before candidate fetch', async (context) => {
@@ -249,24 +284,34 @@ test('company access is denied for other origins or inactive ownership before ca
   assert.equal(findCandidates.mock.callCount(), 0);
 });
 
-test('inactive or expired vacancy and non-calculable requirements do not return ranking', async (context) => {
-  const row = vacancy({ status: 'paused' });
+test('administrator can rank only an ADMIN vacancy created by the same account', async (context) => {
+  const row = adminVacancy({ createdBy: '6512f1e2b3a1c2d3e4f5a6bc' });
   const { findCandidates } = setup(context, row);
-  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, {}, now), { statusCode: 404 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 403 });
+  row.createdBy = recruiterId;
+  row.origin = 'IMPORTED';
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 403 });
+  assert.equal(findCandidates.mock.callCount(), 0);
+});
+
+test('inactive or expired vacancy and non-calculable requirements do not return ranking', async (context) => {
+  const row = adminVacancy({ status: 'paused' });
+  const { findCandidates } = setup(context, row);
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 404 });
   row.status = 'active';
   row.expiresAt = new Date('2026-09-18T11:00:00Z');
-  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, {}, now), { statusCode: 404 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 404 });
   row.expiresAt = null;
   row.matchProfile.requirements = [];
-  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, {}, now), { statusCode: 404 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId, {}, now), { statusCode: 404 });
   assert.equal(findCandidates.mock.callCount(), 0);
 });
 
 test('invalid input and forbidden role are rejected before database access', async (context) => {
   const { findCandidates } = setup(context);
   await assert.rejects(rankCandidates({ role: 'candidate' }, vacancyId), { statusCode: 403 });
-  await assert.rejects(rankCandidates({ role: 'admin' }, 'not-an-id'), { statusCode: 400 });
-  await assert.rejects(rankCandidates({ role: 'admin' }, vacancyId, { limit: '51' }),
+  await assert.rejects(rankCandidates(adminActor, 'not-an-id'), { statusCode: 400 });
+  await assert.rejects(rankCandidates(adminActor, vacancyId, { limit: '51' }),
     { statusCode: 400 });
   assert.equal(findCandidates.mock.callCount(), 0);
 });

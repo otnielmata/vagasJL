@@ -8,7 +8,7 @@ const service = require('../../src/services/company-registration.service');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-test('company registration update route requires an active admin or company JWT', () => {
+test('company registration update route is restricted to master', () => {
   const route = router.stack.find((layer) => layer.route?.path === '/:id/cadastro').route;
   const handlers = route.stack.map((layer) => layer.handle);
   assert.equal(handlers[0], authenticate);
@@ -22,8 +22,11 @@ test('company registration update route requires an active admin or company JWT'
   for (const role of ['admin', 'company']) {
     let passed = false;
     handlers[1]({ user: { role } }, response, () => { passed = true; });
-    assert.equal(passed, true);
+    assert.equal(passed, false);
   }
+  let masterPassed = false;
+  handlers[1]({ user: { role: 'master' } }, response, () => { masterPassed = true; });
+  assert.equal(masterPassed, true);
 });
 
 test('controller returns 200 and forwards errors', async (context) => {

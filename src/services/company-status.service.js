@@ -1,22 +1,22 @@
 const Company = require('../models/company.model');
-const CompanyUser = require('../models/company-user.model');
-const User = require('../models/user.model');
 const ApiError = require('../errors/api.error');
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const STATUSES = Object.freeze(['pending', 'active', 'inactive', 'blocked']);
 const TRANSITIONS = Object.freeze({
   pending: Object.freeze(['active', 'inactive', 'blocked']),
-  active: Object.freeze(['inactive', 'blocked']),
-  inactive: Object.freeze(['active', 'blocked']),
-  blocked: Object.freeze(['active', 'inactive']),
+  active: Object.freeze(['pending', 'inactive', 'blocked']),
+  inactive: Object.freeze(['pending', 'active', 'blocked']),
+  blocked: Object.freeze(['pending', 'active', 'inactive']),
 });
 const REQUIRED_COMPANY_FIELDS = Object.freeze([
   'legalName', 'responsibleName', 'email', 'city', 'state', 'country',
 ]);
 
 function validateRequest(actor, companyId, input) {
-  if (actor?.role !== 'admin') throw new ApiError(403, 'Apenas administradores podem alterar o status da empresa');
+  if (!['master', 'admin'].includes(actor?.role)) {
+    throw new ApiError(403, 'Apenas o perfil master pode alterar o status da empresa');
+  }
   if (typeof companyId !== 'string' || !OBJECT_ID.test(companyId)) {
     throw new ApiError(400, 'Identificador de empresa invalido');
   }
@@ -36,15 +36,6 @@ function companyIsComplete(company) {
 async function ensureActivationReady(company) {
   if (!companyIsComplete(company)) {
     throw new ApiError(409, 'Empresa sem cadastro minimo completo');
-  }
-  const membership = await CompanyUser.findOne({
-    company: company._id, role: 'recruiter', status: 'active',
-  }).select('user').lean();
-  const responsible = membership && await User.findOne({
-    _id: membership.user, role: 'company', status: 'active', emailVerifiedAt: { $type: 'date' },
-  }).select('_id').lean();
-  if (!responsible) {
-    throw new ApiError(409, 'Empresa exige responsavel ativo e verificado para ativacao');
   }
 }
 

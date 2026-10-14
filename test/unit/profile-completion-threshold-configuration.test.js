@@ -12,9 +12,9 @@ const app = require('../../src/app');
 const { authenticate } = require('../../src/middleware/auth.middleware');
 const ensureDatabase = require('../../src/middleware/database.middleware');
 
-const admin = { id: '507f1f77bcf86cd799439011', role: 'admin' };
+const admin = { id: '507f1f77bcf86cd799439011', role: 'master' };
 
-test('route requires JWT and active admin authorization before publishing', () => {
+test('route requires JWT and active master authorization before publishing', () => {
   assert.ok(app._router.stack.some((layer) => layer.handle === router));
   const route = router.stack.find((layer) => layer.route?.path === '/match/completude-minima').route;
   const handlers = route.stack.map((layer) => layer.handle);
